@@ -19,6 +19,9 @@ Real-time control firmware for the RP2040 microcontroller (Raspberry Pi Pico) th
 
 | Document | Purpose |
 |----------|---------|
+| **ESP32 Firmware** | |
+| [ESP32 Implementation](ESP32_Implementation.md) | ESP32-S3 connectivity, MQTT, Cloud, BLE Scale |
+| **Pico Firmware** | |
 | [Requirements](Requirements.md) | What the firmware must do (functional & safety) |
 | [Architecture](Architecture.md) | How it's structured (modules, dual-core, state machine) |
 | [Communication Protocol](Communication_Protocol.md) | Binary protocol with ESP32 (includes OTA firmware streaming) |
