@@ -1,0 +1,123 @@
+# Build and publish release when a tag is pushed
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Triggers on v1.0.0, v0.1.0, etc.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v0.1.0)'
+        required: true
+
+jobs:
+  build:
+    name: Build All Firmware
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ===== Pico Build =====
+      - name: Install ARM GCC Toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi build-essential cmake
+
+      - name: Clone Pico SDK
+        run: |
+          git clone https://github.com/raspberrypi/pico-sdk.git ~/pico-sdk
+          cd ~/pico-sdk
+          git submodule update --init
+
+      - name: Build Pico Firmware
+        env:
+          PICO_SDK_PATH: ~/pico-sdk
+        run: |
+          cd src/pico
+          mkdir build && cd build
+          cmake -DBUILD_ALL_MACHINES=ON -DCMAKE_BUILD_TYPE=Release ..
+          make -j$(nproc)
+
+      # ===== ESP32 Build =====
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      - name: Build ESP32 Firmware
+        run: |
+          cd src/esp32
+          pio run
+
+      # ===== Prepare Release Assets =====
+      - name: Prepare Release Files
+        run: |
+          mkdir -p release
+          
+          # Copy Pico firmware
+          cp src/pico/build/brewos_dual_boiler.uf2 release/
+          cp src/pico/build/brewos_single_boiler.uf2 release/
+          cp src/pico/build/brewos_heat_exchanger.uf2 release/
+          
+          # Copy ESP32 firmware
+          cp src/esp32/.pio/build/esp32s3/firmware.bin release/brewos_esp32.bin
+          
+          # Create checksums
+          cd release
+          sha256sum *.uf2 *.bin > SHA256SUMS.txt
+
+      - name: Get Version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: BrewOS ${{ steps.version.outputs.version }}
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.version, 'alpha') || contains(steps.version.outputs.version, 'beta') || contains(steps.version.outputs.version, 'rc') }}
+          generate_release_notes: true
+          files: |
+            release/brewos_dual_boiler.uf2
+            release/brewos_single_boiler.uf2
+            release/brewos_heat_exchanger.uf2
+            release/brewos_esp32.bin
+            release/SHA256SUMS.txt
+          body: |
+            ## BrewOS ${{ steps.version.outputs.version }}
+            
+            ### Downloads
+            
+            | File | Description |
+            |------|-------------|
+            | `brewos_dual_boiler.uf2` | Pico firmware for dual boiler machines (ECM Synchronika, Profitec Pro 700) |
+            | `brewos_single_boiler.uf2` | Pico firmware for single boiler machines (Rancilio Silvia, Gaggia Classic) |
+            | `brewos_heat_exchanger.uf2` | Pico firmware for heat exchanger machines |
+            | `brewos_esp32.bin` | ESP32 firmware for web interface |
+            
+            ### Installation
+            
+            **Pico:** Hold BOOTSEL, connect USB, copy `.uf2` file to the drive.
+            
+            **ESP32:** Use `esptool.py` or PlatformIO to flash `.bin` file.
+            
+            See [SETUP.md](https://github.com/mizrachiran/brewos/blob/main/SETUP.md) for detailed instructions.
+            
+            ### Checksums
+            
+            Verify your download with `sha256sum -c SHA256SUMS.txt`
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
