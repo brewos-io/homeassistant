@@ -55,14 +55,25 @@ jobs:
           echo ""
           echo "All 3 machine types built successfully!"
 
-      - name: Upload Pico Artifacts
+      - name: Upload Dual Boiler Firmware
         uses: actions/upload-artifact@v4
         with:
-          name: pico-firmware
-          path: |
-            src/pico/build/brewos_dual_boiler.uf2
-            src/pico/build/brewos_single_boiler.uf2
-            src/pico/build/brewos_heat_exchanger.uf2
+          name: brewos-dual-boiler
+          path: src/pico/build/brewos_dual_boiler.uf2
+          retention-days: 30
+
+      - name: Upload Single Boiler Firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: brewos-single-boiler
+          path: src/pico/build/brewos_single_boiler.uf2
+          retention-days: 30
+
+      - name: Upload Heat Exchanger Firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: brewos-heat-exchanger
+          path: src/pico/build/brewos_heat_exchanger.uf2
           retention-days: 30
 
   build-esp32:
