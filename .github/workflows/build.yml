@@ -42,12 +42,27 @@ jobs:
           cmake -DBUILD_ALL_MACHINES=ON ..
           make -j$(nproc)
 
+      - name: Verify Build Output
+        run: |
+          cd src/pico/build
+          echo "=== Built Firmware Files ==="
+          ls -lh *.uf2
+          echo ""
+          echo "=== Verification ==="
+          test -f brewos_dual_boiler.uf2 && echo "✓ brewos_dual_boiler.uf2" || (echo "✗ Missing dual_boiler" && exit 1)
+          test -f brewos_single_boiler.uf2 && echo "✓ brewos_single_boiler.uf2" || (echo "✗ Missing single_boiler" && exit 1)
+          test -f brewos_heat_exchanger.uf2 && echo "✓ brewos_heat_exchanger.uf2" || (echo "✗ Missing heat_exchanger" && exit 1)
+          echo ""
+          echo "All 3 machine types built successfully!"
+
       - name: Upload Pico Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: pico-firmware
           path: |
-            src/pico/build/*.uf2
+            src/pico/build/brewos_dual_boiler.uf2
+            src/pico/build/brewos_single_boiler.uf2
+            src/pico/build/brewos_heat_exchanger.uf2
           retention-days: 30
 
   build-esp32:
@@ -64,13 +79,19 @@ jobs:
           python-version: '3.11'
 
       - name: Install PlatformIO
-        run: |
-          pip install platformio
+        run: pip install platformio
 
       - name: Build ESP32 Firmware
         run: |
           cd src/esp32
           pio run
+
+      - name: Verify Build Output
+        run: |
+          echo "=== Built Firmware Files ==="
+          ls -lh src/esp32/.pio/build/esp32s3/firmware.*
+          echo ""
+          test -f src/esp32/.pio/build/esp32s3/firmware.bin && echo "✓ ESP32 firmware.bin built successfully!"
 
       - name: Upload ESP32 Artifacts
         uses: actions/upload-artifact@v4
@@ -78,6 +99,4 @@ jobs:
           name: esp32-firmware
           path: |
             src/esp32/.pio/build/esp32s3/firmware.bin
-            src/esp32/.pio/build/esp32s3/firmware.elf
           retention-days: 30
-
