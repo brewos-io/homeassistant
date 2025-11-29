@@ -10,6 +10,7 @@ BrewOS is an open-source espresso machine controller with:
 
 ```
 docs/
+├── Compatibility.md       # Validated machines list
 ├── pico/                  # Pico firmware docs
 │   ├── README.md
 │   ├── Architecture.md
@@ -31,6 +32,7 @@ docs/
 ## Quick Links
 
 ### Getting Started
+- [Machine Compatibility](Compatibility.md) ⭐ *Validated machines*
 - [Pico Quick Start](pico/Quick_Start.md)
 - [ESP32 Implementation](esp32/Implementation_Plan.md)
 
@@ -49,3 +51,17 @@ docs/
 ## Feature Status
 
 See [Feature Status Table](shared/Feature_Status_Table.md) for current implementation status.
+
+---
+
+## 🧪 Call for Testers
+
+We're looking for help testing BrewOS on more machines!
+
+**✅ Validated:** ECM Synchronika (reference machine)
+
+**🔷 Same Platform (need testers):** ECM (Barista, Technika, Mechanika, Controvento) • Profitec (Pro 300, 500, 700)
+
+**🔲 Wanted:** Lelit, Rocket, Bezzera, La Marzocco, and any E61 machine
+
+👉 See [TESTERS.md](../TESTERS.md) to learn how you can help!

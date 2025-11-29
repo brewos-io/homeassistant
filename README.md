@@ -240,6 +240,39 @@ See [SETUP.md](SETUP.md) for detailed instructions.
 
 ---
 
+## 🧪 Call for Testers
+
+**Help us expand machine compatibility!** We're looking for espresso enthusiasts to test BrewOS on their machines.
+
+### ✅ Validated
+
+| Brand | Model | Notes |
+|-------|-------|-------|
+| ECM | **Synchronika** | Reference machine |
+
+### 🔷 Same Platform (Need Validation)
+
+These use the same GICAR board and should work - we need testers to confirm!
+
+| Brand | Models |
+|-------|--------|
+| **ECM** | Barista, Technika, Technika Profi, Mechanika, Mechanika Profi, Mechanika V Slim, Controvento |
+| **Profitec** | Pro 300, Pro 500, Pro 700 |
+
+### 🔲 Other Brands (Wanted)
+
+| Brand | Models |
+|-------|--------|
+| **Lelit** | MaraX, Bianca, Elizabeth |
+| **Rocket** | Appartamento, Mozzafiato, R58, R Nine One |
+| **Bezzera** | BZ10, BZ13, Duo, Matrix |
+| **La Marzocco** | Linea Mini, GS3 |
+| **Other** | Any E61 group head machine |
+
+**👉 [Become a Tester](TESTERS.md)** - See how you can help!
+
+---
+
 ## Safety Notice
 
 ```
@@ -289,8 +322,10 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 - [x] Heat exchanger support
 - [x] Web-based dashboard
 - [x] OTA firmware updates
-- [ ] MQTT integration
-- [ ] Home Assistant integration
+- [x] MQTT integration
+- [x] Home Assistant auto-discovery
+- [ ] BLE scale integration (brew by weight)
+- [ ] Cloud connectivity
 - [ ] Mobile app (React Native)
 - [ ] Pressure profiling
 - [ ] Flow control
