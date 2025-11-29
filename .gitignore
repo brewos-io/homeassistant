@@ -48,3 +48,4 @@ Thumbs.db
 # Generated linker scripts
 pico_flash_region.ld
 
+web/assets
