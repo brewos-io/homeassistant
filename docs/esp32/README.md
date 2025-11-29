@@ -10,6 +10,7 @@ The ESP32-S3 handles connectivity, user interface, and advanced features for the
 | [UI Design](UI_Design.md) | Display screens and navigation |
 | [MQTT Integration](integrations/MQTT.md) | MQTT setup and Home Assistant |
 | [Web API Reference](integrations/Web_API.md) | HTTP endpoints and WebSocket |
+| [BLE Scales](integrations/BLE_Scales.md) | Bluetooth scale integration |
 
 ## Hardware
 
@@ -60,6 +61,7 @@ docs/esp32/
 ├── UI_Design.md           # Display UI specification
 └── integrations/
     ├── MQTT.md            # MQTT documentation
-    └── Web_API.md         # API reference
+    ├── Web_API.md         # API reference
+    └── BLE_Scales.md      # Bluetooth scales
 ```
 

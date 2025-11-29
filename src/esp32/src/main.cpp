@@ -10,7 +10,7 @@
  * - Web interface for monitoring and configuration
  * - UART bridge to Pico control board
  * - OTA firmware updates for Pico
- * - BLE scale integration (future)
+ * - BLE scale integration
  */
 
 #include <Arduino.h>
@@ -29,11 +29,17 @@
 // MQTT
 #include "mqtt_client.h"
 
+// BLE Scale
+#include "scale/scale_manager.h"
+
 // Global instances
 WiFiManager wifiManager;
 PicoUART picoUart(Serial1);
 MQTTClient mqttClient;
 WebServer webServer(wifiManager, picoUart, mqttClient);
+
+// Scale state
+static bool scaleEnabled = true;  // Can be disabled to save power
 
 // Machine state from Pico
 static ui_state_t machineState = {0};
@@ -169,7 +175,7 @@ void setup() {
     
     ui.onTareScale([]() {
         LOG_I("UI: Tare scale requested");
-        // Future: BLE scale tare command
+        scaleManager.tare();
     });
     
     ui.onSetTargetWeight([](float weight) {
@@ -280,6 +286,31 @@ void setup() {
     // Initialize MQTT
     mqttClient.begin();
     
+    // Initialize BLE Scale Manager
+    if (scaleEnabled) {
+        LOG_I("Initializing BLE Scale Manager...");
+        if (scaleManager.begin()) {
+            // Set up scale callbacks
+            scaleManager.onWeight([](const scale_state_t& state) {
+                machineState.scale_connected = state.connected;
+                machineState.brew_weight = state.weight;
+                machineState.flow_rate = state.flow_rate;
+            });
+            
+            scaleManager.onConnection([](bool connected) {
+                LOG_I("Scale %s", connected ? "connected" : "disconnected");
+                machineState.scale_connected = connected;
+                if (connected) {
+                    ui.showNotification("Scale Connected", 2000);
+                }
+            });
+            
+            LOG_I("Scale Manager ready");
+        } else {
+            LOG_E("Scale Manager initialization failed!");
+        }
+    }
+    
     // Set default state values for demo
     machineState.brew_setpoint = 93.0f;
     machineState.steam_setpoint = 145.0f;
@@ -310,9 +341,15 @@ void loop() {
     // Update MQTT
     mqttClient.loop();
     
+    // Update BLE Scale
+    if (scaleEnabled) {
+        scaleManager.loop();
+    }
+    
     // Update Pico connection status
     bool picoConnected = picoUart.isConnected();
     machineState.mqtt_connected = mqttClient.isConnected();
+    machineState.scale_connected = scaleManager.isConnected();
     
     // Demo mode: If Pico not connected for DEMO_MODE_TIMEOUT_MS, simulate data
     if (!picoConnected && picoUart.getPacketsReceived() == 0) {
