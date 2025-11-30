@@ -5,6 +5,8 @@
 BrewOS is an open-source espresso machine controller with:
 - **Pico (RP2040)** - Real-time machine control
 - **ESP32-S3** - Connectivity, UI, and smart features
+- **Web Interface** - Modern React dashboard
+- **Cloud Service** - Remote access from anywhere
 
 ## Documentation Structure
 
@@ -19,7 +21,14 @@ docs/
 ├── esp32/                 # ESP32 firmware docs
 │   ├── README.md
 │   ├── Implementation_Plan.md
-│   └── integrations/      # Integration docs (MQTT, API)
+│   └── integrations/      # Integration docs (MQTT, BLE, API)
+├── web/                   # Web interface docs
+│   ├── README.md
+│   └── WebSocket_Protocol.md
+├── cloud/                 # Cloud service docs
+│   ├── README.md
+│   ├── Deployment.md
+│   └── ESP32_Integration.md
 ├── shared/                # Shared documentation
 │   ├── Communication_Protocol.md
 │   └── Feature_Status_Table.md
@@ -38,10 +47,19 @@ docs/
 
 ### Architecture
 - [Pico Architecture](pico/Architecture.md)
+- [ESP32 State Management](esp32/State_Management.md) - Settings, stats, shot history
 - [Communication Protocol](shared/Communication_Protocol.md)
+
+### Web & Cloud
+- [Web Interface](web/README.md) - React dashboard development
+- [WebSocket Protocol](web/WebSocket_Protocol.md) - Message format reference
+- [Cloud Service](cloud/README.md) - Remote access architecture
+- [Cloud Deployment](cloud/Deployment.md) - Deployment guides
+- [ESP32 Cloud Integration](cloud/ESP32_Integration.md) - Connect ESP32 to cloud
 
 ### Integrations
 - [MQTT / Home Assistant](esp32/integrations/MQTT.md)
+- [BLE Scales](esp32/integrations/BLE_Scales.md)
 - [Web API Reference](esp32/integrations/Web_API.md)
 
 ### Hardware
