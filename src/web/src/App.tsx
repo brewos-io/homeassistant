@@ -13,6 +13,7 @@ import { Devices } from '@/pages/Devices';
 import { AuthCallback } from '@/pages/AuthCallback';
 import { Pair } from '@/pages/Pair';
 import { Onboarding } from '@/pages/Onboarding';
+import { Cloud } from '@/pages/Cloud';
 import { initConnection, getConnection } from '@/lib/connection';
 import { initializeStore } from '@/lib/store';
 import { useAppStore } from '@/lib/mode';
@@ -95,6 +96,7 @@ function App() {
           <Route path="scale" element={<Scale />} />
           <Route path="settings" element={<Settings />} />
           <Route path="system" element={<System />} />
+          <Route path="cloud" element={<Cloud />} />
           <Route path="about" element={<About />} />
           <Route path="setup" element={<Setup />} />
           <Route path="*" element={<Navigate to="/" replace />} />

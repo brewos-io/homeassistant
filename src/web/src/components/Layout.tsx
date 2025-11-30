@@ -21,14 +21,22 @@ import { cn } from '@/lib/utils';
 const getNavigation = (isCloud: boolean, deviceId?: string) => {
   const basePath = isCloud && deviceId ? `/device/${deviceId}` : '';
   
-  return [
+  const items = [
     { name: 'Dashboard', href: basePath || '/', icon: LayoutGrid },
     { name: 'Brewing', href: `${basePath}/brewing`, icon: Coffee },
     { name: 'Scale', href: `${basePath}/scale`, icon: Scale },
     { name: 'Settings', href: `${basePath}/settings`, icon: Settings },
     { name: 'System', href: `${basePath}/system`, icon: Server },
-    { name: 'About', href: `${basePath}/about`, icon: Info },
   ];
+  
+  // In local mode, add Cloud tab for pairing/management
+  if (!isCloud) {
+    items.push({ name: 'Cloud', href: '/cloud', icon: Cloud });
+  }
+  
+  items.push({ name: 'About', href: `${basePath}/about`, icon: Info });
+  
+  return items;
 };
 
 export function Layout() {

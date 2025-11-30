@@ -144,6 +144,14 @@ export interface MQTTStatus {
   broker: string;
 }
 
+// Cloud
+export interface CloudConfig {
+  enabled: boolean;
+  serverUrl: string;
+  connected: boolean;
+  deviceId: string;
+}
+
 // Device info
 export interface DeviceInfo {
   deviceId: string;
