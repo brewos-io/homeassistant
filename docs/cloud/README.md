@@ -1,13 +1,13 @@
 # BrewOS Cloud Service
 
-The BrewOS cloud service is a stateless WebSocket relay that enables remote access to your espresso machine from anywhere in the world.
+The BrewOS cloud service is a WebSocket relay that enables remote access to your espresso machine from anywhere in the world, with Supabase for authentication and device management.
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                         CLOUD SERVICE                                   │
-│                    (Stateless WebSocket Relay)                          │
+│              (WebSocket Relay + Supabase Auth/Database)                 │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
 │   /ws/device                              /ws/client                    │
@@ -17,7 +17,13 @@ The BrewOS cloud service is a stateless WebSocket relay that enables remote acce
 │   ┌─────────────┐                         ┌─────────────┐              │
 │   │ DeviceRelay │ ◄────── messages ──────► │ ClientProxy │              │
 │   └─────────────┘                         └─────────────┘              │
-│                                                                         │
+│         │                                        │                      │
+│         └────────────────┬───────────────────────┘                      │
+│                          ▼                                              │
+│                    ┌───────────┐                                        │
+│                    │  Supabase │                                        │
+│                    │ (Auth+DB) │                                        │
+│                    └───────────┘                                        │
 └─────────────────────────────────────────────────────────────────────────┘
          ▲                                        ▲
          │ WebSocket                    WebSocket │
@@ -30,11 +36,12 @@ The BrewOS cloud service is a stateless WebSocket relay that enables remote acce
 
 ## Key Features
 
-- **Stateless** - No database required, scales horizontally
+- **Supabase Auth** - Google, Apple, email sign-in via Supabase
+- **PostgreSQL** - Device and user management with RLS
+- **QR Code Pairing** - Scan to link devices to your account
 - **Pure WebSocket** - No MQTT dependency, deploy anywhere
 - **Low Latency** - Direct message relay between clients and devices
 - **Multi-Client** - Multiple apps can connect to the same device
-- **JWT Authentication** - Secure token-based auth for clients
 
 ## Project Structure
 
@@ -56,6 +63,25 @@ src/cloud/
 
 - Node.js 18+
 - npm or yarn
+- Supabase account (free tier works)
+
+### Supabase Setup
+
+1. **Create a Supabase Project**
+   - Go to [supabase.com](https://supabase.com)
+   - Create a new project
+   - Note your Project URL and API keys
+
+2. **Run Database Migration**
+   - Go to SQL Editor in Supabase Dashboard
+   - Copy contents of `src/cloud/supabase/migrations/001_initial_schema.sql`
+   - Run the SQL
+
+3. **Enable Google Auth**
+   - Go to Authentication → Providers → Google
+   - Enable Google provider
+   - Add your Google OAuth credentials
+   - Set redirect URL to your app's callback URL
 
 ### Installation
 
@@ -66,12 +92,29 @@ npm install
 
 ### Configuration
 
-Create a `.env` file (see `.env.example`):
+Create a `.env` file (see `env.example`):
 
 ```env
 PORT=3001
-JWT_SECRET=your-super-secret-key
+NODE_ENV=development
+
+# CORS
+CORS_ORIGIN=http://localhost:5173
+
+# Supabase
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_KEY=your-service-key
+
+# Web UI path
 WEB_DIST_PATH=../web/dist
+```
+
+For the web app, create `src/web/.env`:
+
+```env
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key
 ```
 
 ### Run Development Server
@@ -91,11 +134,16 @@ npm start
 
 ### HTTP
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/health` | GET | Health check with connection stats |
-| `/api/devices` | GET | List user's devices (requires auth) |
-| `/*` | GET | Serve web UI (SPA) |
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| `/api/health` | GET | No | Health check with connection stats |
+| `/api/devices` | GET | Yes | List user's devices |
+| `/api/devices/claim` | POST | Yes | Claim a device with QR token |
+| `/api/devices/register-claim` | POST | No | ESP32 registers claim token |
+| `/api/devices/:id` | GET | Yes | Get device details |
+| `/api/devices/:id` | PATCH | Yes | Rename device |
+| `/api/devices/:id` | DELETE | Yes | Remove device from account |
+| `/*` | GET | No | Serve web UI (SPA) |
 
 ### WebSocket
 
@@ -103,6 +151,49 @@ npm start
 |----------|-------------|
 | `/ws/device` | ESP32 device connections |
 | `/ws/client` | Client app connections |
+
+## Device Pairing Flow
+
+1. **ESP32 generates QR code**
+   - Generates random claim token
+   - Calls `/api/devices/register-claim` to store token hash
+   - Displays QR code with URL: `https://app.brewos.dev/pair?id=BRW-XXXXX&token=TOKEN`
+
+2. **User scans QR code**
+   - Opens pairing URL in browser
+   - Redirects to login (Google/Apple) if not authenticated
+   - Shows device confirmation screen
+
+3. **User claims device**
+   - App calls `/api/devices/claim` with device ID and token
+   - Server verifies token hash matches
+   - Device is added to user's account
+   - ESP32 receives confirmation via WebSocket
+
+```
+┌──────────┐      ┌───────────┐      ┌────────────┐
+│  ESP32   │      │   Cloud   │      │  Web App   │
+└────┬─────┘      └─────┬─────┘      └──────┬─────┘
+     │                  │                   │
+     │ Generate token   │                   │
+     │─────────────────>│                   │
+     │                  │ Store hash        │
+     │                  │                   │
+     │ Display QR       │                   │
+     │                  │                   │
+     │                  │    Scan QR code   │
+     │                  │<──────────────────│
+     │                  │                   │
+     │                  │    Sign in        │
+     │                  │<──────────────────│
+     │                  │                   │
+     │                  │    Claim device   │
+     │                  │<──────────────────│
+     │                  │                   │
+     │ Device claimed!  │    Success!       │
+     │<─────────────────│──────────────────>│
+     │                  │                   │
+```
 
 ## Connection Protocol
 
@@ -208,7 +299,10 @@ railway up
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `PORT` | No | 3001 | HTTP/WS port |
-| `JWT_SECRET` | Yes | - | Secret for JWT signing |
+| `SUPABASE_URL` | Yes | - | Supabase project URL |
+| `SUPABASE_ANON_KEY` | Yes | - | Supabase anon/public key |
+| `SUPABASE_SERVICE_KEY` | Yes | - | Supabase service key (server-side) |
+| `CORS_ORIGIN` | No | `*` | Allowed CORS origins |
 | `WEB_DIST_PATH` | No | `../web/dist` | Path to web UI build |
 
 ## Scaling

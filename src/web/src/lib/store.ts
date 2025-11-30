@@ -13,6 +13,7 @@ import type {
   MQTTStatus,
   ESP32Info,
   PicoInfo,
+  DeviceInfo,
   Statistics,
   Alert,
   LogEntry,
@@ -24,6 +25,9 @@ import { Connection } from './connection';
 interface BrewOSState {
   // Connection
   connectionState: ConnectionState;
+  
+  // Device identity
+  device: DeviceInfo;
   
   // Machine
   machine: MachineStatus;
@@ -148,10 +152,18 @@ const defaultStats: Statistics = {
   shotsSinceCleaning: 0,
 };
 
+const defaultDevice: DeviceInfo = {
+  deviceId: '',
+  deviceName: 'My BrewOS',
+  machineType: '',
+  firmwareVersion: '',
+};
+
 export const useStore = create<BrewOSState>()(
   subscribeWithSelector((set, get) => ({
     // Initial state
     connectionState: 'disconnected',
+    device: defaultDevice,
     machine: defaultMachine,
     temps: defaultTemps,
     pressure: 0,
@@ -275,6 +287,17 @@ export const useStore = create<BrewOSState>()(
 
         case 'error':
           addAlert('error', data.message as string, set, get);
+          break;
+
+        case 'device_info':
+          set((state) => ({
+            device: {
+              deviceId: (data.deviceId as string) || state.device.deviceId,
+              deviceName: (data.deviceName as string) || state.device.deviceName,
+              machineType: (data.machineType as string) || state.device.machineType,
+              firmwareVersion: (data.firmwareVersion as string) || state.device.firmwareVersion,
+            },
+          }));
           break;
       }
     },

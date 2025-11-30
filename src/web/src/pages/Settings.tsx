@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import { getConnection } from '@/lib/connection';
 import { Card, CardHeader, CardTitle } from '@/components/Card';
@@ -14,13 +14,25 @@ import {
   Leaf,
   Check,
   X,
+  Coffee,
+  Save,
 } from 'lucide-react';
 
 export function Settings() {
+  const device = useStore((s) => s.device);
   const temps = useStore((s) => s.temps);
   const power = useStore((s) => s.power);
   const wifi = useStore((s) => s.wifi);
   const mqtt = useStore((s) => s.mqtt);
+
+  // Device name
+  const [deviceName, setDeviceName] = useState(device.deviceName);
+  const [savingName, setSavingName] = useState(false);
+  
+  // Sync device name when it changes from server
+  useEffect(() => {
+    setDeviceName(device.deviceName);
+  }, [device.deviceName]);
 
   // Local state for forms
   const [brewTemp, setBrewTemp] = useState(temps.brew.setpoint);
@@ -40,6 +52,14 @@ export function Settings() {
     timeout: 30,
   });
   const [testingMqtt, setTestingMqtt] = useState(false);
+
+  const saveDeviceName = async () => {
+    if (!deviceName.trim()) return;
+    setSavingName(true);
+    getConnection()?.sendCommand('set_device_name', { name: deviceName.trim() });
+    // Simulate success
+    setTimeout(() => setSavingName(false), 500);
+  };
 
   const saveTemps = () => {
     getConnection()?.sendCommand('set_temp', { boiler: 'brew', temp: brewTemp });
@@ -72,6 +92,46 @@ export function Settings() {
 
   return (
     <div className="space-y-6">
+      {/* Device Identity */}
+      <Card>
+        <CardHeader>
+          <CardTitle icon={<Coffee className="w-5 h-5" />}>
+            Machine
+          </CardTitle>
+        </CardHeader>
+
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex-1">
+              <Input
+                label="Machine Name"
+                placeholder="Kitchen Espresso"
+                value={deviceName}
+                onChange={(e) => setDeviceName(e.target.value)}
+                hint="Give your machine a friendly name"
+              />
+            </div>
+            <div className="flex items-end">
+              <Button 
+                onClick={saveDeviceName} 
+                loading={savingName}
+                disabled={deviceName === device.deviceName}
+              >
+                <Save className="w-4 h-4" />
+                Save
+              </Button>
+            </div>
+          </div>
+          
+          {device.deviceId && (
+            <div className="grid grid-cols-2 gap-4 pt-2">
+              <StatusRow label="Device ID" value={device.deviceId} mono />
+              <StatusRow label="Machine Type" value={device.machineType || 'Not set'} />
+            </div>
+          )}
+        </div>
+      </Card>
+
       {/* Temperature Settings */}
       <Card>
         <CardHeader>

@@ -26,7 +26,8 @@ export type MessageType =
   | 'log'
   | 'error'
   | 'scan_result'
-  | 'scan_complete';
+  | 'scan_complete'
+  | 'device_info';
 
 export interface WebSocketMessage {
   type: MessageType;
@@ -144,6 +145,13 @@ export interface MQTTStatus {
 }
 
 // Device info
+export interface DeviceInfo {
+  deviceId: string;
+  deviceName: string;
+  machineType: string;
+  firmwareVersion: string;
+}
+
 export interface ESP32Info {
   version: string;
   freeHeap: number;
@@ -180,3 +188,13 @@ export interface LogEntry {
   message: string;
 }
 
+// Cloud device (from API)
+export interface CloudDevice {
+  id: string;
+  name: string;
+  isOnline: boolean;
+  lastSeen: string | null;
+  firmwareVersion: string | null;
+  machineType: string | null;
+  claimedAt: string;
+}

@@ -9,10 +9,11 @@
 // Forward declarations
 class PicoUART;
 class MQTTClient;
+class PairingManager;
 
 class WebServer {
 public:
-    WebServer(WiFiManager& wifiManager, PicoUART& picoUart, MQTTClient& mqttClient);
+    WebServer(WiFiManager& wifiManager, PicoUART& picoUart, MQTTClient& mqttClient, PairingManager* pairingManager = nullptr);
     
     // Initialize
     void begin();
@@ -34,6 +35,7 @@ private:
     WiFiManager& _wifiManager;
     PicoUART& _picoUart;
     MQTTClient& _mqttClient;
+    PairingManager* _pairingManager;
     
     // Request handlers
     void setupRoutes();

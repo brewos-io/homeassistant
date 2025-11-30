@@ -6,7 +6,7 @@ on:
   push:
     branches: ["main"]
     paths:
-      - 'web/**'
+      - 'pages/**'
       - 'assets/**'
       - '.github/workflows/pages.yml'
   
@@ -39,13 +39,13 @@ jobs:
       
       - name: Prepare site
         run: |
-          mkdir -p "web/assets"
-          cp -r "assets/." "web/assets/"
+          mkdir -p "pages/assets"
+          cp -r "assets/." "pages/assets/"
       
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: 'web'
+          path: 'pages'
       
       - name: Deploy to GitHub Pages
         id: deployment

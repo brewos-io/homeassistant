@@ -1,5 +1,7 @@
-import { Outlet, NavLink } from 'react-router-dom';
+import { Outlet, NavLink, useNavigate, useParams } from 'react-router-dom';
 import { useStore } from '@/lib/store';
+import { useAppStore } from '@/lib/mode';
+import { DeviceSelector } from './DeviceSelector';
 import { 
   LayoutGrid, 
   Coffee, 
@@ -9,23 +11,45 @@ import {
   Info,
   Wifi,
   WifiOff,
+  Cloud,
+  LogOut,
+  Home,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const navigation = [
-  { name: 'Dashboard', href: '/', icon: LayoutGrid },
-  { name: 'Brewing', href: '/brewing', icon: Coffee },
-  { name: 'Scale', href: '/scale', icon: Scale },
-  { name: 'Settings', href: '/settings', icon: Settings },
-  { name: 'System', href: '/system', icon: Server },
-  { name: 'About', href: '/about', icon: Info },
-];
+// Navigation items - adjust based on mode
+const getNavigation = (isCloud: boolean, deviceId?: string) => {
+  const basePath = isCloud && deviceId ? `/device/${deviceId}` : '';
+  
+  return [
+    { name: 'Dashboard', href: basePath || '/', icon: LayoutGrid },
+    { name: 'Brewing', href: `${basePath}/brewing`, icon: Coffee },
+    { name: 'Scale', href: `${basePath}/scale`, icon: Scale },
+    { name: 'Settings', href: `${basePath}/settings`, icon: Settings },
+    { name: 'System', href: `${basePath}/system`, icon: Server },
+    { name: 'About', href: `${basePath}/about`, icon: Info },
+  ];
+};
 
 export function Layout() {
+  const navigate = useNavigate();
+  const { deviceId } = useParams();
   const connectionState = useStore((s) => s.connectionState);
+  const deviceName = useStore((s) => s.device.deviceName);
+  const { mode, user, signOut, getSelectedDevice } = useAppStore();
+  
+  const isCloud = mode === 'cloud';
+  const selectedDevice = getSelectedDevice();
   
   const isConnected = connectionState === 'connected';
   const isConnecting = connectionState === 'connecting' || connectionState === 'reconnecting';
+  
+  const navigation = getNavigation(isCloud, deviceId || selectedDevice?.id);
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/login');
+  };
 
   return (
     <div className="min-h-screen bg-cream-100">
@@ -33,27 +57,71 @@ export function Layout() {
       <header className="sticky top-0 z-50 glass border-b border-cream-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            {/* Logo */}
-            <div className="flex items-center gap-3">
+            {/* Logo & Mode */}
+            <div className="flex items-center gap-4">
               <img 
                 src="/logo.png" 
                 alt="BrewOS" 
                 className="h-8 w-auto"
               />
+              
+              {/* Cloud: Device Selector */}
+              {isCloud && <DeviceSelector />}
+              
+              {/* Local: Machine Name */}
+              {!isCloud && deviceName && (
+                <span className="hidden sm:block text-sm font-medium text-coffee-600">
+                  {deviceName}
+                </span>
+              )}
             </div>
 
-            {/* Connection Status */}
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-cream-200/80">
-              {isConnected ? (
-                <Wifi className="w-4 h-4 text-emerald-600" />
-              ) : isConnecting ? (
-                <Wifi className="w-4 h-4 text-amber-500 animate-pulse" />
-              ) : (
-                <WifiOff className="w-4 h-4 text-red-500" />
+            {/* Right side */}
+            <div className="flex items-center gap-3">
+              {/* Connection Status */}
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-cream-200/80">
+                {isCloud ? (
+                  <>
+                    <Cloud className="w-4 h-4 text-accent" />
+                    <span className="text-xs font-medium text-coffee-700">Cloud</span>
+                  </>
+                ) : isConnected ? (
+                  <>
+                    <Wifi className="w-4 h-4 text-emerald-600" />
+                    <span className="text-xs font-medium text-coffee-700">Local</span>
+                  </>
+                ) : isConnecting ? (
+                  <>
+                    <Wifi className="w-4 h-4 text-amber-500 animate-pulse" />
+                    <span className="text-xs font-medium text-coffee-700">Connecting...</span>
+                  </>
+                ) : (
+                  <>
+                    <WifiOff className="w-4 h-4 text-red-500" />
+                    <span className="text-xs font-medium text-coffee-700">Disconnected</span>
+                  </>
+                )}
+              </div>
+
+              {/* Cloud: User menu */}
+              {isCloud && user && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => navigate('/devices')}
+                    className="p-2 rounded-lg hover:bg-cream-200 text-coffee-600"
+                    title="Manage Devices"
+                  >
+                    <Home className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={handleSignOut}
+                    className="p-2 rounded-lg hover:bg-cream-200 text-coffee-600"
+                    title="Sign Out"
+                  >
+                    <LogOut className="w-5 h-5" />
+                  </button>
+                </div>
               )}
-              <span className="text-xs font-medium text-coffee-700">
-                {isConnected ? 'Connected' : isConnecting ? 'Connecting...' : 'Disconnected'}
-              </span>
             </div>
           </div>
         </div>
@@ -67,7 +135,7 @@ export function Layout() {
               <NavLink
                 key={item.name}
                 to={item.href}
-                end={item.href === '/'}
+                end={item.href === '/' || item.href.endsWith(`/${deviceId || selectedDevice?.id}`)}
                 className={({ isActive }) =>
                   cn(
                     'flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all',

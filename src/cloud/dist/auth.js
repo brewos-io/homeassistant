@@ -23,8 +23,11 @@ export function authMiddleware(req, res, next) {
         res.status(401).json({ error: 'Invalid or expired token' });
         return;
     }
-    // Attach user to request
-    req.user = payload;
+    // Attach user to request (normalize id field)
+    req.user = {
+        id: payload.userId,
+        email: payload.email,
+    };
     next();
 }
 export function extractTokenFromUrl(url) {

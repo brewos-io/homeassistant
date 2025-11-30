@@ -5,4 +5,5 @@ export { Input } from './Input';
 export { Button } from './Button';
 export { Badge } from './Badge';
 export { Layout } from './Layout';
-
+export { QRCodeDisplay } from './QRCode';
+export { DeviceSelector } from './DeviceSelector';

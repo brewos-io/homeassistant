@@ -1,7 +1,6 @@
 import { Card, CardHeader, CardTitle } from '@/components/Card';
 import { useStore } from '@/lib/store';
 import { 
-  Coffee, 
   Github, 
   Heart, 
   ExternalLink,
@@ -18,9 +17,11 @@ export function About() {
       {/* Hero */}
       <Card className="text-center bg-gradient-to-br from-coffee-800 to-coffee-900 text-white border-0">
         <div className="py-8">
-          <div className="w-20 h-20 bg-white/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
-            <Coffee className="w-10 h-10 text-accent-light" />
-          </div>
+          <img 
+            src="/logo.png" 
+            alt="BrewOS" 
+            className="h-20 mx-auto mb-6 brightness-0 invert"
+          />
           <h1 className="text-3xl font-bold mb-2">BrewOS</h1>
           <p className="text-cream-300 mb-4">
             Open-source espresso machine controller

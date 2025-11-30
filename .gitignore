@@ -1,6 +1,8 @@
 # Build directories
 build/
 **/build/
+dist/
+**/dist/
 
 # Compiled Object files
 *.o
@@ -28,6 +30,20 @@ CMakeDoxygenDefaults.cmake
 .pioenvs/
 .piolibdeps/
 
+# Node.js
+node_modules/
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+*.env
+
 # IDE
 .vscode/
 .idea/
@@ -48,4 +64,5 @@ Thumbs.db
 # Generated linker scripts
 pico_flash_region.ld
 
-web/assets
+# GitHub Pages assets (copied during build)
+pages/assets

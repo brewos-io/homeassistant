@@ -4,14 +4,16 @@
 #include "mqtt_client.h"
 #include "brew_by_weight.h"
 #include "scale/scale_manager.h"
+#include "pairing_manager.h"
 #include <LittleFS.h>
 
-WebServer::WebServer(WiFiManager& wifiManager, PicoUART& picoUart, MQTTClient& mqttClient)
+WebServer::WebServer(WiFiManager& wifiManager, PicoUART& picoUart, MQTTClient& mqttClient, PairingManager* pairingManager)
     : _server(WEB_SERVER_PORT)
     , _ws(WEBSOCKET_PATH)
     , _wifiManager(wifiManager)
     , _picoUart(picoUart)
-    , _mqttClient(mqttClient) {
+    , _mqttClient(mqttClient)
+    , _pairingManager(pairingManager) {
 }
 
 void WebServer::begin() {
@@ -423,6 +425,48 @@ void WebServer::setupRoutes() {
             }
         }
     );
+    
+    // Pairing API endpoints
+    _server.on("/api/pairing/qr", HTTP_GET, [this](AsyncWebServerRequest* request) {
+        if (!_pairingManager) {
+            request->send(503, "application/json", "{\"error\":\"Pairing not available\"}");
+            return;
+        }
+        
+        // Generate a new token if needed
+        if (!_pairingManager->isTokenValid()) {
+            _pairingManager->generateToken();
+        }
+        
+        JsonDocument doc;
+        doc["deviceId"] = _pairingManager->getDeviceId();
+        doc["token"] = _pairingManager->getCurrentToken();
+        doc["url"] = _pairingManager->getPairingUrl();
+        doc["expiresIn"] = (_pairingManager->getTokenExpiry() - millis()) / 1000;
+        
+        String response;
+        serializeJson(doc, response);
+        request->send(200, "application/json", response);
+    });
+    
+    _server.on("/api/pairing/refresh", HTTP_POST, [this](AsyncWebServerRequest* request) {
+        if (!_pairingManager) {
+            request->send(503, "application/json", "{\"error\":\"Pairing not available\"}");
+            return;
+        }
+        
+        _pairingManager->generateToken();
+        
+        JsonDocument doc;
+        doc["deviceId"] = _pairingManager->getDeviceId();
+        doc["token"] = _pairingManager->getCurrentToken();
+        doc["url"] = _pairingManager->getPairingUrl();
+        doc["expiresIn"] = 600;  // 10 minutes
+        
+        String response;
+        serializeJson(doc, response);
+        request->send(200, "application/json", response);
+    });
     
     // SPA fallback - serve index.html for client-side routes
     // (any route that doesn't match API or static files)

@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import { getConnection } from '@/lib/connection';
 import { Card, CardHeader, CardTitle } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { Badge } from '@/components/Badge';
+import { QRCodeDisplay } from '@/components/QRCode';
 import { 
   Cpu, 
   HardDrive, 
@@ -14,8 +15,17 @@ import {
   AlertTriangle,
   Check,
   Clock,
+  Cloud,
 } from 'lucide-react';
 import { formatUptime, formatBytes } from '@/lib/utils';
+import { isSupabaseConfigured } from '@/lib/supabase';
+
+interface PairingData {
+  deviceId: string;
+  token: string;
+  url: string;
+  expiresIn: number;
+}
 
 export function System() {
   const esp32 = useStore((s) => s.esp32);
@@ -26,6 +36,47 @@ export function System() {
 
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState<string | null>(null);
+  
+  // Pairing state (only on local ESP32)
+  const [pairingData, setPairingData] = useState<PairingData | null>(null);
+  const [pairingLoading, setPairingLoading] = useState(false);
+  
+  // Fetch pairing QR code data (only on ESP32)
+  const fetchPairingData = async () => {
+    setPairingLoading(true);
+    try {
+      const response = await fetch('/api/pairing/qr');
+      if (response.ok) {
+        const data = await response.json();
+        setPairingData(data);
+      }
+    } catch {
+      console.log('Pairing not available');
+    }
+    setPairingLoading(false);
+  };
+  
+  const refreshPairing = async () => {
+    setPairingLoading(true);
+    try {
+      const response = await fetch('/api/pairing/refresh', { method: 'POST' });
+      if (response.ok) {
+        const data = await response.json();
+        setPairingData(data);
+      }
+    } catch {
+      console.log('Failed to refresh pairing');
+    }
+    setPairingLoading(false);
+  };
+  
+  // Fetch pairing data on mount (only on ESP32 local mode)
+  useEffect(() => {
+    // Only fetch on local ESP32 (not on cloud)
+    if (!isSupabaseConfigured) {
+      fetchPairingData();
+    }
+  }, []);
 
   const checkForUpdates = async () => {
     setCheckingUpdate(true);
@@ -94,6 +145,35 @@ export function System() {
           </div>
         </Card>
       </div>
+
+      {/* Cloud Pairing (only on ESP32 local mode) */}
+      {pairingData && (
+        <Card>
+          <CardHeader>
+            <CardTitle icon={<Cloud className="w-5 h-5" />}>Cloud Access</CardTitle>
+          </CardHeader>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <p className="text-sm text-coffee-600 mb-4">
+                Link this device to your BrewOS cloud account to control it from anywhere.
+                Scan the QR code with your phone or open the link in a browser.
+              </p>
+              <div className="bg-cream-100 rounded-xl p-4">
+                <InfoRow label="Device ID" value={pairingData.deviceId} />
+              </div>
+            </div>
+            
+            <QRCodeDisplay
+              url={pairingData.url}
+              deviceId={pairingData.deviceId}
+              expiresIn={pairingData.expiresIn}
+              onRefresh={refreshPairing}
+              loading={pairingLoading}
+            />
+          </div>
+        </Card>
+      )}
 
       {/* Firmware Update */}
       <Card>

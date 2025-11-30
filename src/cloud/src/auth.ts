@@ -40,8 +40,11 @@ export function authMiddleware(
     return;
   }
 
-  // Attach user to request
-  (req as Request & { user: JWTPayload }).user = payload;
+  // Attach user to request (normalize id field)
+  (req as Request & { user: { id: string; email: string } }).user = {
+    id: payload.userId,
+    email: payload.email,
+  };
   next();
 }
 
