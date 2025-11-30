@@ -431,10 +431,10 @@ function ScheduleForm({ data, onChange, onSave, onCancel, toggleDay, setPresetDa
           <div className="flex gap-2 h-[50px]">
             <button
               onClick={() => onChange({ ...data, action: 'on' })}
-              className={`flex-1 px-3 rounded-xl border-2 text-sm font-medium transition-all flex items-center justify-center ${
+              className={`flex-1 px-3 rounded-xl border text-sm font-medium transition-all flex items-center justify-center ${
                 data.action === 'on'
                   ? 'bg-emerald-100 border-emerald-400 text-emerald-700'
-                  : 'bg-cream-100 border-cream-300 text-coffee-600 hover:border-coffee-300'
+                  : 'bg-cream-100 border-coffee-200 text-coffee-600 hover:border-coffee-300'
               }`}
             >
               <Power className="w-4 h-4 mr-2" />
@@ -442,10 +442,10 @@ function ScheduleForm({ data, onChange, onSave, onCancel, toggleDay, setPresetDa
             </button>
             <button
               onClick={() => onChange({ ...data, action: 'off' })}
-              className={`flex-1 px-3 rounded-xl border-2 text-sm font-medium transition-all flex items-center justify-center ${
+              className={`flex-1 px-3 rounded-xl border text-sm font-medium transition-all flex items-center justify-center ${
                 data.action === 'off'
                   ? 'bg-orange-100 border-orange-400 text-orange-700'
-                  : 'bg-cream-100 border-cream-300 text-coffee-600 hover:border-coffee-300'
+                  : 'bg-cream-100 border-coffee-200 text-coffee-600 hover:border-coffee-300'
               }`}
             >
               <PowerOff className="w-4 h-4 mr-2" />
@@ -465,7 +465,7 @@ function ScheduleForm({ data, onChange, onSave, onCancel, toggleDay, setPresetDa
               max={23}
               value={data.hour}
               onChange={(e) => onChange({ ...data, hour: parseInt(e.target.value) || 0 })}
-              className="w-20 text-center px-3 bg-cream-100 border-2 border-cream-300 rounded-xl text-coffee-900 outline-none transition-colors focus:border-accent focus:bg-white"
+              className="w-20 text-center px-3 bg-cream-100 border border-coffee-200 rounded-xl text-coffee-900 outline-none transition-colors focus:border-accent focus:bg-white"
             />
             <span className="self-center text-coffee-400 font-bold">:</span>
             <input
@@ -475,7 +475,7 @@ function ScheduleForm({ data, onChange, onSave, onCancel, toggleDay, setPresetDa
               step={5}
               value={data.minute.toString().padStart(2, '0')}
               onChange={(e) => onChange({ ...data, minute: parseInt(e.target.value) || 0 })}
-              className="w-20 text-center px-3 bg-cream-100 border-2 border-cream-300 rounded-xl text-coffee-900 outline-none transition-colors focus:border-accent focus:bg-white"
+              className="w-20 text-center px-3 bg-cream-100 border border-coffee-200 rounded-xl text-coffee-900 outline-none transition-colors focus:border-accent focus:bg-white"
             />
           </div>
         </div>
@@ -490,10 +490,10 @@ function ScheduleForm({ data, onChange, onSave, onCancel, toggleDay, setPresetDa
             <button
               key={day.value}
               onClick={() => toggleDay(day.value)}
-              className={`w-9 h-9 rounded-lg text-xs font-bold transition-all border-2 ${
+              className={`w-9 h-9 rounded-lg text-xs font-bold transition-all border ${
                 data.days & day.value
                   ? 'bg-accent text-white border-accent'
-                  : 'bg-cream-100 text-coffee-500 border-cream-300 hover:border-coffee-300'
+                  : 'bg-cream-100 text-coffee-500 border-coffee-200 hover:border-coffee-300'
               }`}
             >
               {day.short}
@@ -532,7 +532,7 @@ function ScheduleForm({ data, onChange, onSave, onCancel, toggleDay, setPresetDa
           <select
             value={data.strategy}
             onChange={(e) => onChange({ ...data, strategy: parseInt(e.target.value) })}
-            className="w-full h-[50px] px-4 bg-cream-100 border-2 border-cream-300 rounded-xl text-coffee-900 outline-none transition-colors focus:border-accent focus:bg-white"
+            className="w-full h-[50px] px-4 bg-cream-100 border border-coffee-200 rounded-xl text-coffee-900 outline-none transition-colors focus:border-accent focus:bg-white"
           >
             {STRATEGIES.map(s => (
               <option key={s.value} value={s.value}>

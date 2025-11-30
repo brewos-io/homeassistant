@@ -437,7 +437,7 @@ function RegionalSettings() {
             className={`flex-1 py-2.5 px-4 rounded-xl border text-sm font-medium transition-all ${
               preferences.firstDayOfWeek === 'sunday'
                 ? 'bg-accent text-white border-accent'
-                : 'bg-cream-50 border-cream-200 text-coffee-600 hover:border-cream-300'
+                : 'bg-cream-100 border-coffee-200 text-coffee-600 hover:border-coffee-300'
             }`}
           >
             Sunday
@@ -447,7 +447,7 @@ function RegionalSettings() {
             className={`flex-1 py-2.5 px-4 rounded-xl border text-sm font-medium transition-all ${
               preferences.firstDayOfWeek === 'monday'
                 ? 'bg-accent text-white border-accent'
-                : 'bg-cream-50 border-cream-200 text-coffee-600 hover:border-cream-300'
+                : 'bg-cream-100 border-coffee-200 text-coffee-600 hover:border-coffee-300'
             }`}
           >
             Monday
