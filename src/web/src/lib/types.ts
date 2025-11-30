@@ -135,6 +135,7 @@ export interface MQTTConfig {
   port: number;
   username: string;
   password: string;
+  topic: string;
   discovery: boolean;
 }
 
@@ -142,6 +143,7 @@ export interface MQTTStatus {
   enabled: boolean;
   connected: boolean;
   broker: string;
+  topic: string;
 }
 
 // Cloud

@@ -131,6 +131,7 @@ const defaultMqtt: MQTTStatus = {
   enabled: false,
   connected: false,
   broker: '',
+  topic: 'brewos',
 };
 
 const defaultEsp32: ESP32Info = {

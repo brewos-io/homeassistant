@@ -49,6 +49,7 @@ export function Settings() {
     port: 1883,
     username: '',
     password: '',
+    topic: mqtt.topic || 'brewos',
     discovery: true,
   });
   const [ecoSettings, setEcoSettings] = useState({
@@ -281,12 +282,21 @@ export function Settings() {
         </CardHeader>
 
         <div className="space-y-4 mb-6">
-          <Input
-            label="Broker Address"
-            placeholder="homeassistant.local"
-            value={mqttConfig.broker}
-            onChange={(e) => setMqttConfig({ ...mqttConfig, broker: e.target.value })}
-          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Broker Address"
+              placeholder="homeassistant.local"
+              value={mqttConfig.broker}
+              onChange={(e) => setMqttConfig({ ...mqttConfig, broker: e.target.value })}
+            />
+            <Input
+              label="Topic Prefix"
+              placeholder="brewos"
+              value={mqttConfig.topic}
+              onChange={(e) => setMqttConfig({ ...mqttConfig, topic: e.target.value })}
+              hint="Topics: {prefix}/status, {prefix}/command"
+            />
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Input
