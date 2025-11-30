@@ -100,11 +100,15 @@
 | **STATE_BREWING** | ✅ | `state.c` | Brew cycle in progress |
 | **STATE_FAULT** | ✅ | `state.c` | Fault condition detected |
 | **STATE_SAFE** | ✅ | `state.c` | Safe state (all outputs OFF) |
+| **STATE_ECO** | ✅ | `state.c` | Eco mode (reduced temperature) |
 | **State Transitions** | ✅ | `state.c` | All transitions with entry/exit actions |
 | **MODE_IDLE** | ✅ | `state.c` | Machine idle, no heating |
 | **MODE_BREW** | ✅ | `state.c` | Brew mode (heats brew boiler) |
 | **MODE_STEAM** | ✅ | `state.c` | Steam mode (heats both boilers) |
+| **MODE_ECO** | ✅ | `state.c` | Eco mode with reduced setpoint |
 | **Mode Switching** | ✅ | `state.c` | Dynamic mode changes via ESP32 |
+| **Eco Mode Auto-Timeout** | ✅ | `state.c` | Automatic eco entry after idle timeout |
+| **Eco Mode Config** | ✅ | `config_persistence.c` | Eco temp, timeout, enabled - persisted |
 
 ---
 
@@ -195,6 +199,7 @@
 | **MSG_CMD_CLEANING_RESET** | ✅ | `main.c` | Reset brew counter |
 | **MSG_CMD_CLEANING_SET_THRESHOLD** | ✅ | `main.c` | Set cleaning reminder threshold |
 | **MSG_CMD_GET_STATISTICS** | ✅ | `main.c` | Request statistics |
+| **MSG_CMD_SET_ECO** | ✅ | `main.c` | Set eco mode configuration |
 | **MSG_STATISTICS** | ✅ | `protocol.c` | Statistics response |
 | **MSG_CONFIG** | ✅ | `protocol.c` | Configuration response |
 | **MSG_ENV_CONFIG** | ✅ | `protocol.c` | Environmental config response |

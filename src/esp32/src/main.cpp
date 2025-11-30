@@ -335,6 +335,31 @@ void setup() {
                 machineState.target_weight = weight;
             }
         }
+        else if (cmdStr == "set_eco") {
+            // Set eco mode config
+            bool enabled = doc["enabled"] | true;
+            float brewTemp = doc["brewTemp"] | 80.0f;
+            int timeout = doc["timeout"] | 30;
+            
+            // Convert to Pico format: [enabled:1][eco_brew_temp:2][timeout_minutes:2]
+            uint8_t payload[5];
+            payload[0] = enabled ? 1 : 0;
+            int16_t tempScaled = (int16_t)(brewTemp * 10);  // Convert to Celsius * 10
+            payload[1] = (tempScaled >> 8) & 0xFF;
+            payload[2] = tempScaled & 0xFF;
+            payload[3] = (timeout >> 8) & 0xFF;
+            payload[4] = timeout & 0xFF;
+            
+            picoUart.sendCommand(MSG_CMD_SET_ECO, payload, 5);
+        }
+        else if (cmdStr == "enter_eco") {
+            uint8_t payload[1] = {1};  // 1 = enter eco
+            picoUart.sendCommand(MSG_CMD_SET_ECO, payload, 1);
+        }
+        else if (cmdStr == "exit_eco") {
+            uint8_t payload[1] = {0};  // 0 = exit eco
+            picoUart.sendCommand(MSG_CMD_SET_ECO, payload, 1);
+        }
     });
     
     // Initialize BLE Scale Manager

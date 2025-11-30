@@ -354,6 +354,64 @@ void handle_packet(const packet_t* packet) {
             break;
         }
         
+        case MSG_CMD_SET_ECO: {
+            // Set eco mode configuration
+            // Payload: [enabled:1][eco_brew_temp:2][timeout_minutes:2]
+            if (packet->length >= 5) {
+                bool enabled = packet->payload[0] != 0;
+                int16_t eco_temp = (int16_t)((packet->payload[1] << 8) | packet->payload[2]);
+                uint16_t timeout = (packet->payload[3] << 8) | packet->payload[4];
+                
+                // Validate eco temp: 500-900 (50.0-90.0°C) - must be lower than normal brew temp
+                if (eco_temp < 500 || eco_temp > 900) {
+                    DEBUG_PRINT("CMD_SET_ECO: Invalid eco temp %d (valid: 500-900)\n", eco_temp);
+                    protocol_send_ack(MSG_CMD_SET_ECO, packet->seq, ACK_ERROR_INVALID);
+                    break;
+                }
+                
+                // Validate timeout: 0-480 minutes (0 = disabled, max 8 hours)
+                if (timeout > 480) {
+                    DEBUG_PRINT("CMD_SET_ECO: Invalid timeout %d (valid: 0-480 min)\n", timeout);
+                    protocol_send_ack(MSG_CMD_SET_ECO, packet->seq, ACK_ERROR_INVALID);
+                    break;
+                }
+                
+                eco_config_t eco_config = {
+                    .enabled = enabled,
+                    .eco_brew_temp = eco_temp,
+                    .timeout_minutes = timeout
+                };
+                state_set_eco_config(&eco_config);
+                
+                DEBUG_PRINT("Eco config set: enabled=%d, temp=%d, timeout=%d min\n",
+                           enabled, eco_temp, timeout);
+                protocol_send_ack(MSG_CMD_SET_ECO, packet->seq, ACK_SUCCESS);
+            } else if (packet->length >= 1) {
+                // Single byte payload: enable/disable or enter/exit eco mode
+                uint8_t cmd = packet->payload[0];
+                if (cmd == 0) {
+                    // Exit eco mode
+                    if (state_exit_eco()) {
+                        protocol_send_ack(MSG_CMD_SET_ECO, packet->seq, ACK_SUCCESS);
+                    } else {
+                        protocol_send_ack(MSG_CMD_SET_ECO, packet->seq, ACK_ERROR_REJECTED);
+                    }
+                } else if (cmd == 1) {
+                    // Enter eco mode
+                    if (state_enter_eco()) {
+                        protocol_send_ack(MSG_CMD_SET_ECO, packet->seq, ACK_SUCCESS);
+                    } else {
+                        protocol_send_ack(MSG_CMD_SET_ECO, packet->seq, ACK_ERROR_REJECTED);
+                    }
+                } else {
+                    protocol_send_ack(MSG_CMD_SET_ECO, packet->seq, ACK_ERROR_INVALID);
+                }
+            } else {
+                protocol_send_ack(MSG_CMD_SET_ECO, packet->seq, ACK_ERROR_INVALID);
+            }
+            break;
+        }
+        
         case MSG_CMD_BOOTLOADER: {
             // Enter bootloader mode and receive firmware
             DEBUG_PRINT("Entering bootloader mode!\n");

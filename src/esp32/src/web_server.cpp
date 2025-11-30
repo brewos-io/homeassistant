@@ -807,6 +807,109 @@ void WebServer::handleWsMessage(AsyncWebSocketClient* client, uint8_t* data, siz
     else if (type == "setLogLevel") {
         // TODO: Implement log level control
     }
+    else if (type == "command") {
+        // Handle commands from web UI
+        String cmd = doc["cmd"] | "";
+        
+        if (cmd == "set_eco") {
+            // Set eco mode configuration
+            // Payload: enabled (bool), brewTemp (float), timeout (int minutes)
+            bool enabled = doc["enabled"] | true;
+            float brewTemp = doc["brewTemp"] | 80.0f;
+            int timeout = doc["timeout"] | 30;
+            
+            // Convert to Pico format: [enabled:1][eco_brew_temp:2][timeout_minutes:2]
+            uint8_t payload[5];
+            payload[0] = enabled ? 1 : 0;
+            int16_t tempScaled = (int16_t)(brewTemp * 10);  // Convert to Celsius * 10
+            payload[1] = (tempScaled >> 8) & 0xFF;
+            payload[2] = tempScaled & 0xFF;
+            payload[3] = (timeout >> 8) & 0xFF;
+            payload[4] = timeout & 0xFF;
+            
+            if (_picoUart.sendCommand(MSG_CMD_SET_ECO, payload, 5)) {
+                broadcastLog("Eco mode config sent: enabled=" + String(enabled) + 
+                            ", temp=" + String(brewTemp, 1) + "°C, timeout=" + String(timeout) + "min", "info");
+            } else {
+                broadcastLog("Failed to send eco config", "error");
+            }
+        }
+        else if (cmd == "enter_eco") {
+            // Manually enter eco mode
+            uint8_t payload[1] = {1};  // 1 = enter eco
+            if (_picoUart.sendCommand(MSG_CMD_SET_ECO, payload, 1)) {
+                broadcastLog("Entering eco mode", "info");
+            } else {
+                broadcastLog("Failed to enter eco mode", "error");
+            }
+        }
+        else if (cmd == "exit_eco") {
+            // Manually exit eco mode (wake up)
+            uint8_t payload[1] = {0};  // 0 = exit eco
+            if (_picoUart.sendCommand(MSG_CMD_SET_ECO, payload, 1)) {
+                broadcastLog("Exiting eco mode", "info");
+            } else {
+                broadcastLog("Failed to exit eco mode", "error");
+            }
+        }
+        else if (cmd == "set_temp") {
+            // Set temperature setpoint
+            String boiler = doc["boiler"] | "brew";
+            float temp = doc["temp"] | 0.0f;
+            
+            uint8_t payload[5];
+            payload[0] = (boiler == "steam") ? 0x02 : 0x01;
+            memcpy(&payload[1], &temp, sizeof(float));
+            if (_picoUart.sendCommand(MSG_CMD_SET_TEMP, payload, 5)) {
+                broadcastLog(boiler + " temp set to " + String(temp, 1) + "°C", "info");
+            }
+        }
+        else if (cmd == "set_mode") {
+            // Set machine mode
+            String mode = doc["mode"] | "";
+            uint8_t modeCmd = 0;
+            
+            if (mode == "on" || mode == "ready" || mode == "brew") {
+                modeCmd = 0x01;  // MODE_BREW
+            } else if (mode == "steam") {
+                modeCmd = 0x02;  // MODE_STEAM
+            } else if (mode == "off" || mode == "standby" || mode == "idle") {
+                modeCmd = 0x00;  // MODE_IDLE
+            } else if (mode == "eco") {
+                // Enter eco mode
+                uint8_t ecoPayload[1] = {1};
+                _picoUart.sendCommand(MSG_CMD_SET_ECO, ecoPayload, 1);
+                return;
+            }
+            
+            if (_picoUart.sendCommand(MSG_CMD_MODE, &modeCmd, 1)) {
+                broadcastLog("Mode set to: " + mode, "info");
+            }
+        }
+        else if (cmd == "mqtt_config") {
+            // Update MQTT config
+            MQTTConfig config = _mqttClient.getConfig();
+            
+            if (!doc["enabled"].isNull()) config.enabled = doc["enabled"].as<bool>();
+            if (!doc["broker"].isNull()) strncpy(config.broker, doc["broker"].as<const char*>(), sizeof(config.broker) - 1);
+            if (!doc["port"].isNull()) config.port = doc["port"].as<uint16_t>();
+            if (!doc["username"].isNull()) strncpy(config.username, doc["username"].as<const char*>(), sizeof(config.username) - 1);
+            if (!doc["password"].isNull()) {
+                const char* pwd = doc["password"].as<const char*>();
+                if (pwd && strlen(pwd) > 0) {
+                    strncpy(config.password, pwd, sizeof(config.password) - 1);
+                }
+            }
+            if (!doc["topic"].isNull()) {
+                strncpy(config.topic_prefix, doc["topic"].as<const char*>(), sizeof(config.topic_prefix) - 1);
+            }
+            if (!doc["discovery"].isNull()) config.ha_discovery = doc["discovery"].as<bool>();
+            
+            if (_mqttClient.setConfig(config)) {
+                broadcastLog("MQTT configuration updated", "info");
+            }
+        }
+    }
 }
 
 void WebServer::broadcastStatus(const String& json) {

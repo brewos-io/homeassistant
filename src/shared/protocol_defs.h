@@ -84,6 +84,7 @@ extern "C" {
 #define MSG_CMD_CLEANING_SET_THRESHOLD 0x1B  // Set cleaning reminder threshold
 #define MSG_CMD_GET_STATISTICS  0x1C    // Request statistics
 #define MSG_CMD_DEBUG           0x1D    // Debug command
+#define MSG_CMD_SET_ECO         0x1E    // Set eco mode configuration
 #define MSG_CMD_BOOTLOADER      0x1F    // Enter bootloader mode
 
 // =============================================================================
@@ -107,6 +108,7 @@ extern "C" {
 #define STATE_BREWING           4       // Brewing in progress
 #define STATE_FAULT             5       // Fault condition
 #define STATE_SAFE              6       // Safe state (all outputs off)
+#define STATE_ECO               7       // Eco mode (reduced temperature)
 
 // =============================================================================
 // Status Flags (bitfield)
@@ -145,6 +147,7 @@ extern "C" {
 #define CONFIG_STANDBY           0x03
 #define CONFIG_TEMPS             0x04
 #define CONFIG_ENVIRONMENTAL     0x05   // Environmental electrical config (voltage, current limits)
+#define CONFIG_ECO               0x06   // Eco mode configuration
 
 // =============================================================================
 // CRC-16-CCITT

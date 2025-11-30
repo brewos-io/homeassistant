@@ -99,6 +99,11 @@ static void set_defaults(persisted_config_t* config) {
     // Cleaning mode defaults
     config->cleaning_brew_count = 0;
     config->cleaning_threshold = 100;  // Default: 100 cycles before reminder
+    
+    // Eco mode defaults
+    config->eco_enabled = true;           // Eco mode enabled by default
+    config->eco_brew_temp = 800;          // 80.0°C in eco mode
+    config->eco_timeout_minutes = 30;     // 30 minutes idle before eco
 }
 
 // =============================================================================
@@ -369,6 +374,40 @@ void config_persistence_get_cleaning(uint16_t* brew_count, uint16_t* threshold) 
     }
     if (threshold) {
         *threshold = g_persisted_config.cleaning_threshold;
+    }
+}
+
+bool config_persistence_save_eco(bool enabled, int16_t brew_temp, uint16_t timeout_minutes) {
+    // Update eco values in persisted config
+    g_persisted_config.eco_enabled = enabled;
+    g_persisted_config.eco_brew_temp = brew_temp;
+    g_persisted_config.eco_timeout_minutes = timeout_minutes;
+    
+    // Ensure magic and version are set
+    g_persisted_config.magic = CONFIG_MAGIC;
+    g_persisted_config.version = CONFIG_VERSION;
+    
+    // Save to flash
+    if (flash_write_config(&g_persisted_config)) {
+        g_config_loaded = true;
+        DEBUG_PRINT("Config: Saved eco settings (enabled=%d, temp=%d, timeout=%d min)\n", 
+                   enabled, brew_temp, timeout_minutes);
+        return true;
+    }
+    
+    DEBUG_PRINT("Config: Failed to save eco settings to flash\n");
+    return false;
+}
+
+void config_persistence_get_eco(bool* enabled, int16_t* brew_temp, uint16_t* timeout_minutes) {
+    if (enabled) {
+        *enabled = g_persisted_config.eco_enabled;
+    }
+    if (brew_temp) {
+        *brew_temp = g_persisted_config.eco_brew_temp;
+    }
+    if (timeout_minutes) {
+        *timeout_minutes = g_persisted_config.eco_timeout_minutes;
     }
 }
 

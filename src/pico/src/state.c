@@ -18,6 +18,7 @@
 #include "protocol.h"
 #include "cleaning.h"
 #include "statistics.h"
+#include "config_persistence.h"
 
 // =============================================================================
 // Brew Cycle Configuration
@@ -88,6 +89,16 @@ static bool g_brew_switch_debounced = false;
 // State entry/exit tracking
 static uint32_t g_state_entry_time = 0;
 
+// Eco mode state
+static eco_config_t g_eco_config = {
+    .enabled = true,
+    .eco_brew_temp = 800,       // 80.0°C
+    .timeout_minutes = 30       // 30 minutes
+};
+static uint32_t g_last_activity_time = 0;    // Time of last user activity
+static int16_t g_saved_brew_setpoint = 0;    // Saved setpoint before entering eco
+static machine_mode_t g_saved_mode = MODE_IDLE;  // Saved mode before entering eco
+
 // =============================================================================
 // State Names (for debugging)
 // =============================================================================
@@ -99,7 +110,8 @@ static const char* state_names[] = {
     "READY",
     "BREWING",
     "FAULT",
-    "SAFE"
+    "SAFE",
+    "ECO"
 };
 
 // =============================================================================
@@ -199,6 +211,15 @@ static void state_entry_action(machine_state_t state) {
         case STATE_SAFE:
             // Safe state - outputs already off from safety system
             break;
+            
+        case STATE_ECO:
+            // Eco mode - save current setpoint and reduce temperature
+            g_saved_brew_setpoint = control_get_setpoint(0);
+            g_saved_mode = g_mode;
+            control_set_setpoint(0, g_eco_config.eco_brew_temp);
+            DEBUG_PRINT("Eco: Entered eco mode (saved setpoint=%d, eco temp=%d)\n",
+                       g_saved_brew_setpoint, g_eco_config.eco_brew_temp);
+            break;
     }
 }
 
@@ -207,6 +228,15 @@ static void state_entry_action(machine_state_t state) {
  */
 static void state_exit_action(machine_state_t state) {
     switch (state) {
+        case STATE_ECO:
+            // Exiting eco mode - restore original setpoint and mode
+            control_set_setpoint(0, g_saved_brew_setpoint);
+            g_mode = g_saved_mode;
+            g_last_activity_time = to_ms_since_boot(get_absolute_time());  // Reset idle timer
+            DEBUG_PRINT("Eco: Exited eco mode (restored setpoint=%d, mode=%d)\n",
+                       g_saved_brew_setpoint, g_saved_mode);
+            break;
+            
         case STATE_BREWING:
             // Stop brew cycle (shot timer already stopped in state_stop_brew)
             // Only set stop time if not already set (may have been set by WEIGHT_STOP or lever)
@@ -261,6 +291,18 @@ void state_init(void) {
     g_preinfusion_on_ms = PREINFUSION_DEFAULT_ON_MS;
     g_preinfusion_pause_ms = PREINFUSION_DEFAULT_PAUSE_MS;
     
+    // Initialize eco mode from persisted config
+    bool eco_enabled;
+    int16_t eco_temp;
+    uint16_t eco_timeout;
+    config_persistence_get_eco(&eco_enabled, &eco_temp, &eco_timeout);
+    g_eco_config.enabled = eco_enabled;
+    g_eco_config.eco_brew_temp = eco_temp;
+    g_eco_config.timeout_minutes = eco_timeout;
+    g_last_activity_time = to_ms_since_boot(get_absolute_time());
+    g_saved_brew_setpoint = 0;
+    g_saved_mode = MODE_IDLE;
+    
     // Initialize brew switch GPIO
     const pcb_config_t* pcb = pcb_config_get();
     if (pcb && pcb->pins.input_brew_switch >= 0) {
@@ -270,7 +312,10 @@ void state_init(void) {
     // Perform entry action for INIT state
     state_entry_action(STATE_INIT);
     
-    DEBUG_PRINT("State machine initialized: %s\n", state_names[g_state]);
+    DEBUG_PRINT("State machine initialized: %s (eco: %s, timeout=%d min)\n", 
+               state_names[g_state],
+               g_eco_config.enabled ? "enabled" : "disabled",
+               g_eco_config.timeout_minutes);
 }
 
 // =============================================================================
@@ -436,6 +481,16 @@ void state_update(void) {
                 new_state = STATE_IDLE;
             }
             break;
+            
+        case STATE_ECO:
+            // In eco mode - maintain reduced temperature
+            // Exit eco mode on user activity (mode change, brew switch, etc.)
+            // This is handled by state_exit_eco() called from command handlers
+            // Also check if eco mode was disabled while in eco
+            if (!g_eco_config.enabled) {
+                new_state = STATE_IDLE;
+            }
+            break;
     }
     
     // Handle post-brew phase (solenoid delay)
@@ -560,6 +615,20 @@ void state_update(void) {
                     new_state = STATE_IDLE;
                 }
             }
+        }
+    }
+    
+    // Check eco mode auto-timeout (only in READY state when not brewing)
+    if (g_eco_config.enabled && g_eco_config.timeout_minutes > 0 && 
+        g_state == STATE_READY && !g_brewing && new_state == STATE_READY) {
+        uint32_t idle_ms = now - g_last_activity_time;
+        uint32_t timeout_ms = (uint32_t)g_eco_config.timeout_minutes * 60 * 1000;
+        
+        if (idle_ms >= timeout_ms) {
+            // Idle timeout reached - enter eco mode
+            DEBUG_PRINT("Eco: Idle timeout reached (%lu ms >= %lu ms), entering eco mode\n", 
+                       idle_ms, timeout_ms);
+            new_state = STATE_ECO;
         }
     }
     
@@ -712,4 +781,87 @@ uint32_t state_get_brew_start_timestamp_ms(void) {
     }
     // Not brewing - return 0
     return 0;
+}
+
+// =============================================================================
+// Eco Mode
+// =============================================================================
+
+void state_set_eco_config(const eco_config_t* config) {
+    if (!config) return;
+    
+    g_eco_config = *config;
+    
+    // Save to flash
+    config_persistence_save_eco(config->enabled, config->eco_brew_temp, config->timeout_minutes);
+    
+    DEBUG_PRINT("Eco: Config updated (enabled=%d, temp=%d, timeout=%d min)\n",
+               config->enabled, config->eco_brew_temp, config->timeout_minutes);
+    
+    // If eco was disabled while in eco mode, exit eco mode
+    if (!config->enabled && g_state == STATE_ECO) {
+        state_exit_eco();
+    }
+}
+
+void state_get_eco_config(eco_config_t* config) {
+    if (!config) return;
+    *config = g_eco_config;
+}
+
+bool state_is_eco_mode(void) {
+    return g_state == STATE_ECO;
+}
+
+bool state_enter_eco(void) {
+    // Can only enter eco from READY or IDLE state
+    if (g_state != STATE_READY && g_state != STATE_IDLE) {
+        DEBUG_PRINT("Eco: Cannot enter eco mode from state %s\n", state_names[g_state]);
+        return false;
+    }
+    
+    if (g_brewing) {
+        DEBUG_PRINT("Eco: Cannot enter eco mode while brewing\n");
+        return false;
+    }
+    
+    // Transition to eco mode
+    state_exit_action(g_state);
+    g_previous_state = g_state;
+    g_state = STATE_ECO;
+    state_entry_action(STATE_ECO);
+    DEBUG_PRINT("State: %s -> ECO (manual)\n", state_names[g_previous_state]);
+    
+    return true;
+}
+
+bool state_exit_eco(void) {
+    if (g_state != STATE_ECO) {
+        return false;
+    }
+    
+    // Transition out of eco mode to HEATING (to reach normal temp)
+    state_exit_action(STATE_ECO);
+    g_previous_state = STATE_ECO;
+    
+    // Determine target state based on saved mode
+    if (g_saved_mode == MODE_IDLE) {
+        g_state = STATE_IDLE;
+    } else {
+        g_state = STATE_HEATING;  // Start heating to reach normal temperature
+    }
+    
+    state_entry_action(g_state);
+    DEBUG_PRINT("State: ECO -> %s (wake)\n", state_names[g_state]);
+    
+    return true;
+}
+
+void state_reset_idle_timer(void) {
+    g_last_activity_time = to_ms_since_boot(get_absolute_time());
+    
+    // If currently in eco mode and user activity detected, exit eco mode
+    if (g_state == STATE_ECO) {
+        state_exit_eco();
+    }
 }

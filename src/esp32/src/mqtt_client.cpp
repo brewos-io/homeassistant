@@ -435,6 +435,24 @@ void MQTTClient::onMessage(char* topicName, byte* payload, unsigned int length) 
                 LOG_I("MQTT: Set target weight to %.1fg", weight);
             }
         }
+        else if (cmd == "set_eco") {
+            // Set eco mode config: {"cmd":"set_eco","enabled":true,"brewTemp":80.0,"timeout":30}
+            if (_commandCallback) {
+                _commandCallback(cmd.c_str(), doc);
+            }
+            bool enabled = doc["enabled"] | true;
+            float brewTemp = doc["brewTemp"] | 80.0f;
+            int timeout = doc["timeout"] | 30;
+            LOG_I("MQTT: Set eco config: enabled=%d, temp=%.1f°C, timeout=%dmin", 
+                  enabled, brewTemp, timeout);
+        }
+        else if (cmd == "enter_eco" || cmd == "exit_eco") {
+            // Enter/exit eco mode: {"cmd":"enter_eco"} or {"cmd":"exit_eco"}
+            if (_commandCallback) {
+                _commandCallback(cmd.c_str(), doc);
+            }
+            LOG_I("MQTT: %s", cmd.c_str());
+        }
         else {
             LOG_W("MQTT: Unknown command: %s", cmd.c_str());
         }

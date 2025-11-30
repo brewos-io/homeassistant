@@ -61,8 +61,13 @@ typedef struct __attribute__((packed)) {
     uint16_t cleaning_brew_count;          // Brew counter (persists across reboots)
     uint16_t cleaning_threshold;          // Cleaning reminder threshold (10-200)
     
+    // Eco mode settings
+    bool eco_enabled;                     // Whether eco mode auto-timeout is enabled
+    int16_t eco_brew_temp;                // Reduced brew temp in eco mode (Celsius * 10)
+    uint16_t eco_timeout_minutes;         // Minutes of idle before entering eco mode (0=disabled)
+    
     // Reserved for future use
-    uint8_t reserved[28];
+    uint8_t reserved[23];
     
     // CRC32 for integrity check
     uint32_t crc32;
@@ -133,6 +138,17 @@ bool config_persistence_save_cleaning(uint16_t brew_count, uint16_t threshold);
  * @param threshold Output parameter for threshold
  */
 void config_persistence_get_cleaning(uint16_t* brew_count, uint16_t* threshold);
+
+/**
+ * Save eco mode settings to flash
+ * @return true on success, false on failure
+ */
+bool config_persistence_save_eco(bool enabled, int16_t brew_temp, uint16_t timeout_minutes);
+
+/**
+ * Get eco mode settings from persisted config
+ */
+void config_persistence_get_eco(bool* enabled, int16_t* brew_temp, uint16_t* timeout_minutes);
 
 #endif // CONFIG_PERSISTENCE_H
 
