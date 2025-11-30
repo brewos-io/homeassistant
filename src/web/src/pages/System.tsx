@@ -18,7 +18,7 @@ import {
   Cloud,
 } from 'lucide-react';
 import { formatUptime, formatBytes } from '@/lib/utils';
-import { isSupabaseConfigured } from '@/lib/supabase';
+import { isGoogleAuthConfigured } from '@/lib/google-auth';
 
 interface PairingData {
   deviceId: string;
@@ -73,7 +73,7 @@ export function System() {
   // Fetch pairing data on mount (only on ESP32 local mode)
   useEffect(() => {
     // Only fetch on local ESP32 (not on cloud)
-    if (!isSupabaseConfigured) {
+    if (!isGoogleAuthConfigured) {
       fetchPairingData();
     }
   }, []);

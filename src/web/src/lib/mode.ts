@@ -1,15 +1,22 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { CloudDevice, ConnectionMode } from './types';
-import { isSupabaseConfigured, getSupabase } from './supabase';
-import type { User, Session } from '@supabase/supabase-js';
+import { 
+  isGoogleAuthConfigured, 
+  getStoredSession, 
+  storeSession, 
+  clearSession, 
+  handleGoogleSuccess,
+  type GoogleUser,
+  type AuthSession,
+} from './google-auth';
 
 /**
  * Detect if running on ESP32 (local) or cloud
  */
 export function detectMode(): ConnectionMode {
-  // If no Supabase config, we're on ESP32
-  if (!isSupabaseConfigured) return 'local';
+  // If no Google auth config, we're on ESP32
+  if (!isGoogleAuthConfigured) return 'local';
   
   // If hostname is brewos.local or IP, we're on ESP32
   const host = window.location.hostname;
@@ -25,8 +32,8 @@ interface AppState {
   initialized: boolean;
   
   // Auth (cloud only)
-  user: User | null;
-  session: Session | null;
+  user: GoogleUser | null;
+  idToken: string | null;
   authLoading: boolean;
   
   // Devices (cloud only)
@@ -36,8 +43,8 @@ interface AppState {
   
   // Actions
   initialize: () => Promise<void>;
-  signInWithGoogle: () => Promise<void>;
-  signOut: () => Promise<void>;
+  handleGoogleLogin: (credential: string) => void;
+  signOut: () => void;
   
   // Device management
   fetchDevices: () => Promise<void>;
@@ -58,7 +65,7 @@ export const useAppStore = create<AppState>()(
       mode: detectMode(),
       initialized: false,
       user: null,
-      session: null,
+      idToken: null,
       authLoading: true,
       devices: [],
       selectedDeviceId: null,
@@ -73,70 +80,47 @@ export const useAppStore = create<AppState>()(
           return;
         }
 
-        // Cloud mode: initialize auth
-        if (!isSupabaseConfigured) {
-          set({ initialized: true, authLoading: false });
-          return;
-        }
-
-        try {
-          const { data: { session } } = await getSupabase().auth.getSession();
-          
+        // Cloud mode: check for stored session
+        const session = getStoredSession();
+        
+        if (session) {
           set({
-            user: session?.user ?? null,
-            session,
+            user: session.user,
+            idToken: session.idToken,
             authLoading: false,
             initialized: true,
           });
-
-          // Listen for auth changes
-          getSupabase().auth.onAuthStateChange((_event, session) => {
-            set({
-              user: session?.user ?? null,
-              session,
-            });
-            
-            // Fetch devices when logged in
-            if (session?.user) {
-              get().fetchDevices();
-            } else {
-              set({ devices: [], selectedDeviceId: null });
-            }
-          });
-
-          // Fetch devices if already logged in
-          if (session?.user) {
-            get().fetchDevices();
-          }
-        } catch (error) {
-          console.error('Failed to initialize:', error);
+          
+          // Fetch devices
+          get().fetchDevices();
+        } else {
           set({ authLoading: false, initialized: true });
         }
       },
 
-      signInWithGoogle: async () => {
-        if (!isSupabaseConfigured) return;
+      handleGoogleLogin: (credential: string) => {
+        const session = handleGoogleSuccess(credential);
         
-        set({ authLoading: true });
-        
-        const { error } = await getSupabase().auth.signInWithOAuth({
-          provider: 'google',
-          options: {
-            redirectTo: `${window.location.origin}/auth/callback`,
-          },
-        });
-
-        if (error) {
-          console.error('Sign in failed:', error);
-          set({ authLoading: false });
+        if (session) {
+          set({
+            user: session.user,
+            idToken: session.idToken,
+            authLoading: false,
+          });
+          
+          // Fetch devices after login
+          get().fetchDevices();
         }
       },
 
-      signOut: async () => {
-        if (!isSupabaseConfigured) return;
-        
-        await getSupabase().auth.signOut();
-        set({ user: null, session: null, devices: [], selectedDeviceId: null });
+      signOut: () => {
+        clearSession();
+        set({ 
+          user: null, 
+          idToken: null, 
+          devices: [], 
+          selectedDeviceId: null 
+        });
       },
 
       fetchDevices: async () => {
@@ -162,6 +146,9 @@ export const useAppStore = create<AppState>()(
             if (!get().selectedDeviceId && devices.length > 0) {
               set({ selectedDeviceId: devices[0].id });
             }
+          } else if (response.status === 401) {
+            // Token expired, sign out
+            get().signOut();
           }
         } catch (error) {
           console.error('Failed to fetch devices:', error);
@@ -262,7 +249,7 @@ export const useAppStore = create<AppState>()(
       },
 
       getAccessToken: () => {
-        return get().session?.access_token ?? null;
+        return get().idToken;
       },
     }),
     {
@@ -273,4 +260,3 @@ export const useAppStore = create<AppState>()(
     }
   )
 );
-

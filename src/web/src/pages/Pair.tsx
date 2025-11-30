@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { GoogleLogin } from '@react-oauth/google';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
@@ -9,7 +10,7 @@ import { Coffee, Check, X, Loader2 } from 'lucide-react';
 export function Pair() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { user, loading: authLoading, signInWithGoogle } = useAuth();
+  const { user, loading: authLoading, handleGoogleLogin } = useAuth();
   const { claimDevice } = useDevices();
   
   const deviceId = searchParams.get('id') || '';
@@ -27,13 +28,7 @@ export function Pair() {
   }, [deviceId, token, navigate]);
 
   const handlePair = async () => {
-    if (!user) {
-      // Save pairing info and redirect to login
-      const returnUrl = `/pair?id=${deviceId}&token=${encodeURIComponent(token)}&name=${encodeURIComponent(deviceName)}`;
-      localStorage.setItem('brewos_pair_return', returnUrl);
-      await signInWithGoogle();
-      return;
-    }
+    if (!user) return;
 
     setStatus('claiming');
     setErrorMessage('');
@@ -48,23 +43,18 @@ export function Pair() {
         setStatus('error');
         setErrorMessage('Failed to pair device. The code may have expired.');
       }
-    } catch (error) {
+    } catch {
       setStatus('error');
       setErrorMessage('An error occurred while pairing.');
     }
   };
 
-  // Check for saved pairing after OAuth return
+  // Auto-pair after login
   useEffect(() => {
-    if (user && status === 'idle') {
-      const savedReturn = localStorage.getItem('brewos_pair_return');
-      if (savedReturn) {
-        localStorage.removeItem('brewos_pair_return');
-        // Auto-pair if we just logged in
-        handlePair();
-      }
+    if (user && status === 'idle' && deviceId && token) {
+      handlePair();
     }
-  }, [user, status]);
+  }, [user, status, deviceId, token]);
 
   if (authLoading) {
     return (
@@ -103,6 +93,11 @@ export function Pair() {
               </Button>
             </div>
           </div>
+        ) : status === 'claiming' ? (
+          <div className="text-center py-8">
+            <Loader2 className="w-8 h-8 animate-spin text-accent mx-auto mb-4" />
+            <h2 className="text-xl font-bold text-coffee-900 mb-2">Adding Device...</h2>
+          </div>
         ) : (
           <>
             <div className="text-center mb-6">
@@ -128,23 +123,38 @@ export function Pair() {
               className="mb-6"
             />
 
-            {!user && (
-              <p className="text-sm text-coffee-500 mb-4 text-center">
-                You'll need to sign in to add this device.
-              </p>
+            {user ? (
+              <Button
+                className="w-full"
+                onClick={handlePair}
+              >
+                Add to My Devices
+              </Button>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-sm text-coffee-500 text-center">
+                  Sign in to add this device to your account
+                </p>
+                <div className="flex justify-center">
+                  <GoogleLogin
+                    onSuccess={(response) => {
+                      if (response.credential) {
+                        handleGoogleLogin(response.credential);
+                      }
+                    }}
+                    onError={() => {
+                      setErrorMessage('Sign in failed');
+                    }}
+                    theme="outline"
+                    size="large"
+                    text="continue_with"
+                  />
+                </div>
+              </div>
             )}
-
-            <Button
-              className="w-full"
-              onClick={handlePair}
-              loading={status === 'claiming'}
-            >
-              {user ? 'Add to My Devices' : 'Sign in & Add Device'}
-            </Button>
           </>
         )}
       </Card>
     </div>
   );
 }
-

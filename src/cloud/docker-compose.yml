@@ -10,7 +10,7 @@ services:
       - PORT=3001
       - DATA_DIR=/data
       - WEB_DIST_PATH=/app/web
-      - SUPABASE_URL=${SUPABASE_URL}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
     restart: unless-stopped
 
 volumes:

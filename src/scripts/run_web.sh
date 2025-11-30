@@ -24,7 +24,7 @@ fi
 # Check for --cloud flag
 if [ "$1" == "--cloud" ]; then
     echo "☁️  Starting web app in cloud mode..."
-    echo "   Make sure to set VITE_CLOUD_WS_URL and VITE_SUPABASE_* in .env"
+    echo "   Make sure to set VITE_GOOGLE_CLIENT_ID in .env"
     npm run dev -- --mode cloud
 else
     echo "🌐 Starting web app in local/ESP32 mode..."

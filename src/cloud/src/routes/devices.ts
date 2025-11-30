@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { supabaseAuthMiddleware } from '../middleware/auth.js';
+import { googleAuthMiddleware } from '../middleware/auth.js';
 import {
   claimDevice,
   verifyClaimToken,
@@ -45,7 +45,7 @@ router.post('/register-claim', (req, res) => {
  * POST /api/devices/claim
  * Claim a device using QR code token
  */
-router.post('/claim', supabaseAuthMiddleware, (req, res) => {
+router.post('/claim', googleAuthMiddleware, (req, res) => {
   try {
     const { deviceId, token, name } = req.body;
     const userId = req.user!.id;
@@ -81,7 +81,7 @@ router.post('/claim', supabaseAuthMiddleware, (req, res) => {
  * GET /api/devices
  * List user's devices
  */
-router.get('/', supabaseAuthMiddleware, (req, res) => {
+router.get('/', googleAuthMiddleware, (req, res) => {
   try {
     const devices = getUserDevices(req.user!.id);
 
@@ -107,7 +107,7 @@ router.get('/', supabaseAuthMiddleware, (req, res) => {
  * GET /api/devices/:id
  * Get a specific device
  */
-router.get('/:id', supabaseAuthMiddleware, (req, res) => {
+router.get('/:id', googleAuthMiddleware, (req, res) => {
   try {
     const { id } = req.params;
 
@@ -143,7 +143,7 @@ router.get('/:id', supabaseAuthMiddleware, (req, res) => {
  * PATCH /api/devices/:id
  * Update device (name, brand, model)
  */
-router.patch('/:id', supabaseAuthMiddleware, (req, res) => {
+router.patch('/:id', googleAuthMiddleware, (req, res) => {
   try {
     const { id } = req.params;
     const { name, brand, model } = req.body;
@@ -165,7 +165,7 @@ router.patch('/:id', supabaseAuthMiddleware, (req, res) => {
  * DELETE /api/devices/:id
  * Remove device from account
  */
-router.delete('/:id', supabaseAuthMiddleware, (req, res) => {
+router.delete('/:id', googleAuthMiddleware, (req, res) => {
   try {
     const { id } = req.params;
 

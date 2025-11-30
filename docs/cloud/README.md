@@ -7,7 +7,7 @@ The BrewOS cloud service is a WebSocket relay that enables remote access to your
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                         CLOUD SERVICE                                   │
-│              (WebSocket Relay + SQLite + Supabase Auth)                 │
+│              (WebSocket Relay + SQLite + Google Auth)                   │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
 │   /ws/device                              /ws/client                    │
@@ -36,7 +36,7 @@ The BrewOS cloud service is a WebSocket relay that enables remote access to your
 ## Key Features
 
 - **SQLite Database** - Embedded, file-based, no external DB needed
-- **Supabase Auth** - Google, Apple sign-in (JWT verification only)
+- **Google OAuth** - Direct Google Sign-In, no extra services needed
 - **QR Code Pairing** - Scan to link devices to your account
 - **Pure WebSocket** - No MQTT dependency, deploy anywhere
 - **Low Latency** - Direct message relay between clients and devices
@@ -52,7 +52,7 @@ src/cloud/
 │   ├── lib/
 │   │   └── database.ts    # SQLite database (sql.js)
 │   ├── middleware/
-│   │   └── auth.ts        # Supabase JWT verification
+│   │   └── auth.ts        # Google ID token verification
 │   ├── routes/
 │   │   └── devices.ts     # Device management API
 │   ├── services/
@@ -69,19 +69,28 @@ src/cloud/
 
 - Node.js 18+
 - npm or yarn
-- Supabase account (for auth only - free tier)
+- Google Cloud Console account (for OAuth)
 
-### Supabase Auth Setup
+### Google OAuth Setup
 
-1. **Create a Supabase Project**
-   - Go to [supabase.com](https://supabase.com)
-   - Create a new project
-   - Note your JWT Secret (Settings → API → JWT Secret)
+1. **Go to Google Cloud Console**
+   - Visit [console.cloud.google.com](https://console.cloud.google.com)
+   - Create a new project or select existing
 
-2. **Enable Google Auth**
-   - Go to Authentication → Providers → Google
-   - Enable Google provider
-   - Add your Google OAuth credentials
+2. **Configure OAuth Consent Screen**
+   - Go to APIs & Services → OAuth consent screen
+   - Choose "External" user type
+   - Fill in app name, support email
+   - Add scopes: email, profile, openid
+
+3. **Create OAuth 2.0 Client ID**
+   - Go to APIs & Services → Credentials
+   - Click "Create Credentials" → "OAuth 2.0 Client ID"
+   - Application type: Web application
+   - Add authorized JavaScript origins:
+     - `https://cloud.brewos.io`
+     - `http://localhost:5173` (for development)
+   - Copy the **Client ID** (you'll need this for both frontend and backend)
 
 ### Installation
 
@@ -101,8 +110,8 @@ NODE_ENV=development
 # Data directory for SQLite database
 DATA_DIR=./data
 
-# Supabase JWT secret (for token verification only)
-SUPABASE_JWT_SECRET=your-jwt-secret
+# Google OAuth Client ID
+GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 
 # CORS
 CORS_ORIGIN=http://localhost:5173
@@ -130,12 +139,12 @@ The service uses **SQLite** (via sql.js) for data storage:
 
 ```sql
 -- Device ownership
-devices (id, owner_id, name, is_online, ...)
+devices (id, owner_id, name, machine_brand, machine_model, is_online, ...)
 
 -- QR code pairing tokens
 device_claim_tokens (device_id, token_hash, expires_at)
 
--- User profiles (synced from Supabase Auth)
+-- User profiles (synced from Google Auth)
 profiles (id, email, display_name, avatar_url)
 ```
 
@@ -154,7 +163,7 @@ For persistence on cloud platforms, mount a volume to `DATA_DIR`.
 | `/api/devices/claim` | POST | Yes | Claim a device with QR token |
 | `/api/devices/register-claim` | POST | No | ESP32 registers claim token |
 | `/api/devices/:id` | GET | Yes | Get device details |
-| `/api/devices/:id` | PATCH | Yes | Rename device |
+| `/api/devices/:id` | PATCH | Yes | Update device (name, brand, model) |
 | `/api/devices/:id` | DELETE | Yes | Remove device from account |
 | `/*` | GET | No | Serve web UI (SPA) |
 
@@ -170,7 +179,7 @@ For persistence on cloud platforms, mount a volume to `DATA_DIR`.
 1. **ESP32 generates QR code**
    - Generates random claim token
    - Calls `/api/devices/register-claim` to store token hash
-   - Displays QR code with URL: `https://app.brewos.dev/pair?id=BRW-XXXXX&token=TOKEN`
+   - Displays QR code with URL: `https://cloud.brewos.io/pair?id=BRW-XXXXX&token=TOKEN`
 
 2. **User scans QR code**
    - Opens pairing URL in browser
@@ -234,14 +243,14 @@ fly deploy
 |----------|----------|---------|-------------|
 | `PORT` | No | 3001 | HTTP/WS port |
 | `DATA_DIR` | No | `.` | Directory for SQLite database |
-| `SUPABASE_JWT_SECRET` | Yes | - | Supabase JWT secret for auth |
+| `GOOGLE_CLIENT_ID` | Yes | - | Google OAuth Client ID |
 | `CORS_ORIGIN` | No | `*` | Allowed CORS origins |
 | `WEB_DIST_PATH` | No | `../web/dist` | Path to web UI build |
 
 ## Security Considerations
 
 1. **Use HTTPS/WSS in production** - Terminate TLS at load balancer
-2. **Protect JWT secret** - Store securely, don't commit to git
+2. **Keep Client ID secret** - Don't expose in public repos with sensitive data
 3. **Validate device ownership** - Check user has access to device
 4. **Rate limiting** - Add rate limiting for API endpoints
 5. **Backup SQLite** - Regular backups of `brewos.db` file

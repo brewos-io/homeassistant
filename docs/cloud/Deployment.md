@@ -33,7 +33,7 @@ Access at `http://localhost:3001`
 |----------|----------|---------|-------------|
 | `PORT` | No | 3001 | HTTP/WebSocket port |
 | `DATA_DIR` | No | `.` | Directory for SQLite database |
-| `SUPABASE_JWT_SECRET` | Yes | - | Supabase JWT secret for auth |
+| `GOOGLE_CLIENT_ID` | Yes | - | Google OAuth Client ID |
 | `CORS_ORIGIN` | No | `*` | Allowed CORS origins |
 | `WEB_DIST_PATH` | No | `../web/dist` | Path to web UI build |
 
@@ -83,8 +83,6 @@ CMD ["node", "dist/server.js"]
 ### Docker Compose
 
 ```yaml
-version: '3.8'
-
 services:
   brewos-cloud:
     build:
@@ -97,7 +95,7 @@ services:
     environment:
       - PORT=3001
       - DATA_DIR=/data
-      - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
     restart: unless-stopped
 
 volumes:
@@ -110,7 +108,7 @@ volumes:
 docker build -t brewos-cloud .
 docker run -p 3001:3001 \
   -v brewos-data:/data \
-  -e SUPABASE_JWT_SECRET=your-secret \
+  -e GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com \
   brewos-cloud
 ```
 

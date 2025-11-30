@@ -14,14 +14,12 @@ jobs:
       - name: Deploy to server
         uses: appleboy/ssh-action@v1.0.3
         env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: root
           key: ${{ secrets.SERVER_SSH_KEY }}
-          envs: VITE_SUPABASE_URL,VITE_SUPABASE_ANON_KEY,SUPABASE_URL
+          envs: GOOGLE_CLIENT_ID
           script_stop: true
           script: |
             set -e
@@ -34,14 +32,13 @@ jobs:
             
             # Create .env for web build (Vite needs these at build time)
             cat > src/web/.env << EOF
-            VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
-            VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
-            VITE_CLOUD_WS_URL=wss://cloud.brewos.io
+            VITE_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+            VITE_CLOUD_WS_URL=wss://cloud.brewos.io/ws
             EOF
             
             # Create .env for cloud service
             cat > src/cloud/.env << EOF
-            SUPABASE_URL=${SUPABASE_URL}
+            GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
             PORT=3001
             DATA_DIR=/data
             EOF
@@ -58,4 +55,3 @@ jobs:
             cd ../cloud
             docker compose down
             docker compose up -d --build
-
