@@ -1,21 +1,37 @@
-# ECM Coffee Machine Controller - Source Code
+# BrewOS Source Code
 
-This directory contains the firmware source code for both the ESP32-S3 display module and the Pico control board.
+This directory contains all source code for the BrewOS project.
 
 ## Directory Structure
 
 ```
 src/
+├── cloud/          # Cloud service (Node.js + WebSocket relay)
+│   ├── src/        # TypeScript source
+│   └── Dockerfile
+│
 ├── esp32/          # ESP32-S3 firmware (PlatformIO)
 │   ├── src/        # C++ source files
 │   ├── include/    # Header files
-│   ├── data/       # Web UI files (LittleFS)
+│   ├── data/       # Built web UI (LittleFS)
 │   └── platformio.ini
 │
-└── pico/           # Pico firmware (CMake + Pico SDK)
-    ├── src/        # C source files
-    ├── include/    # Header files
-    └── CMakeLists.txt
+├── pico/           # Pico firmware (CMake + Pico SDK)
+│   ├── src/        # C source files
+│   ├── include/    # Header files
+│   └── CMakeLists.txt
+│
+├── web/            # React web interface
+│   ├── src/        # TypeScript/React source
+│   └── vite.config.ts
+│
+├── shared/         # Shared protocol definitions
+│   └── protocol_defs.h
+│
+└── scripts/        # Build and utility scripts
+    ├── build_firmware.sh
+    ├── build_web.sh
+    └── version.py
 ```
 
 ## Quick Start
@@ -96,10 +112,10 @@ make -j4
 ### 1. First Boot (WiFi Setup)
 
 1. Upload ESP32 firmware and web UI
-2. Connect to "ECM-Setup" WiFi network (password: ecmcoffee)
+2. Connect to "BrewOS-XXXXXX" WiFi network
 3. Open http://192.168.4.1
 4. Configure your home WiFi
-5. ESP32 will reconnect and be accessible on your network
+5. ESP32 will reconnect and be accessible at `http://brewos.local`
 
 ### 2. Monitoring & Debugging
 
@@ -156,20 +172,20 @@ See `docs/shared/Communication_Protocol.md` for details.
 
 ## Version Management
 
-Versions are managed centrally using `scripts/version.py`:
+Versions are managed centrally using `src/scripts/version.py`:
 
 ```bash
 # Show current version
-python scripts/version.py
+python src/scripts/version.py
 
 # Bump patch version (0.1.0 → 0.1.1)
-python scripts/version.py --bump patch
+python src/scripts/version.py --bump patch
 
 # Bump minor version (0.1.0 → 0.2.0)
-python scripts/version.py --bump minor
+python src/scripts/version.py --bump minor
 
 # Set specific version
-python scripts/version.py --set 1.2.3
+python src/scripts/version.py --set 1.2.3
 ```
 
 See `docs/pico/Versioning.md` for complete versioning guide.

@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """
-ECM Version Management Script
+BrewOS Version Management Script
 
 Manages firmware and protocol versions from a single source of truth.
 Updates version definitions in all firmware projects.
 
 Usage:
-    python scripts/version.py                    # Show current version
-    python scripts/version.py --bump patch      # Bump patch version
-    python scripts/version.py --bump minor      # Bump minor version
-    python scripts/version.py --bump major      # Bump major version
-    python scripts/version.py --set 1.2.3       # Set specific version
-    python scripts/version.py --protocol 2     # Set protocol version
+    python src/scripts/version.py                 # Show current version
+    python src/scripts/version.py --bump patch   # Bump patch version
+    python src/scripts/version.py --bump minor   # Bump minor version
+    python src/scripts/version.py --bump major   # Bump major version
+    python src/scripts/version.py --set 1.2.3    # Set specific version
+    python src/scripts/version.py --protocol 2   # Set protocol version
 """
 
 import re
@@ -19,8 +19,8 @@ import sys
 import os
 from pathlib import Path
 
-# Project root (parent of scripts/)
-PROJECT_ROOT = Path(__file__).parent.parent
+# Project root (parent of src/scripts/)
+PROJECT_ROOT = Path(__file__).parent.parent.parent
 VERSION_FILE = PROJECT_ROOT / "VERSION"
 
 # Files to update
@@ -53,7 +53,7 @@ def read_version_file():
 
 def write_version_file(firmware_version, protocol_version):
     """Write version to VERSION file."""
-    content = f"""# ECM Firmware Version
+    content = f"""# BrewOS Firmware Version
 # Format: MAJOR.MINOR.PATCH
 # Follow semantic versioning: https://semver.org/
 #
@@ -198,7 +198,7 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(
-        description='ECM Version Management',
+        description='BrewOS Version Management',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__
     )
