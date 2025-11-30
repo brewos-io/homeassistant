@@ -4,4 +4,5 @@ export { Scale } from './Scale';
 export { Settings } from './Settings';
 export { System } from './System';
 export { About } from './About';
+export { Setup } from './Setup';
 

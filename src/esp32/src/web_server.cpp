@@ -45,24 +45,28 @@ void WebServer::loop() {
 }
 
 void WebServer::setupRoutes() {
-    // Root route - serve setup.html in AP mode, index.html otherwise
-    _server.on("/", HTTP_GET, [this](AsyncWebServerRequest* request) {
-        if (_wifiManager.isAPMode()) {
-            request->send(LittleFS, "/setup.html", "text/html");
-        } else {
-            request->send(LittleFS, "/index.html", "text/html");
-        }
-    });
+    // Serve static files from LittleFS (assets, favicon, logo)
+    _server.serveStatic("/assets", LittleFS, "/assets");
+    _server.serveStatic("/favicon.svg", LittleFS, "/favicon.svg");
+    _server.serveStatic("/logo.png", LittleFS, "/logo.png");
     
-    // Explicit setup page route (accessible anytime)
-    _server.on("/setup", HTTP_GET, [](AsyncWebServerRequest* request) {
-        request->send(LittleFS, "/setup.html", "text/html");
+    // Root route - always serve index.html (React handles AP mode detection)
+    _server.on("/", HTTP_GET, [](AsyncWebServerRequest* request) {
+        request->send(LittleFS, "/index.html", "text/html");
     });
-    
-    // Serve other static files from LittleFS
-    _server.serveStatic("/", LittleFS, "/");
     
     // API endpoints
+    
+    // Check if in AP mode (for WiFi setup detection)
+    _server.on("/api/mode", HTTP_GET, [this](AsyncWebServerRequest* request) {
+        JsonDocument doc;
+        doc["apMode"] = _wifiManager.isAPMode();
+        doc["hostname"] = WiFi.getHostname();
+        String response;
+        serializeJson(doc, response);
+        request->send(200, "application/json", response);
+    });
+    
     _server.on("/api/status", HTTP_GET, [this](AsyncWebServerRequest* request) {
         handleGetStatus(request);
     });
@@ -420,9 +424,16 @@ void WebServer::setupRoutes() {
         }
     );
     
-    // 404 handler
+    // SPA fallback - serve index.html for client-side routes
+    // (any route that doesn't match API or static files)
     _server.onNotFound([](AsyncWebServerRequest* request) {
-        request->send(404, "text/plain", "Not found");
+        // If it's an API call, return 404
+        if (request->url().startsWith("/api/")) {
+            request->send(404, "application/json", "{\"error\":\"Not found\"}");
+            return;
+        }
+        // For all other routes, serve index.html (React Router handles it)
+        request->send(LittleFS, "/index.html", "text/html");
     });
 }
 
