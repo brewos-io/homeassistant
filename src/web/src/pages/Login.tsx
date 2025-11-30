@@ -1,14 +1,18 @@
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { useAuth } from '@/lib/auth';
 import { isSupabaseConfigured } from '@/lib/supabase';
-import { Coffee } from 'lucide-react';
+import { Coffee, AlertCircle } from 'lucide-react';
 
 export function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, loading, signInWithGoogle } = useAuth();
+  
+  // Get error from navigation state (e.g., from cancelled OAuth)
+  const error = (location.state as { error?: string })?.error;
 
   useEffect(() => {
     if (user) {
@@ -43,6 +47,13 @@ export function Login() {
             Sign in to manage your espresso machines from anywhere
           </p>
         </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span className="text-sm">{error}</span>
+          </div>
+        )}
 
         <div className="space-y-4">
           <Button

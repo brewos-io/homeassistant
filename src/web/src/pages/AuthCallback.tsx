@@ -13,19 +13,40 @@ export function AuthCallback() {
         navigate('/');
         return;
       }
+
+      // Check URL for OAuth errors (e.g., user cancelled)
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const urlParams = new URLSearchParams(window.location.search);
       
-      const { error } = await getSupabase().auth.getSession();
+      const errorCode = hashParams.get('error') || urlParams.get('error');
+      const errorDescription = hashParams.get('error_description') || urlParams.get('error_description');
+      
+      if (errorCode) {
+        console.error('OAuth error:', errorCode, errorDescription);
+        navigate('/login', { 
+          state: { error: errorDescription || 'Authentication was cancelled' }
+        });
+        return;
+      }
+      
+      const { data, error } = await getSupabase().auth.getSession();
       
       if (error) {
         console.error('Auth callback error:', error);
+        navigate('/login', { state: { error: error.message } });
+        return;
+      }
+
+      // No session means auth failed or was cancelled
+      if (!data.session) {
+        console.log('No session after auth callback');
         navigate('/login');
         return;
       }
 
       // Check for pairing redirect
-      const params = new URLSearchParams(window.location.search);
-      const deviceId = params.get('device');
-      const token = params.get('token');
+      const deviceId = urlParams.get('device');
+      const token = urlParams.get('token');
 
       if (deviceId && token) {
         // Redirect to pair page with device info
