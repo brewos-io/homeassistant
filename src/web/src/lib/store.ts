@@ -19,6 +19,7 @@ import type {
   LogEntry,
   ScaleScanResult,
   WebSocketMessage,
+  UserPreferences,
 } from './types';
 import { Connection } from './connection';
 
@@ -58,6 +59,9 @@ interface BrewOSState {
   alerts: Alert[];
   logs: LogEntry[];
   
+  // User preferences (localStorage)
+  preferences: UserPreferences;
+  
   // Actions
   setConnectionState: (state: ConnectionState) => void;
   processMessage: (message: WebSocketMessage) => void;
@@ -66,6 +70,7 @@ interface BrewOSState {
   addScanResult: (result: ScaleScanResult) => void;
   setScaleScanning: (scanning: boolean) => void;
   clearScanResults: () => void;
+  setPreference: <K extends keyof UserPreferences>(key: K, value: UserPreferences[K]) => void;
 }
 
 // Default state
@@ -162,6 +167,32 @@ const defaultDevice: DeviceInfo = {
   firmwareVersion: '',
 };
 
+// Load preferences from localStorage
+const loadPreferences = (): UserPreferences => {
+  const defaults: UserPreferences = {
+    firstDayOfWeek: 'sunday',
+    use24HourTime: false,
+  };
+  
+  try {
+    const saved = localStorage.getItem('brewos_preferences');
+    if (saved) {
+      return { ...defaults, ...JSON.parse(saved) };
+    }
+  } catch (e) {
+    console.warn('Failed to load preferences:', e);
+  }
+  return defaults;
+};
+
+const savePreferences = (prefs: UserPreferences) => {
+  try {
+    localStorage.setItem('brewos_preferences', JSON.stringify(prefs));
+  } catch (e) {
+    console.warn('Failed to save preferences:', e);
+  }
+};
+
 export const useStore = create<BrewOSState>()(
   subscribeWithSelector((set, get) => ({
     // Initial state
@@ -184,6 +215,7 @@ export const useStore = create<BrewOSState>()(
     stats: defaultStats,
     alerts: [],
     logs: [],
+    preferences: loadPreferences(),
 
     // Actions
     setConnectionState: (state) => set({ connectionState: state }),
@@ -322,6 +354,14 @@ export const useStore = create<BrewOSState>()(
     setScaleScanning: (scanning) => set({ scaleScanning: scanning }),
 
     clearScanResults: () => set({ scanResults: [] }),
+
+    setPreference: (key, value) => {
+      set((state) => {
+        const newPrefs = { ...state.preferences, [key]: value };
+        savePreferences(newPrefs);
+        return { preferences: newPrefs };
+      });
+    },
   }))
 );
 

@@ -26,8 +26,8 @@ const getNavigation = (isCloud: boolean, deviceId?: string) => {
     { name: 'Dashboard', href: basePath || '/', icon: LayoutGrid },
     { name: 'Brewing', href: `${basePath}/brewing`, icon: Coffee },
     { name: 'Scale', href: `${basePath}/scale`, icon: Scale },
-    { name: 'Settings', href: `${basePath}/settings`, icon: Settings },
     { name: 'Schedules', href: `${basePath}/schedules`, icon: Calendar },
+    { name: 'Settings', href: `${basePath}/settings`, icon: Settings },
     { name: 'System', href: `${basePath}/system`, icon: Server },
   ];
   

@@ -10,6 +10,9 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
   ({ label, hint, error, unit, className, ...props }, ref) => {
+    // Calculate right padding based on unit length
+    const unitPadding = unit ? (unit.length > 3 ? 'pr-20' : 'pr-12') : '';
+    
     return (
       <div className="space-y-1.5">
         {label && (
@@ -17,19 +20,19 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             {label}
           </label>
         )}
-        <div className="relative">
+        <div className="relative flex items-center">
           <input
             ref={ref}
             className={cn(
-              'input',
-              unit && 'pr-12',
+              'input flex-1',
+              unitPadding,
               error && 'border-red-400 focus:border-red-500',
               className
             )}
             {...props}
           />
           {unit && (
-            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-medium text-coffee-400">
+            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-medium text-coffee-400 whitespace-nowrap">
               {unit}
             </span>
           )}

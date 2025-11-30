@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useStore } from '@/lib/store';
 import { Card, CardHeader, CardTitle } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
@@ -16,20 +17,29 @@ import {
   X,
 } from 'lucide-react';
 
-// Days of week
-const DAYS = [
-  { value: 0x01, label: 'Sun', short: 'S' },
-  { value: 0x02, label: 'Mon', short: 'M' },
-  { value: 0x04, label: 'Tue', short: 'T' },
-  { value: 0x08, label: 'Wed', short: 'W' },
-  { value: 0x10, label: 'Thu', short: 'T' },
-  { value: 0x20, label: 'Fri', short: 'F' },
-  { value: 0x40, label: 'Sat', short: 'S' },
+// Days of week - starting from Sunday (standard ISO)
+const ALL_DAYS = [
+  { value: 0x01, label: 'Sun', short: 'S', index: 0 },
+  { value: 0x02, label: 'Mon', short: 'M', index: 1 },
+  { value: 0x04, label: 'Tue', short: 'T', index: 2 },
+  { value: 0x08, label: 'Wed', short: 'W', index: 3 },
+  { value: 0x10, label: 'Thu', short: 'T', index: 4 },
+  { value: 0x20, label: 'Fri', short: 'F', index: 5 },
+  { value: 0x40, label: 'Sat', short: 'S', index: 6 },
 ];
 
 const WEEKDAYS = 0x3E; // Mon-Fri
 const WEEKENDS = 0x41; // Sat-Sun
 const EVERY_DAY = 0x7F;
+
+// Helper to reorder days based on first day of week
+const getOrderedDays = (firstDay: 'sunday' | 'monday') => {
+  if (firstDay === 'monday') {
+    // Mon, Tue, Wed, Thu, Fri, Sat, Sun
+    return [...ALL_DAYS.slice(1), ALL_DAYS[0]];
+  }
+  return ALL_DAYS;
+};
 
 // Heating strategies
 const STRATEGIES = [
@@ -72,12 +82,19 @@ const defaultSchedule: ScheduleFormData = {
 };
 
 export function Schedules() {
+  const preferences = useStore((s) => s.preferences);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [autoPowerOff, setAutoPowerOff] = useState({ enabled: false, minutes: 60 });
   const [isEditing, setIsEditing] = useState<number | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [formData, setFormData] = useState<ScheduleFormData>(defaultSchedule);
   const [loading, setLoading] = useState(true);
+
+  // Get ordered days based on user preference
+  const orderedDays = useMemo(() => 
+    getOrderedDays(preferences.firstDayOfWeek), 
+    [preferences.firstDayOfWeek]
+  );
 
   // Fetch schedules on mount
   useEffect(() => {
@@ -203,8 +220,11 @@ export function Schedules() {
   };
 
   const formatTime = (hour: number, minute: number) => {
-    const h = hour % 12 || 12;
     const m = minute.toString().padStart(2, '0');
+    if (preferences.use24HourTime) {
+      return `${hour.toString().padStart(2, '0')}:${m}`;
+    }
+    const h = hour % 12 || 12;
     const ampm = hour >= 12 ? 'PM' : 'AM';
     return `${h}:${m} ${ampm}`;
   };
@@ -214,7 +234,7 @@ export function Schedules() {
     if (days === WEEKDAYS) return 'Weekdays';
     if (days === WEEKENDS) return 'Weekends';
     
-    const dayNames = DAYS.filter(d => days & d.value).map(d => d.label);
+    const dayNames = orderedDays.filter(d => days & d.value).map(d => d.label);
     return dayNames.join(', ');
   };
 
@@ -272,6 +292,7 @@ export function Schedules() {
                     onCancel={cancelEdit}
                     toggleDay={toggleDay}
                     setPresetDays={setPresetDays}
+                    orderedDays={orderedDays}
                   />
                 ) : (
                   <div className="flex items-center justify-between">
@@ -324,6 +345,7 @@ export function Schedules() {
                   onCancel={cancelEdit}
                   toggleDay={toggleDay}
                   setPresetDays={setPresetDays}
+                  orderedDays={orderedDays}
                 />
               </div>
             )}
@@ -374,6 +396,13 @@ export function Schedules() {
 }
 
 // Schedule Form Component
+interface DayInfo {
+  value: number;
+  label: string;
+  short: string;
+  index: number;
+}
+
 interface ScheduleFormProps {
   data: ScheduleFormData;
   onChange: (data: ScheduleFormData) => void;
@@ -381,9 +410,10 @@ interface ScheduleFormProps {
   onCancel: () => void;
   toggleDay: (day: number) => void;
   setPresetDays: (preset: 'weekdays' | 'weekends' | 'everyday') => void;
+  orderedDays: DayInfo[];
 }
 
-function ScheduleForm({ data, onChange, onSave, onCancel, toggleDay, setPresetDays }: ScheduleFormProps) {
+function ScheduleForm({ data, onChange, onSave, onCancel, toggleDay, setPresetDays, orderedDays }: ScheduleFormProps) {
   return (
     <div className="space-y-4">
       <Input
@@ -456,7 +486,7 @@ function ScheduleForm({ data, onChange, onSave, onCancel, toggleDay, setPresetDa
           Days
         </label>
         <div className="flex gap-1 mb-2">
-          {DAYS.map(day => (
+          {orderedDays.map(day => (
             <button
               key={day.value}
               onClick={() => toggleDay(day.value)}
@@ -475,14 +505,14 @@ function ScheduleForm({ data, onChange, onSave, onCancel, toggleDay, setPresetDa
             onClick={() => setPresetDays('weekdays')}
             className="text-accent hover:underline"
           >
-            Weekdays
+            Mon–Fri
           </button>
           <span className="text-coffee-300">•</span>
           <button
             onClick={() => setPresetDays('weekends')}
             className="text-accent hover:underline"
           >
-            Weekends
+            Sat–Sun
           </button>
           <span className="text-coffee-300">•</span>
           <button

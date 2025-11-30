@@ -16,6 +16,7 @@ import {
   X,
   Coffee,
   Save,
+  Globe,
 } from 'lucide-react';
 
 export function Settings() {
@@ -352,6 +353,19 @@ export function Settings() {
         </div>
       </Card>
 
+      {/* Regional Settings */}
+      <Card>
+        <CardHeader>
+          <CardTitle icon={<Globe className="w-5 h-5" />}>Regional</CardTitle>
+        </CardHeader>
+
+        <p className="text-sm text-coffee-500 mb-4">
+          Customize display settings for your region.
+        </p>
+
+        <RegionalSettings />
+      </Card>
+
       {/* Eco Mode */}
       <Card>
         <CardHeader>
@@ -403,6 +417,58 @@ function StatusRow({ label, value, mono }: StatusRowProps) {
       <span className={`text-sm font-medium text-coffee-900 ${mono ? 'font-mono' : ''}`}>
         {value}
       </span>
+    </div>
+  );
+}
+
+function RegionalSettings() {
+  const preferences = useStore((s) => s.preferences);
+  const setPreference = useStore((s) => s.setPreference);
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="block text-xs font-semibold uppercase tracking-wider text-coffee-500 mb-1.5">
+          First Day of Week
+        </label>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setPreference('firstDayOfWeek', 'sunday')}
+            className={`flex-1 py-2.5 px-4 rounded-xl border text-sm font-medium transition-all ${
+              preferences.firstDayOfWeek === 'sunday'
+                ? 'bg-accent text-white border-accent'
+                : 'bg-cream-50 border-cream-200 text-coffee-600 hover:border-cream-300'
+            }`}
+          >
+            Sunday
+          </button>
+          <button
+            onClick={() => setPreference('firstDayOfWeek', 'monday')}
+            className={`flex-1 py-2.5 px-4 rounded-xl border text-sm font-medium transition-all ${
+              preferences.firstDayOfWeek === 'monday'
+                ? 'bg-accent text-white border-accent'
+                : 'bg-cream-50 border-cream-200 text-coffee-600 hover:border-cream-300'
+            }`}
+          >
+            Monday
+          </button>
+        </div>
+        <p className="mt-1.5 text-xs text-coffee-400">
+          Affects how weekdays and weekends are displayed in schedules
+        </p>
+      </div>
+
+      <div>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={preferences.use24HourTime}
+            onChange={(e) => setPreference('use24HourTime', e.target.checked)}
+            className="w-4 h-4 rounded border-cream-300 text-accent focus:ring-accent"
+          />
+          <span className="text-sm text-coffee-700">Use 24-hour time format</span>
+        </label>
+      </div>
     </div>
   );
 }

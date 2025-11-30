@@ -210,3 +210,11 @@ export interface CloudDevice {
   machineType: string | null;
   claimedAt: string;
 }
+
+// User preferences (stored in localStorage)
+export type FirstDayOfWeek = 'sunday' | 'monday';
+
+export interface UserPreferences {
+  firstDayOfWeek: FirstDayOfWeek;
+  use24HourTime: boolean;
+}
