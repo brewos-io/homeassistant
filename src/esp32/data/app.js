@@ -52,6 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initWebSocket();
     initButtons();
     initMQTT();
+    initScale();
     fetchStatus();
     fetchMQTTConfig();
     
@@ -465,6 +466,254 @@ function formatUptime(ms) {
         return `${minutes}m ${seconds % 60}s`;
     } else {
         return `${seconds}s`;
+    }
+}
+
+// Scale / Brew-by-Weight
+let scaleConnected = false;
+let scaleScanning = false;
+
+function initScale() {
+    document.getElementById('scale-scan-btn').addEventListener('click', scanScales);
+    document.getElementById('scale-connect-btn').addEventListener('click', connectScale);
+    document.getElementById('scale-disconnect-btn').addEventListener('click', disconnectScale);
+    document.getElementById('scale-tare-btn').addEventListener('click', tareScale);
+    document.getElementById('bbw-save-btn').addEventListener('click', saveBBWSettings);
+    
+    document.getElementById('scale-devices-list').addEventListener('change', function() {
+        document.getElementById('scale-connect-btn').disabled = !this.value;
+    });
+    
+    // Initial fetch
+    fetchScaleStatus();
+    fetchBBWSettings();
+    
+    // Periodic refresh
+    setInterval(fetchScaleStatus, 2000);
+}
+
+async function fetchScaleStatus() {
+    try {
+        const response = await fetch('/api/scale/status');
+        const data = await response.json();
+        updateScaleUI(data);
+    } catch (error) {
+        console.error('Scale status fetch failed:', error);
+    }
+}
+
+function updateScaleUI(data) {
+    scaleConnected = data.connected;
+    scaleScanning = data.scanning;
+    
+    const statusEl = document.getElementById('scale-status');
+    const weightSection = document.getElementById('scale-weight-section');
+    const disconnectedSection = document.getElementById('scale-disconnected-section');
+    const scanningSection = document.getElementById('scale-scanning-section');
+    const devicesSection = document.getElementById('scale-devices-section');
+    const scanBtn = document.getElementById('scale-scan-btn');
+    const connectBtn = document.getElementById('scale-connect-btn');
+    const disconnectBtn = document.getElementById('scale-disconnect-btn');
+    const tareBtn = document.getElementById('scale-tare-btn');
+    
+    if (data.connected) {
+        statusEl.textContent = data.name || 'Connected';
+        statusEl.className = 'status-badge connected';
+        
+        weightSection.style.display = 'block';
+        disconnectedSection.style.display = 'none';
+        scanningSection.style.display = 'none';
+        devicesSection.style.display = 'none';
+        
+        document.getElementById('scale-weight').textContent = data.weight.toFixed(1);
+        document.getElementById('scale-flow').textContent = data.flow_rate.toFixed(1);
+        
+        scanBtn.style.display = 'none';
+        connectBtn.style.display = 'none';
+        disconnectBtn.style.display = 'inline-block';
+        tareBtn.disabled = false;
+    } else if (data.scanning) {
+        statusEl.textContent = 'Scanning...';
+        statusEl.className = 'status-badge';
+        statusEl.style.background = 'rgba(74, 144, 217, 0.2)';
+        statusEl.style.color = 'var(--accent-cool)';
+        
+        weightSection.style.display = 'none';
+        disconnectedSection.style.display = 'none';
+        scanningSection.style.display = 'flex';
+        devicesSection.style.display = 'none';
+        
+        scanBtn.textContent = 'Stop';
+        scanBtn.style.display = 'inline-block';
+        connectBtn.style.display = 'none';
+        disconnectBtn.style.display = 'none';
+        tareBtn.disabled = true;
+    } else {
+        statusEl.textContent = 'Disconnected';
+        statusEl.className = 'status-badge disconnected';
+        
+        weightSection.style.display = 'none';
+        disconnectedSection.style.display = 'block';
+        scanningSection.style.display = 'none';
+        
+        scanBtn.textContent = 'Scan';
+        scanBtn.style.display = 'inline-block';
+        connectBtn.style.display = 'inline-block';
+        disconnectBtn.style.display = 'none';
+        tareBtn.disabled = true;
+        
+        // Check if we have discovered devices
+        fetchDiscoveredScales();
+    }
+}
+
+async function scanScales() {
+    const btn = document.getElementById('scale-scan-btn');
+    
+    if (scaleScanning) {
+        // Stop scan
+        try {
+            await fetch('/api/scale/scan/stop', { method: 'POST' });
+            log('Scale scan stopped', 'info');
+        } catch (error) {
+            log('Failed to stop scan', 'error');
+        }
+    } else {
+        // Start scan
+        try {
+            btn.disabled = true;
+            const response = await fetch('/api/scale/scan', { method: 'POST' });
+            const data = await response.json();
+            if (data.status === 'ok') {
+                log('Scanning for BLE scales...', 'info');
+                // Poll for discovered devices
+                setTimeout(fetchDiscoveredScales, 2000);
+                setTimeout(fetchDiscoveredScales, 5000);
+                setTimeout(fetchDiscoveredScales, 10000);
+                setTimeout(fetchDiscoveredScales, 15000);
+            }
+        } catch (error) {
+            log('Failed to start scan', 'error');
+        }
+        btn.disabled = false;
+    }
+}
+
+async function fetchDiscoveredScales() {
+    try {
+        const response = await fetch('/api/scale/devices');
+        const data = await response.json();
+        
+        const select = document.getElementById('scale-devices-list');
+        const devicesSection = document.getElementById('scale-devices-section');
+        const disconnectedSection = document.getElementById('scale-disconnected-section');
+        
+        select.innerHTML = '';
+        
+        if (data.devices && data.devices.length > 0) {
+            devicesSection.style.display = 'block';
+            disconnectedSection.style.display = 'none';
+            
+            data.devices.forEach(device => {
+                const opt = document.createElement('option');
+                opt.value = device.address;
+                opt.textContent = `${device.name} (${device.type_name}, ${device.rssi}dBm)`;
+                select.appendChild(opt);
+            });
+            
+            document.getElementById('scale-connect-btn').disabled = false;
+        } else if (!scaleConnected && !scaleScanning) {
+            devicesSection.style.display = 'none';
+            disconnectedSection.style.display = 'block';
+            document.getElementById('scale-connect-btn').disabled = true;
+        }
+    } catch (error) {
+        console.error('Failed to fetch discovered scales:', error);
+    }
+}
+
+async function connectScale() {
+    const select = document.getElementById('scale-devices-list');
+    const address = select.value;
+    
+    if (!address) {
+        log('Please select a scale to connect', 'warn');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/scale/connect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ address: address })
+        });
+        const data = await response.json();
+        if (data.status === 'ok') {
+            log('Connecting to scale...', 'info');
+        } else {
+            log('Failed to connect: ' + (data.error || 'Unknown error'), 'error');
+        }
+    } catch (error) {
+        log('Connection error: ' + error, 'error');
+    }
+}
+
+async function disconnectScale() {
+    try {
+        await fetch('/api/scale/disconnect', { method: 'POST' });
+        log('Scale disconnected', 'info');
+    } catch (error) {
+        log('Disconnect error: ' + error, 'error');
+    }
+}
+
+async function tareScale() {
+    try {
+        await fetch('/api/scale/tare', { method: 'POST' });
+        log('Scale tared', 'info');
+    } catch (error) {
+        log('Tare error: ' + error, 'error');
+    }
+}
+
+async function fetchBBWSettings() {
+    try {
+        const response = await fetch('/api/scale/settings');
+        const data = await response.json();
+        
+        document.getElementById('bbw-target').value = data.target_weight || 36;
+        document.getElementById('bbw-dose').value = data.dose_weight || 18;
+        document.getElementById('bbw-offset').value = data.stop_offset || 2;
+        document.getElementById('bbw-auto-stop').checked = data.auto_stop !== false;
+        document.getElementById('bbw-auto-tare').checked = data.auto_tare !== false;
+    } catch (error) {
+        console.error('Failed to fetch BBW settings:', error);
+    }
+}
+
+async function saveBBWSettings() {
+    const settings = {
+        target_weight: parseFloat(document.getElementById('bbw-target').value),
+        dose_weight: parseFloat(document.getElementById('bbw-dose').value),
+        stop_offset: parseFloat(document.getElementById('bbw-offset').value),
+        auto_stop: document.getElementById('bbw-auto-stop').checked,
+        auto_tare: document.getElementById('bbw-auto-tare').checked
+    };
+    
+    try {
+        const response = await fetch('/api/scale/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(settings)
+        });
+        
+        if (response.ok) {
+            log('BBW settings saved', 'info');
+        } else {
+            log('Failed to save BBW settings', 'error');
+        }
+    } catch (error) {
+        log('Error saving BBW settings: ' + error, 'error');
     }
 }
 

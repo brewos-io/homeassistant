@@ -12,6 +12,7 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
 #include <Preferences.h>
+#include <ArduinoJson.h>
 
 // Include ui_state_t definition
 #include "ui/ui.h"
@@ -112,6 +113,14 @@ public:
     void onConnected(std::function<void()> callback) { _onConnected = callback; }
     void onDisconnected(std::function<void()> callback) { _onDisconnected = callback; }
     
+    /**
+     * Command callback - called when a command is received via MQTT
+     * @param cmd Command name (e.g., "set_temp", "set_mode", "tare")
+     * @param doc JSON document with command parameters
+     */
+    typedef std::function<void(const char* cmd, const JsonDocument& doc)> command_callback_t;
+    void onCommand(command_callback_t callback) { _commandCallback = callback; }
+    
 private:
     WiFiClient _wifiClient;
     PubSubClient _client;
@@ -128,6 +137,7 @@ private:
     // Callbacks
     std::function<void()> _onConnected;
     std::function<void()> _onDisconnected;
+    command_callback_t _commandCallback;
     
     // Internal methods
     void loadConfig();

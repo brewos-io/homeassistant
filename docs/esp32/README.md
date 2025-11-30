@@ -32,11 +32,12 @@ The ESP32-S3 handles connectivity, user interface, and advanced features for the
 - OTA Pico firmware updates
 - MQTT with Home Assistant discovery
 - RESTful API
+- BLE scale integration (Acaia, Felicita, Decent, Timemore)
+- Brew-by-weight auto-stop
+- Temperature control via web/MQTT
 
 ### In Progress 🔲
 
-- BLE scale integration
-- Brew-by-weight auto-stop
 - Notifications framework
 - Cloud connectivity
 

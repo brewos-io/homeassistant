@@ -128,6 +128,75 @@
                 </div>
             </div>
 
+            <!-- Scale / Brew-by-Weight -->
+            <div class="card scale-card">
+                <div class="card-header">
+                    <span class="icon">⚖️</span>
+                    <span>BLE Scale</span>
+                    <span id="scale-status" class="status-badge disconnected">Disconnected</span>
+                </div>
+                <div class="scale-content">
+                    <div class="scale-weight-display" id="scale-weight-section">
+                        <div class="weight-value">
+                            <span id="scale-weight">0.0</span>
+                            <span class="weight-unit">g</span>
+                        </div>
+                        <div class="weight-info">
+                            <span>Flow: <span id="scale-flow">0.0</span> g/s</span>
+                        </div>
+                    </div>
+                    <div class="scale-disconnected" id="scale-disconnected-section">
+                        <p>No scale connected</p>
+                    </div>
+                    <div class="scale-scanning" id="scale-scanning-section" style="display:none;">
+                        <div class="spinner-small"></div>
+                        <p>Scanning for scales...</p>
+                    </div>
+                    <div class="scale-devices" id="scale-devices-section" style="display:none;">
+                        <select id="scale-devices-list" size="4">
+                            <option value="">No scales found</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="scale-actions">
+                    <button id="scale-scan-btn" class="btn">Scan</button>
+                    <button id="scale-connect-btn" class="btn primary" disabled>Connect</button>
+                    <button id="scale-tare-btn" class="btn" disabled>Tare</button>
+                    <button id="scale-disconnect-btn" class="btn warning" style="display:none;">Disconnect</button>
+                </div>
+                <div class="scale-bbw">
+                    <h4>Brew by Weight</h4>
+                    <div class="bbw-settings">
+                        <div class="form-group inline">
+                            <label>Target</label>
+                            <input type="number" id="bbw-target" value="36" min="10" max="100" step="0.5">
+                            <span>g</span>
+                        </div>
+                        <div class="form-group inline">
+                            <label>Dose</label>
+                            <input type="number" id="bbw-dose" value="18" min="5" max="30" step="0.5">
+                            <span>g</span>
+                        </div>
+                        <div class="form-group inline">
+                            <label>Offset</label>
+                            <input type="number" id="bbw-offset" value="2" min="0" max="10" step="0.5">
+                            <span>g</span>
+                        </div>
+                    </div>
+                    <div class="bbw-options">
+                        <label><input type="checkbox" id="bbw-auto-stop" checked> Auto-stop</label>
+                        <label><input type="checkbox" id="bbw-auto-tare" checked> Auto-tare</label>
+                        <button id="bbw-save-btn" class="btn small primary">Save</button>
+                    </div>
+                    <div class="bbw-progress" id="bbw-progress-section" style="display:none;">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="bbw-progress"></div>
+                        </div>
+                        <span id="bbw-ratio">0.0 : 1</span>
+                    </div>
+                </div>
+            </div>
+
             <!-- MQTT Settings -->
             <div class="card mqtt-card">
                 <div class="card-header">

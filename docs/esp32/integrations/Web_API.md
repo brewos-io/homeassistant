@@ -355,16 +355,204 @@ Connect to `/ws` for real-time updates.
 
 ---
 
-## Planned Endpoints
+## Machine Control Endpoints
 
-### Machine Control
+### POST /api/temp/brew
+
+Set brew boiler temperature.
+
+**Request:**
+```json
+{
+  "temp": 94.0
+}
 ```
-POST /api/temp/brew             # Set brew temperature
-POST /api/temp/steam            # Set steam temperature
-POST /api/mode                  # Set machine mode (idle/standby)
+
+**Response:**
+```json
+{
+  "status": "ok"
+}
 ```
+
+### POST /api/temp/steam
+
+Set steam boiler temperature.
+
+**Request:**
+```json
+{
+  "temp": 145.0
+}
+```
+
+### POST /api/mode
+
+Set machine mode.
+
+**Request:**
+```json
+{
+  "mode": "on"
+}
+```
+
+| Mode | Description |
+|------|-------------|
+| `on`, `ready` | Turn machine on |
+| `off`, `standby` | Turn machine off |
 
 > **Note:** Brew start/stop is controlled by the physical lever on the machine, not via API.
+
+---
+
+## Scale / Brew-by-Weight Endpoints
+
+### GET /api/scale/status
+
+Get current scale connection status.
+
+**Response:**
+```json
+{
+  "connected": true,
+  "scanning": false,
+  "name": "Acaia Lunar",
+  "type": 1,
+  "type_name": "Acaia",
+  "weight": 36.5,
+  "stable": true,
+  "flow_rate": 1.8,
+  "battery": 85
+}
+```
+
+### POST /api/scale/scan
+
+Start BLE scan for scales.
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "message": "Scanning..."
+}
+```
+
+### POST /api/scale/scan/stop
+
+Stop BLE scan.
+
+### GET /api/scale/devices
+
+Get discovered scales from scan.
+
+**Response:**
+```json
+{
+  "devices": [
+    {
+      "index": 0,
+      "name": "Acaia Lunar",
+      "address": "AA:BB:CC:DD:EE:FF",
+      "type": 1,
+      "type_name": "Acaia",
+      "rssi": -45
+    }
+  ],
+  "scanning": false,
+  "count": 1
+}
+```
+
+### POST /api/scale/connect
+
+Connect to a scale.
+
+**Request (by address):**
+```json
+{
+  "address": "AA:BB:CC:DD:EE:FF"
+}
+```
+
+**Request (by index):**
+```json
+{
+  "index": 0
+}
+```
+
+### POST /api/scale/disconnect
+
+Disconnect from current scale.
+
+### POST /api/scale/forget
+
+Forget saved scale (clear from NVS).
+
+### POST /api/scale/tare
+
+Tare the connected scale.
+
+### GET /api/scale/settings
+
+Get brew-by-weight settings.
+
+**Response:**
+```json
+{
+  "target_weight": 36.0,
+  "dose_weight": 18.0,
+  "stop_offset": 2.0,
+  "auto_stop": true,
+  "auto_tare": true
+}
+```
+
+### POST /api/scale/settings
+
+Update brew-by-weight settings.
+
+**Request:**
+```json
+{
+  "target_weight": 36.0,
+  "dose_weight": 18.0,
+  "stop_offset": 2.0,
+  "auto_stop": true,
+  "auto_tare": true
+}
+```
+
+### GET /api/scale/state
+
+Get current brew-by-weight state.
+
+**Response:**
+```json
+{
+  "active": false,
+  "current_weight": 0.0,
+  "target_weight": 36.0,
+  "progress": 0.0,
+  "ratio": 0.0,
+  "target_reached": false,
+  "stop_signaled": false
+}
+```
+
+### Scale Timer Control
+
+```
+POST /api/scale/timer/start    # Start scale timer (Acaia)
+POST /api/scale/timer/stop     # Stop scale timer
+POST /api/scale/timer/reset    # Reset scale timer
+```
+
+---
+
+## Planned Endpoints
 
 ### Configuration
 ```
@@ -388,14 +576,6 @@ DELETE /api/shots               # Clear shot history
 GET  /api/cloud/status          # Cloud connection status
 POST /api/cloud/link            # Link to cloud account
 POST /api/cloud/unlink          # Unlink from cloud
-```
-
-### Brew by Weight
-```
-GET  /api/scale/status          # Scale connection status
-POST /api/scale/pair            # Pair BLE scale
-POST /api/scale/tare            # Tare scale
-POST /api/weight/target         # Set target weight
 ```
 
 ---

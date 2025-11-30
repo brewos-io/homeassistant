@@ -14,6 +14,7 @@
  */
 
 #include <Arduino.h>
+#include <ArduinoJson.h>
 #include <cmath>
 #include "config.h"
 #include "wifi_manager.h"
@@ -157,14 +158,14 @@ void setup() {
         LOG_I("UI: Turn on requested");
         // Send turn-on command to Pico
         uint8_t cmd = 0x01;  // Turn on
-        picoUart.sendCommand(MSG_COMMAND, &cmd, 1);
+        picoUart.sendCommand(MSG_CMD_MODE, &cmd, 1);
     });
     
     ui.onTurnOff([]() {
         LOG_I("UI: Turn off requested");
         // Send turn-off command to Pico
         uint8_t cmd = 0x00;  // Turn off
-        picoUart.sendCommand(MSG_COMMAND, &cmd, 1);
+        picoUart.sendCommand(MSG_CMD_MODE, &cmd, 1);
     });
     
     ui.onSetTemp([](bool is_steam, float temp) {
@@ -173,7 +174,7 @@ void setup() {
         uint8_t payload[5];
         payload[0] = is_steam ? 0x02 : 0x01;  // Boiler ID
         memcpy(&payload[1], &temp, sizeof(float));
-        picoUart.sendCommand(MSG_SET_TEMP, payload, 5);
+        picoUart.sendCommand(MSG_CMD_SET_TEMP, payload, 5);
     });
     
     ui.onTareScale([]() {
@@ -289,6 +290,42 @@ void setup() {
     
     // Initialize MQTT
     mqttClient.begin();
+    
+    // Set up MQTT command handler
+    mqttClient.onCommand([](const char* cmd, const JsonDocument& doc) {
+        String cmdStr = cmd;
+        
+        if (cmdStr == "set_temp") {
+            String boiler = doc["boiler"] | "brew";
+            float temp = doc["temp"] | 0.0f;
+            
+            uint8_t payload[5];
+            payload[0] = (boiler == "steam") ? 0x02 : 0x01;
+            memcpy(&payload[1], &temp, sizeof(float));
+            picoUart.sendCommand(MSG_CMD_SET_TEMP, payload, 5);
+        }
+        else if (cmdStr == "set_mode") {
+            String mode = doc["mode"] | "";
+            uint8_t modeCmd = 0;
+            
+            if (mode == "on" || mode == "ready") {
+                modeCmd = 0x01;
+            } else if (mode == "off" || mode == "standby") {
+                modeCmd = 0x00;
+            }
+            picoUart.sendCommand(MSG_CMD_MODE, &modeCmd, 1);
+        }
+        else if (cmdStr == "tare") {
+            scaleManager.tare();
+        }
+        else if (cmdStr == "set_target_weight") {
+            float weight = doc["weight"] | 0.0f;
+            if (weight > 0) {
+                brewByWeight.setTargetWeight(weight);
+                machineState.target_weight = weight;
+            }
+        }
+    });
     
     // Initialize BLE Scale Manager
     if (scaleEnabled) {

@@ -25,7 +25,8 @@ The ESP32-S3 serves as the connectivity and UI hub for the BrewOS coffee machine
 | MQTT Integration | ✅ Complete | [Details](integrations/MQTT.md) |
 | Web API | ✅ Complete | [Details](integrations/Web_API.md) |
 | LVGL Display | ✅ Complete | Round display UI |
-| BLE Scale | 🔲 Planned | Brew by weight |
+| BLE Scale | ✅ Complete | Multi-scale support (Acaia, Felicita, Decent, Timemore) |
+| Brew by Weight | ✅ Complete | Auto-stop at target weight |
 | Cloud Integration | 🔲 Planned | Remote monitoring |
 
 ---
@@ -190,12 +191,14 @@ See [Web API Reference](integrations/Web_API.md) for full documentation.
 ### Tasks
 
 ```
-[ ] BLE-1: NimBLE stack initialization
-[ ] BLE-2: Scale scanning and pairing
-[ ] BLE-3: Acaia protocol implementation
-[ ] BLE-4: Weight notification handling
-[ ] BLE-5: Auto-stop signal to Pico
-[ ] BLE-6: Scale config persistence
+[x] BLE-1: NimBLE stack initialization
+[x] BLE-2: Scale scanning and pairing
+[x] BLE-3: Acaia protocol implementation
+[x] BLE-4: Weight notification handling
+[x] BLE-5: Auto-stop signal to Pico
+[x] BLE-6: Scale config persistence
+[x] BLE-7: Felicita/Decent/Timemore support
+[x] BLE-8: Flow rate calculation
 ```
 
 ---

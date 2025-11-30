@@ -184,6 +184,228 @@ void WebServer::setupRoutes() {
         request->send(200, "application/json", "{\"status\":\"ok\"}");
     });
     
+    // Scale connection status
+    _server.on("/api/scale/status", HTTP_GET, [](AsyncWebServerRequest* request) {
+        JsonDocument doc;
+        scale_state_t state = scaleManager.getState();
+        
+        doc["connected"] = scaleManager.isConnected();
+        doc["scanning"] = scaleManager.isScanning();
+        doc["name"] = scaleManager.getScaleName();
+        doc["type"] = (int)scaleManager.getScaleType();
+        doc["type_name"] = getScaleTypeName(scaleManager.getScaleType());
+        doc["weight"] = state.weight;
+        doc["stable"] = state.stable;
+        doc["flow_rate"] = state.flow_rate;
+        doc["battery"] = state.battery_percent;
+        
+        String response;
+        serializeJson(doc, response);
+        request->send(200, "application/json", response);
+    });
+    
+    // Start BLE scale scan
+    _server.on("/api/scale/scan", HTTP_POST, [this](AsyncWebServerRequest* request) {
+        if (scaleManager.isScanning()) {
+            request->send(400, "application/json", "{\"error\":\"Already scanning\"}");
+            return;
+        }
+        if (scaleManager.isConnected()) {
+            scaleManager.disconnect();
+        }
+        scaleManager.clearDiscovered();
+        scaleManager.startScan(15000);  // 15 second scan
+        broadcastLog("BLE scale scan started", "info");
+        request->send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Scanning...\"}");
+    });
+    
+    // Stop BLE scan
+    _server.on("/api/scale/scan/stop", HTTP_POST, [](AsyncWebServerRequest* request) {
+        scaleManager.stopScan();
+        request->send(200, "application/json", "{\"status\":\"ok\"}");
+    });
+    
+    // Get discovered scales
+    _server.on("/api/scale/devices", HTTP_GET, [](AsyncWebServerRequest* request) {
+        JsonDocument doc;
+        JsonArray devices = doc["devices"].to<JsonArray>();
+        
+        const auto& discovered = scaleManager.getDiscoveredScales();
+        for (size_t i = 0; i < discovered.size(); i++) {
+            JsonObject device = devices.add<JsonObject>();
+            device["index"] = i;
+            device["name"] = discovered[i].name;
+            device["address"] = discovered[i].address;
+            device["type"] = (int)discovered[i].type;
+            device["type_name"] = getScaleTypeName(discovered[i].type);
+            device["rssi"] = discovered[i].rssi;
+        }
+        
+        doc["scanning"] = scaleManager.isScanning();
+        doc["count"] = discovered.size();
+        
+        String response;
+        serializeJson(doc, response);
+        request->send(200, "application/json", response);
+    });
+    
+    // Connect to scale by address or index
+    _server.on("/api/scale/connect", HTTP_POST,
+        [](AsyncWebServerRequest* request) {},
+        nullptr,
+        [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            JsonDocument doc;
+            if (deserializeJson(doc, data, len)) {
+                request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+                return;
+            }
+            
+            bool success = false;
+            
+            if (!doc["address"].isNull()) {
+                // Connect by address
+                const char* addr = doc["address"].as<const char*>();
+                if (addr && strlen(addr) > 0) {
+                    success = scaleManager.connect(addr);
+                }
+            } else if (!doc["index"].isNull()) {
+                // Connect by index from discovered list
+                int idx = doc["index"].as<int>();
+                success = scaleManager.connectByIndex(idx);
+            } else {
+                // Try to reconnect to saved scale
+                success = scaleManager.connect(nullptr);
+            }
+            
+            if (success) {
+                broadcastLog("Connecting to scale...", "info");
+                request->send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Connecting...\"}");
+            } else {
+                request->send(400, "application/json", "{\"error\":\"Connection failed\"}");
+            }
+        }
+    );
+    
+    // Disconnect from scale
+    _server.on("/api/scale/disconnect", HTTP_POST, [](AsyncWebServerRequest* request) {
+        scaleManager.disconnect();
+        request->send(200, "application/json", "{\"status\":\"ok\"}");
+    });
+    
+    // Forget saved scale
+    _server.on("/api/scale/forget", HTTP_POST, [this](AsyncWebServerRequest* request) {
+        scaleManager.forgetScale();
+        broadcastLog("Scale forgotten", "info");
+        request->send(200, "application/json", "{\"status\":\"ok\"}");
+    });
+    
+    // Timer control (for scales that support it)
+    _server.on("/api/scale/timer/start", HTTP_POST, [](AsyncWebServerRequest* request) {
+        scaleManager.startTimer();
+        request->send(200, "application/json", "{\"status\":\"ok\"}");
+    });
+    
+    _server.on("/api/scale/timer/stop", HTTP_POST, [](AsyncWebServerRequest* request) {
+        scaleManager.stopTimer();
+        request->send(200, "application/json", "{\"status\":\"ok\"}");
+    });
+    
+    _server.on("/api/scale/timer/reset", HTTP_POST, [](AsyncWebServerRequest* request) {
+        scaleManager.resetTimer();
+        request->send(200, "application/json", "{\"status\":\"ok\"}");
+    });
+    
+    // Temperature control endpoints
+    _server.on("/api/temp/brew", HTTP_POST,
+        [](AsyncWebServerRequest* request) {},
+        nullptr,
+        [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            JsonDocument doc;
+            if (deserializeJson(doc, data, len)) {
+                request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+                return;
+            }
+            
+            float temp = doc["temp"] | 0.0f;
+            if (temp < 80.0f || temp > 105.0f) {
+                request->send(400, "application/json", "{\"error\":\"Temperature out of range (80-105°C)\"}");
+                return;
+            }
+            
+            // Send to Pico
+            uint8_t payload[5];
+            payload[0] = 0x01;  // Brew boiler ID
+            memcpy(&payload[1], &temp, sizeof(float));
+            if (_picoUart.sendCommand(MSG_CMD_SET_TEMP, payload, 5)) {
+                broadcastLog("Brew temp set to " + String(temp, 1) + "°C", "info");
+                request->send(200, "application/json", "{\"status\":\"ok\"}");
+            } else {
+                request->send(500, "application/json", "{\"error\":\"Failed to send command\"}");
+            }
+        }
+    );
+    
+    _server.on("/api/temp/steam", HTTP_POST,
+        [](AsyncWebServerRequest* request) {},
+        nullptr,
+        [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            JsonDocument doc;
+            if (deserializeJson(doc, data, len)) {
+                request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+                return;
+            }
+            
+            float temp = doc["temp"] | 0.0f;
+            if (temp < 120.0f || temp > 160.0f) {
+                request->send(400, "application/json", "{\"error\":\"Temperature out of range (120-160°C)\"}");
+                return;
+            }
+            
+            // Send to Pico
+            uint8_t payload[5];
+            payload[0] = 0x02;  // Steam boiler ID
+            memcpy(&payload[1], &temp, sizeof(float));
+            if (_picoUart.sendCommand(MSG_CMD_SET_TEMP, payload, 5)) {
+                broadcastLog("Steam temp set to " + String(temp, 1) + "°C", "info");
+                request->send(200, "application/json", "{\"status\":\"ok\"}");
+            } else {
+                request->send(500, "application/json", "{\"error\":\"Failed to send command\"}");
+            }
+        }
+    );
+    
+    // Machine mode control
+    _server.on("/api/mode", HTTP_POST,
+        [](AsyncWebServerRequest* request) {},
+        nullptr,
+        [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            JsonDocument doc;
+            if (deserializeJson(doc, data, len)) {
+                request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+                return;
+            }
+            
+            String mode = doc["mode"] | "";
+            uint8_t cmd = 0;
+            
+            if (mode == "on" || mode == "ready") {
+                cmd = 0x01;  // Turn on
+            } else if (mode == "off" || mode == "standby") {
+                cmd = 0x00;  // Turn off
+            } else {
+                request->send(400, "application/json", "{\"error\":\"Invalid mode (use: on, off, ready, standby)\"}");
+                return;
+            }
+            
+            if (_picoUart.sendCommand(MSG_CMD_MODE, &cmd, 1)) {
+                broadcastLog("Machine mode set to: " + mode, "info");
+                request->send(200, "application/json", "{\"status\":\"ok\"}");
+            } else {
+                request->send(500, "application/json", "{\"error\":\"Failed to send command\"}");
+            }
+        }
+    );
+    
     // 404 handler
     _server.onNotFound([](AsyncWebServerRequest* request) {
         request->send(404, "text/plain", "Not found");
@@ -215,6 +437,17 @@ void WebServer::handleGetStatus(AsyncWebServerRequest* request) {
     doc["mqtt"]["enabled"] = _mqttClient.getConfig().enabled;
     doc["mqtt"]["connected"] = _mqttClient.isConnected();
     doc["mqtt"]["status"] = _mqttClient.getStatusString();
+    
+    // Scale status
+    doc["scale"]["connected"] = scaleManager.isConnected();
+    doc["scale"]["scanning"] = scaleManager.isScanning();
+    doc["scale"]["name"] = scaleManager.getScaleName();
+    if (scaleManager.isConnected()) {
+        scale_state_t scaleState = scaleManager.getState();
+        doc["scale"]["weight"] = scaleState.weight;
+        doc["scale"]["flow_rate"] = scaleState.flow_rate;
+        doc["scale"]["stable"] = scaleState.stable;
+    }
     
     // WebSocket clients
     doc["clients"] = getClientCount();

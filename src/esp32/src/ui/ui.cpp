@@ -13,6 +13,10 @@
 #include "ui/screen_complete.h"
 #include "ui/screen_settings.h"
 #include "ui/screen_alarm.h"
+#ifndef SIMULATOR
+#include "ui/screen_temp.h"
+#include "ui/screen_scale.h"
+#endif
 #include "display/theme.h"
 #include "display/display_config.h"
 
@@ -124,6 +128,16 @@ void UI::update(const ui_state_t& state) {
         case SCREEN_SETTINGS:
             updateSettingsScreen();
             break;
+        case SCREEN_TEMP_SETTINGS:
+#ifndef SIMULATOR
+            screen_temp_update(&_state);
+#endif
+            break;
+        case SCREEN_SCALE:
+#ifndef SIMULATOR
+            screen_scale_update(&_state);
+#endif
+            break;
         case SCREEN_ALARM:
             updateAlarmScreen();
             break;
@@ -210,6 +224,20 @@ void UI::handleEncoder(int direction) {
             screen_settings_navigate(direction);
             break;
             
+        case SCREEN_TEMP_SETTINGS:
+#ifndef SIMULATOR
+            // Temperature adjustment
+            screen_temp_encoder(direction);
+#endif
+            break;
+            
+        case SCREEN_SCALE:
+#ifndef SIMULATOR
+            // Scale list navigation
+            screen_scale_encoder(direction);
+#endif
+            break;
+            
         case SCREEN_BREWING:
             // During brewing, encoder could adjust target weight
             if (_onSetTargetWeight) {
@@ -264,6 +292,20 @@ void UI::handleButtonPress() {
             screen_settings_select();
             break;
             
+        case SCREEN_TEMP_SETTINGS:
+#ifndef SIMULATOR
+            // Handle temperature edit
+            screen_temp_select();
+#endif
+            break;
+            
+        case SCREEN_SCALE:
+#ifndef SIMULATOR
+            // Handle scale pairing actions
+            screen_scale_select();
+#endif
+            break;
+            
         case SCREEN_ALARM:
             // Acknowledge alarm
             clearAlarm();
@@ -307,6 +349,14 @@ void UI::handleDoublePress() {
     switch (_currentScreen) {
         case SCREEN_BREWING:
             // Double press - tare scale
+            if (_onTareScale) {
+                _onTareScale();
+                showNotification("Scale tared", 1000);
+            }
+            break;
+            
+        case SCREEN_SCALE:
+            // Double press on scale screen - tare
             if (_onTareScale) {
                 _onTareScale();
                 showNotification("Scale tared", 1000);
@@ -370,84 +420,49 @@ void UI::createSettingsScreen() {
 }
 
 void UI::createTempSettingsScreen() {
-    // Temperature settings - create a simple placeholder for now
+#ifndef SIMULATOR
+    // Create temperature settings screen with full encoder interaction
+    _screens[SCREEN_TEMP_SETTINGS] = screen_temp_create();
+    
+    // Set callback for temperature changes
+    screen_temp_set_callback([](bool is_steam, float temp) {
+        if (ui._onSetTemp) {
+            ui._onSetTemp(is_steam, temp);
+        }
+    });
+#else
+    // Simulator placeholder
     _screens[SCREEN_TEMP_SETTINGS] = lv_obj_create(NULL);
     lv_obj_set_style_bg_color(_screens[SCREEN_TEMP_SETTINGS], COLOR_BG_DARK, 0);
     
-    lv_obj_t* container = lv_obj_create(_screens[SCREEN_TEMP_SETTINGS]);
-    lv_obj_remove_style_all(container);
-    lv_obj_set_size(container, DISPLAY_WIDTH, DISPLAY_HEIGHT);
-    lv_obj_center(container);
-    lv_obj_clear_flag(container, LV_OBJ_FLAG_SCROLLABLE);
-    
-    lv_obj_t* title = lv_label_create(container);
-    lv_label_set_text(title, "Temperature");
-    lv_obj_set_style_text_font(title, FONT_LARGE, 0);
-    lv_obj_set_style_text_color(title, COLOR_TEXT_PRIMARY, 0);
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 50);
-    
-    // Brew temp display
-    lv_obj_t* brew_label = lv_label_create(container);
-    lv_label_set_text(brew_label, "Brew: 93.0°C");
-    lv_obj_set_style_text_font(brew_label, FONT_XLARGE, 0);
-    lv_obj_set_style_text_color(brew_label, COLOR_ACCENT_AMBER, 0);
-    lv_obj_align(brew_label, LV_ALIGN_CENTER, 0, -30);
-    
-    // Steam temp display
-    lv_obj_t* steam_label = lv_label_create(container);
-    lv_label_set_text(steam_label, "Steam: 145.0°C");
-    lv_obj_set_style_text_font(steam_label, FONT_XLARGE, 0);
-    lv_obj_set_style_text_color(steam_label, COLOR_TEMP_HOT, 0);
-    lv_obj_align(steam_label, LV_ALIGN_CENTER, 0, 30);
-    
-    lv_obj_t* hint = lv_label_create(container);
-    lv_label_set_text(hint, "Rotate to adjust • Long press to exit");
-    lv_obj_set_style_text_font(hint, FONT_SMALL, 0);
-    lv_obj_set_style_text_color(hint, COLOR_TEXT_MUTED, 0);
-    lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -50);
+    lv_obj_t* label = lv_label_create(_screens[SCREEN_TEMP_SETTINGS]);
+    lv_label_set_text(label, "Temperature Settings\n(Simulator)");
+    lv_obj_set_style_text_color(label, COLOR_TEXT_PRIMARY, 0);
+    lv_obj_center(label);
+#endif
 }
 
 void UI::createScaleScreen() {
-    // Scale pairing screen - placeholder
+#ifndef SIMULATOR
+    // Create scale pairing screen with BLE scanning functionality
+    _screens[SCREEN_SCALE] = screen_scale_create();
+#else
+    // Simulator placeholder
     _screens[SCREEN_SCALE] = lv_obj_create(NULL);
     lv_obj_set_style_bg_color(_screens[SCREEN_SCALE], COLOR_BG_DARK, 0);
     
-    lv_obj_t* container = lv_obj_create(_screens[SCREEN_SCALE]);
-    lv_obj_remove_style_all(container);
-    lv_obj_set_size(container, DISPLAY_WIDTH, DISPLAY_HEIGHT);
-    lv_obj_center(container);
-    lv_obj_clear_flag(container, LV_OBJ_FLAG_SCROLLABLE);
-    
-    lv_obj_t* icon = lv_label_create(container);
+    lv_obj_t* icon = lv_label_create(_screens[SCREEN_SCALE]);
     lv_label_set_text(icon, LV_SYMBOL_BLUETOOTH);
-    lv_obj_set_style_text_font(icon, FONT_TEMP, 0);
+    lv_obj_set_style_text_font(icon, &lv_font_montserrat_48, 0);
     lv_obj_set_style_text_color(icon, COLOR_INFO, 0);
-    lv_obj_align(icon, LV_ALIGN_CENTER, 0, -60);
+    lv_obj_align(icon, LV_ALIGN_CENTER, 0, -30);
     
-    lv_obj_t* title = lv_label_create(container);
-    lv_label_set_text(title, "Bluetooth Scale");
-    lv_obj_set_style_text_font(title, FONT_LARGE, 0);
-    lv_obj_set_style_text_color(title, COLOR_TEXT_PRIMARY, 0);
-    lv_obj_align(title, LV_ALIGN_CENTER, 0, 10);
-    
-    lv_obj_t* status = lv_label_create(container);
-    lv_label_set_text(status, "Searching for scales...");
-    lv_obj_set_style_text_font(status, FONT_NORMAL, 0);
-    lv_obj_set_style_text_color(status, COLOR_TEXT_MUTED, 0);
-    lv_obj_align(status, LV_ALIGN_CENTER, 0, 50);
-    
-    // Spinner
-    lv_obj_t* spinner = lv_spinner_create(container, 1000, 60);
-    lv_obj_set_size(spinner, 40, 40);
-    lv_obj_align(spinner, LV_ALIGN_CENTER, 0, 100);
-    lv_obj_set_style_arc_color(spinner, COLOR_INFO, LV_PART_INDICATOR);
-    lv_obj_set_style_arc_color(spinner, COLOR_BG_ELEVATED, LV_PART_MAIN);
-    
-    lv_obj_t* hint = lv_label_create(container);
-    lv_label_set_text(hint, "Long press to cancel");
-    lv_obj_set_style_text_font(hint, FONT_SMALL, 0);
-    lv_obj_set_style_text_color(hint, COLOR_TEXT_MUTED, 0);
-    lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -50);
+    lv_obj_t* label = lv_label_create(_screens[SCREEN_SCALE]);
+    lv_label_set_text(label, "Scale Pairing\n(Simulator)");
+    lv_obj_set_style_text_color(label, COLOR_TEXT_PRIMARY, 0);
+    lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(label, LV_ALIGN_CENTER, 0, 30);
+#endif
 }
 
 void UI::createAlarmScreen() {
@@ -515,7 +530,7 @@ void UI::checkAutoScreenSwitch() {
     }
     
     // Show idle screen if machine is off
-    if (_state.machine_state == STATE_IDLE && 
+    if (_state.machine_state == UI_STATE_IDLE && 
         _currentScreen != SCREEN_IDLE && 
         _currentScreen != SCREEN_SETTINGS) {
         // Only auto-switch to idle if not in settings
@@ -526,15 +541,15 @@ void UI::checkAutoScreenSwitch() {
 
 const char* UI::getStateText(uint8_t state) {
     switch (state) {
-        case STATE_INIT: return "INIT";
-        case STATE_IDLE: return "OFF";
-        case STATE_HEATING: return "HEATING";
-        case STATE_READY: return "READY";
-        case STATE_BREWING: return "BREWING";
-        case STATE_STEAMING: return "STEAMING";
-        case STATE_COOLDOWN: return "COOLING";
-        case STATE_FAULT: return "FAULT";
-        case STATE_SAFE: return "SAFE MODE";
+        case UI_STATE_INIT: return "INIT";
+        case UI_STATE_IDLE: return "OFF";
+        case UI_STATE_HEATING: return "HEATING";
+        case UI_STATE_READY: return "READY";
+        case UI_STATE_BREWING: return "BREWING";
+        case UI_STATE_STEAMING: return "STEAMING";
+        case UI_STATE_COOLDOWN: return "COOLING";
+        case UI_STATE_FAULT: return "FAULT";
+        case UI_STATE_SAFE: return "SAFE MODE";
         default: return "UNKNOWN";
     }
 }
@@ -552,15 +567,15 @@ const char* UI::getStrategyText(uint8_t strategy) {
 
 lv_color_t UI::getStateColor(uint8_t state) {
     switch (state) {
-        case STATE_INIT: return COLOR_INFO;
-        case STATE_IDLE: return COLOR_TEXT_MUTED;
-        case STATE_HEATING: return COLOR_WARNING;
-        case STATE_READY: return COLOR_SUCCESS;
-        case STATE_BREWING: return COLOR_ACCENT_ORANGE;
-        case STATE_STEAMING: return COLOR_TEMP_HOT;
-        case STATE_COOLDOWN: return COLOR_INFO;
-        case STATE_FAULT: return COLOR_ERROR;
-        case STATE_SAFE: return COLOR_ERROR;
+        case UI_STATE_INIT: return COLOR_INFO;
+        case UI_STATE_IDLE: return COLOR_TEXT_MUTED;
+        case UI_STATE_HEATING: return COLOR_WARNING;
+        case UI_STATE_READY: return COLOR_SUCCESS;
+        case UI_STATE_BREWING: return COLOR_ACCENT_ORANGE;
+        case UI_STATE_STEAMING: return COLOR_TEMP_HOT;
+        case UI_STATE_COOLDOWN: return COLOR_INFO;
+        case UI_STATE_FAULT: return COLOR_ERROR;
+        case UI_STATE_SAFE: return COLOR_ERROR;
         default: return COLOR_TEXT_MUTED;
     }
 }

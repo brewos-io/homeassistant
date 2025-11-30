@@ -478,6 +478,173 @@ body {
     background: #444;
 }
 
+/* Scale Card */
+.scale-card .scale-content {
+    min-height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.scale-weight-display {
+    text-align: center;
+}
+
+.weight-value {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 4px;
+}
+
+.weight-value span:first-child {
+    font-family: var(--font-mono);
+    font-size: 3rem;
+    font-weight: 700;
+    color: var(--accent-warm);
+}
+
+.weight-unit {
+    font-size: 1.5rem;
+    color: var(--text-secondary);
+}
+
+.weight-info {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+.scale-disconnected,
+.scale-scanning {
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.scale-scanning {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.spinner-small {
+    width: 24px;
+    height: 24px;
+    border: 3px solid var(--bg-secondary);
+    border-top: 3px solid var(--accent-cool);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.scale-devices select {
+    width: 100%;
+    padding: 8px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+}
+
+.scale-devices select option {
+    padding: 8px;
+}
+
+.scale-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+}
+
+.scale-bbw {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-color);
+}
+
+.scale-bbw h4 {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+}
+
+.bbw-settings {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.form-group.inline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.form-group.inline label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    min-width: 40px;
+}
+
+.form-group.inline input {
+    width: 70px;
+    padding: 6px 10px;
+    font-size: 0.875rem;
+}
+
+.form-group.inline span {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.bbw-options {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+}
+
+.bbw-options label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.bbw-progress {
+    margin-top: 12px;
+}
+
+.bbw-progress .progress-bar {
+    height: 8px;
+    background: var(--bg-secondary);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 4px;
+}
+
+.bbw-progress .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-warm), var(--accent-success));
+    width: 0%;
+    transition: width 0.3s;
+}
+
+#bbw-ratio {
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
 /* MQTT Card */
 .mqtt-form {
     display: flex;

@@ -497,10 +497,16 @@ bool ScaleManager::setupCharacteristics() {
     NimBLEAddress addr = _client->getPeerAddress();
     strncpy(_scaleAddress, addr.toString().c_str(), sizeof(_scaleAddress) - 1);
     
-    // Try to get name
-    std::string name = _client->getPeerInfo().getName();
-    if (name.length() > 0) {
-        strncpy(_scaleName, name.c_str(), sizeof(_scaleName) - 1);
+    // Try to get name from remote device
+    NimBLERemoteService* gapSvc = _client->getService(NimBLEUUID((uint16_t)0x1800));
+    if (gapSvc) {
+        NimBLERemoteCharacteristic* nameChar = gapSvc->getCharacteristic(NimBLEUUID((uint16_t)0x2A00));
+        if (nameChar && nameChar->canRead()) {
+            std::string name = nameChar->readValue();
+            if (name.length() > 0) {
+                strncpy(_scaleName, name.c_str(), sizeof(_scaleName) - 1);
+            }
+        }
     }
     
     // Detect type from name or services

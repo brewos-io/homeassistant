@@ -257,7 +257,7 @@ void screen_home_update(lv_obj_t* scr, const ui_state_t* state) {
     } else if (!state->pico_connected) {
         status_text = "OFFLINE";
         status_color = COLOR_ERROR;
-    } else if (state->machine_state == STATE_IDLE) {
+    } else if (state->machine_state == UI_STATE_IDLE) {
         status_text = "OFF";
         status_color = COLOR_TEXT_MUTED;
     }

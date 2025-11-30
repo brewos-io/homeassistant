@@ -384,11 +384,60 @@ void MQTTClient::onMessage(char* topicName, byte* payload, unsigned int length) 
     String cmdTopic = topic("command");
     
     if (topicStr == cmdTopic) {
-        // Parse JSON command
-        // Example: {"cmd":"set_temp","boiler":"brew","temp":94.0}
-        // This would be handled by main.cpp or a command handler
         LOG_I("Received MQTT command: %s", message);
-        // TODO: Parse and execute command
+        
+        // Parse JSON command
+        JsonDocument doc;
+        DeserializationError error = deserializeJson(doc, message);
+        if (error) {
+            LOG_W("Failed to parse MQTT command JSON: %s", error.c_str());
+            return;
+        }
+        
+        String cmd = doc["cmd"] | "";
+        
+        if (cmd == "set_temp") {
+            // Set temperature: {"cmd":"set_temp","boiler":"brew","temp":94.0}
+            String boiler = doc["boiler"] | "brew";
+            float temp = doc["temp"] | 0.0f;
+            
+            if (temp > 0) {
+                if (_commandCallback) {
+                    _commandCallback(cmd.c_str(), doc);
+                }
+                LOG_I("MQTT: Set %s temp to %.1f°C", boiler.c_str(), temp);
+            }
+        }
+        else if (cmd == "set_mode") {
+            // Set mode: {"cmd":"set_mode","mode":"standby"}
+            String mode = doc["mode"] | "";
+            if (mode.length() > 0) {
+                if (_commandCallback) {
+                    _commandCallback(cmd.c_str(), doc);
+                }
+                LOG_I("MQTT: Set mode to %s", mode.c_str());
+            }
+        }
+        else if (cmd == "tare") {
+            // Tare scale: {"cmd":"tare"}
+            if (_commandCallback) {
+                _commandCallback(cmd.c_str(), doc);
+            }
+            LOG_I("MQTT: Tare scale");
+        }
+        else if (cmd == "set_target_weight") {
+            // Set target weight: {"cmd":"set_target_weight","weight":36.0}
+            float weight = doc["weight"] | 0.0f;
+            if (weight > 0) {
+                if (_commandCallback) {
+                    _commandCallback(cmd.c_str(), doc);
+                }
+                LOG_I("MQTT: Set target weight to %.1fg", weight);
+            }
+        }
+        else {
+            LOG_W("MQTT: Unknown command: %s", cmd.c_str());
+        }
     }
 }
 

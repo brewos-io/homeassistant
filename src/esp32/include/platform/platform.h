@@ -17,13 +17,14 @@ extern "C" {
 
 // =============================================================================
 // Log Levels (needed before impl headers)
+// Use BREWOS_ prefix to avoid conflicts with NimBLE's log macros
 // =============================================================================
 
 typedef enum {
-    LOG_LEVEL_DEBUG = 0,
-    LOG_LEVEL_INFO,
-    LOG_LEVEL_WARN,
-    LOG_LEVEL_ERROR
+    BREWOS_LOG_DEBUG = 0,
+    BREWOS_LOG_INFO = 1,
+    BREWOS_LOG_WARN = 2,
+    BREWOS_LOG_ERROR = 3
 } log_level_t;
 
 // =============================================================================
@@ -53,10 +54,10 @@ typedef enum {
 // Logging Convenience Macros
 // =============================================================================
 
-#define LOG_D(fmt, ...) platform_log(LOG_LEVEL_DEBUG, fmt, ##__VA_ARGS__)
-#define LOG_I(fmt, ...) platform_log(LOG_LEVEL_INFO, fmt, ##__VA_ARGS__)
-#define LOG_W(fmt, ...) platform_log(LOG_LEVEL_WARN, fmt, ##__VA_ARGS__)
-#define LOG_E(fmt, ...) platform_log(LOG_LEVEL_ERROR, fmt, ##__VA_ARGS__)
+#define LOG_D(fmt, ...) platform_log(BREWOS_LOG_DEBUG, fmt, ##__VA_ARGS__)
+#define LOG_I(fmt, ...) platform_log(BREWOS_LOG_INFO, fmt, ##__VA_ARGS__)
+#define LOG_W(fmt, ...) platform_log(BREWOS_LOG_WARN, fmt, ##__VA_ARGS__)
+#define LOG_E(fmt, ...) platform_log(BREWOS_LOG_ERROR, fmt, ##__VA_ARGS__)
 
 #endif // PLATFORM_H
 

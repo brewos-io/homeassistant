@@ -30,10 +30,10 @@ static inline void platform_delay(uint32_t ms) {
 static inline void platform_log(log_level_t level, const char* fmt, ...) {
     const char* level_str;
     switch(level) {
-        case LOG_LEVEL_DEBUG: level_str = "D"; break;
-        case LOG_LEVEL_INFO:  level_str = "I"; break;
-        case LOG_LEVEL_WARN:  level_str = "W"; break;
-        case LOG_LEVEL_ERROR: level_str = "E"; break;
+        case BREWOS_LOG_DEBUG: level_str = "D"; break;
+        case BREWOS_LOG_INFO:  level_str = "I"; break;
+        case BREWOS_LOG_WARN:  level_str = "W"; break;
+        case BREWOS_LOG_ERROR: level_str = "E"; break;
         default: level_str = "?"; break;
     }
     

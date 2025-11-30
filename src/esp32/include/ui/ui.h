@@ -29,18 +29,19 @@ typedef enum {
 
 // =============================================================================
 // Machine States (from Pico)
+// Note: Using UI_ prefix to avoid conflict with protocol_defs.h macros
 // =============================================================================
 
 typedef enum {
-    STATE_INIT = 0,
-    STATE_IDLE = 1,
-    STATE_HEATING = 2,
-    STATE_READY = 3,
-    STATE_BREWING = 4,
-    STATE_STEAMING = 5,
-    STATE_COOLDOWN = 6,
-    STATE_FAULT = 7,
-    STATE_SAFE = 8
+    UI_STATE_INIT = 0,
+    UI_STATE_IDLE = 1,
+    UI_STATE_HEATING = 2,
+    UI_STATE_READY = 3,
+    UI_STATE_BREWING = 4,
+    UI_STATE_STEAMING = 5,
+    UI_STATE_COOLDOWN = 6,
+    UI_STATE_FAULT = 7,
+    UI_STATE_SAFE = 8
 } machine_state_t;
 
 // =============================================================================
