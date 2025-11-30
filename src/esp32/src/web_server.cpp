@@ -5,6 +5,7 @@
 #include "brew_by_weight.h"
 #include "scale/scale_manager.h"
 #include "pairing_manager.h"
+#include "state/state_manager.h"
 #include <LittleFS.h>
 
 WebServer::WebServer(WiFiManager& wifiManager, PicoUART& picoUart, MQTTClient& mqttClient, PairingManager* pairingManager)
@@ -334,6 +335,163 @@ void WebServer::setupRoutes() {
         scaleManager.resetTimer();
         request->send(200, "application/json", "{\"status\":\"ok\"}");
     });
+    
+    // ==========================================================================
+    // Schedule API endpoints
+    // ==========================================================================
+    
+    // Get all schedules
+    _server.on("/api/schedules", HTTP_GET, [](AsyncWebServerRequest* request) {
+        JsonDocument doc;
+        JsonObject obj = doc.to<JsonObject>();
+        State.settings().schedule.toJson(obj);
+        
+        String response;
+        serializeJson(doc, response);
+        request->send(200, "application/json", response);
+    });
+    
+    // Add a new schedule
+    _server.on("/api/schedules", HTTP_POST,
+        [](AsyncWebServerRequest* request) {},
+        nullptr,
+        [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            JsonDocument doc;
+            if (deserializeJson(doc, data, len)) {
+                request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+                return;
+            }
+            
+            BrewOS::ScheduleEntry entry;
+            entry.fromJson(doc.as<JsonObjectConst>());
+            
+            uint8_t newId = State.addSchedule(entry);
+            if (newId > 0) {
+                JsonDocument resp;
+                resp["status"] = "ok";
+                resp["id"] = newId;
+                String response;
+                serializeJson(resp, response);
+                request->send(200, "application/json", response);
+                broadcastLog("Schedule added: " + String(entry.name), "info");
+            } else {
+                request->send(400, "application/json", "{\"error\":\"Max schedules reached\"}");
+            }
+        }
+    );
+    
+    // Update a schedule
+    _server.on("/api/schedules/update", HTTP_POST,
+        [](AsyncWebServerRequest* request) {},
+        nullptr,
+        [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            JsonDocument doc;
+            if (deserializeJson(doc, data, len)) {
+                request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+                return;
+            }
+            
+            uint8_t id = doc["id"] | 0;
+            if (id == 0) {
+                request->send(400, "application/json", "{\"error\":\"Missing schedule ID\"}");
+                return;
+            }
+            
+            BrewOS::ScheduleEntry entry;
+            entry.fromJson(doc.as<JsonObjectConst>());
+            
+            if (State.updateSchedule(id, entry)) {
+                request->send(200, "application/json", "{\"status\":\"ok\"}");
+                broadcastLog("Schedule updated: " + String(entry.name), "info");
+            } else {
+                request->send(404, "application/json", "{\"error\":\"Schedule not found\"}");
+            }
+        }
+    );
+    
+    // Delete a schedule
+    _server.on("/api/schedules/delete", HTTP_POST,
+        [](AsyncWebServerRequest* request) {},
+        nullptr,
+        [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            JsonDocument doc;
+            if (deserializeJson(doc, data, len)) {
+                request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+                return;
+            }
+            
+            uint8_t id = doc["id"] | 0;
+            if (id == 0) {
+                request->send(400, "application/json", "{\"error\":\"Missing schedule ID\"}");
+                return;
+            }
+            
+            if (State.removeSchedule(id)) {
+                request->send(200, "application/json", "{\"status\":\"ok\"}");
+                broadcastLog("Schedule deleted", "info");
+            } else {
+                request->send(404, "application/json", "{\"error\":\"Schedule not found\"}");
+            }
+        }
+    );
+    
+    // Enable/disable a schedule
+    _server.on("/api/schedules/toggle", HTTP_POST,
+        [](AsyncWebServerRequest* request) {},
+        nullptr,
+        [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            JsonDocument doc;
+            if (deserializeJson(doc, data, len)) {
+                request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+                return;
+            }
+            
+            uint8_t id = doc["id"] | 0;
+            bool enabled = doc["enabled"] | false;
+            
+            if (id == 0) {
+                request->send(400, "application/json", "{\"error\":\"Missing schedule ID\"}");
+                return;
+            }
+            
+            if (State.enableSchedule(id, enabled)) {
+                request->send(200, "application/json", "{\"status\":\"ok\"}");
+            } else {
+                request->send(404, "application/json", "{\"error\":\"Schedule not found\"}");
+            }
+        }
+    );
+    
+    // Auto power-off settings
+    _server.on("/api/schedules/auto-off", HTTP_GET, [](AsyncWebServerRequest* request) {
+        JsonDocument doc;
+        doc["enabled"] = State.getAutoPowerOffEnabled();
+        doc["minutes"] = State.getAutoPowerOffMinutes();
+        
+        String response;
+        serializeJson(doc, response);
+        request->send(200, "application/json", response);
+    });
+    
+    _server.on("/api/schedules/auto-off", HTTP_POST,
+        [](AsyncWebServerRequest* request) {},
+        nullptr,
+        [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            JsonDocument doc;
+            if (deserializeJson(doc, data, len)) {
+                request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+                return;
+            }
+            
+            bool enabled = doc["enabled"] | false;
+            uint16_t minutes = doc["minutes"] | 60;
+            
+            State.setAutoPowerOff(enabled, minutes);
+            request->send(200, "application/json", "{\"status\":\"ok\"}");
+            broadcastLog("Auto power-off: " + String(enabled ? "enabled" : "disabled") + 
+                        " (" + String(minutes) + " min)", "info");
+        }
+    );
     
     // Temperature control endpoints
     _server.on("/api/temp/brew", HTTP_POST,
@@ -908,6 +1066,53 @@ void WebServer::handleWsMessage(AsyncWebSocketClient* client, uint8_t* data, siz
             if (_mqttClient.setConfig(config)) {
                 broadcastLog("MQTT configuration updated", "info");
             }
+        }
+        else if (cmd == "add_schedule") {
+            // Add a new schedule
+            BrewOS::ScheduleEntry entry;
+            entry.fromJson(doc.as<JsonObjectConst>());
+            
+            uint8_t newId = State.addSchedule(entry);
+            if (newId > 0) {
+                broadcastLog("Schedule added: " + String(entry.name), "info");
+            }
+        }
+        else if (cmd == "update_schedule") {
+            // Update existing schedule
+            uint8_t id = doc["id"] | 0;
+            if (id > 0) {
+                BrewOS::ScheduleEntry entry;
+                entry.fromJson(doc.as<JsonObjectConst>());
+                if (State.updateSchedule(id, entry)) {
+                    broadcastLog("Schedule updated", "info");
+                }
+            }
+        }
+        else if (cmd == "delete_schedule") {
+            // Delete schedule
+            uint8_t id = doc["id"] | 0;
+            if (id > 0 && State.removeSchedule(id)) {
+                broadcastLog("Schedule deleted", "info");
+            }
+        }
+        else if (cmd == "toggle_schedule") {
+            // Enable/disable schedule
+            uint8_t id = doc["id"] | 0;
+            bool enabled = doc["enabled"] | false;
+            if (id > 0) {
+                State.enableSchedule(id, enabled);
+            }
+        }
+        else if (cmd == "set_auto_off") {
+            // Set auto power-off settings
+            bool enabled = doc["enabled"] | false;
+            uint16_t minutes = doc["minutes"] | 60;
+            State.setAutoPowerOff(enabled, minutes);
+            broadcastLog("Auto power-off updated", "info");
+        }
+        else if (cmd == "get_schedules") {
+            // Return schedules to requesting client (if needed)
+            // Usually schedules are sent via full state broadcast
         }
     }
 }

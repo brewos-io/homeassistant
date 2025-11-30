@@ -473,4 +473,145 @@ MachineMode stringToMachineMode(const char* str) {
     return MachineMode::STANDBY;
 }
 
+// =============================================================================
+// ScheduleEntry
+// =============================================================================
+
+void ScheduleEntry::toJson(JsonObject& obj) const {
+    obj["id"] = id;
+    obj["enabled"] = enabled;
+    obj["days"] = days;
+    obj["hour"] = hour;
+    obj["minute"] = minute;
+    obj["action"] = (action == ACTION_TURN_ON) ? "on" : "off";
+    obj["strategy"] = strategy;
+    obj["name"] = name;
+}
+
+bool ScheduleEntry::fromJson(JsonObjectConst obj) {
+    if (obj["id"].is<uint8_t>()) id = obj["id"];
+    if (obj["enabled"].is<bool>()) enabled = obj["enabled"];
+    if (obj["days"].is<uint8_t>()) days = obj["days"];
+    if (obj["hour"].is<uint8_t>()) hour = obj["hour"];
+    if (obj["minute"].is<uint8_t>()) minute = obj["minute"];
+    
+    if (obj["action"].is<const char*>()) {
+        const char* actionStr = obj["action"];
+        action = (strcmp(actionStr, "on") == 0) ? ACTION_TURN_ON : ACTION_TURN_OFF;
+    } else if (obj["action"].is<uint8_t>()) {
+        action = (ScheduleAction)obj["action"].as<uint8_t>();
+    }
+    
+    if (obj["strategy"].is<uint8_t>()) strategy = (HeatingStrategy)obj["strategy"].as<uint8_t>();
+    if (obj["name"].is<const char*>()) strncpy(name, obj["name"] | "", sizeof(name) - 1);
+    
+    return true;
+}
+
+bool ScheduleEntry::isValidForDay(uint8_t dayOfWeek) const {
+    // dayOfWeek: 0=Sun, 1=Mon, etc.
+    uint8_t dayMask = 1 << dayOfWeek;
+    return (days & dayMask) != 0;
+}
+
+bool ScheduleEntry::matchesTime(uint8_t h, uint8_t m) const {
+    return hour == h && minute == m;
+}
+
+// =============================================================================
+// ScheduleSettings
+// =============================================================================
+
+void ScheduleSettings::toJson(JsonObject& obj) const {
+    JsonArray arr = obj["schedules"].to<JsonArray>();
+    for (size_t i = 0; i < MAX_SCHEDULES; i++) {
+        if (schedules[i].id > 0) {
+            JsonObject schedObj = arr.add<JsonObject>();
+            schedules[i].toJson(schedObj);
+        }
+    }
+    
+    obj["autoPowerOffEnabled"] = autoPowerOffEnabled;
+    obj["autoPowerOffMinutes"] = autoPowerOffMinutes;
+}
+
+bool ScheduleSettings::fromJson(JsonObjectConst obj) {
+    // Clear existing schedules
+    for (size_t i = 0; i < MAX_SCHEDULES; i++) {
+        schedules[i] = ScheduleEntry();
+    }
+    count = 0;
+    
+    // Parse schedules array
+    JsonArrayConst arr = obj["schedules"];
+    if (!arr.isNull()) {
+        size_t idx = 0;
+        for (JsonObjectConst schedObj : arr) {
+            if (idx >= MAX_SCHEDULES) break;
+            schedules[idx].fromJson(schedObj);
+            if (schedules[idx].id > 0) {
+                count++;
+            }
+            idx++;
+        }
+    }
+    
+    if (obj["autoPowerOffEnabled"].is<bool>()) autoPowerOffEnabled = obj["autoPowerOffEnabled"];
+    if (obj["autoPowerOffMinutes"].is<uint16_t>()) autoPowerOffMinutes = obj["autoPowerOffMinutes"];
+    
+    return true;
+}
+
+ScheduleEntry* ScheduleSettings::findById(uint8_t id) {
+    for (size_t i = 0; i < MAX_SCHEDULES; i++) {
+        if (schedules[i].id == id) {
+            return &schedules[i];
+        }
+    }
+    return nullptr;
+}
+
+const ScheduleEntry* ScheduleSettings::findById(uint8_t id) const {
+    for (size_t i = 0; i < MAX_SCHEDULES; i++) {
+        if (schedules[i].id == id) {
+            return &schedules[i];
+        }
+    }
+    return nullptr;
+}
+
+uint8_t ScheduleSettings::getNextId() const {
+    uint8_t maxId = 0;
+    for (size_t i = 0; i < MAX_SCHEDULES; i++) {
+        if (schedules[i].id > maxId) {
+            maxId = schedules[i].id;
+        }
+    }
+    return maxId + 1;
+}
+
+uint8_t ScheduleSettings::addSchedule(const ScheduleEntry& entry) {
+    // Find empty slot
+    for (size_t i = 0; i < MAX_SCHEDULES; i++) {
+        if (schedules[i].id == 0) {
+            schedules[i] = entry;
+            schedules[i].id = getNextId();
+            count++;
+            return schedules[i].id;
+        }
+    }
+    return 0;  // No space
+}
+
+bool ScheduleSettings::removeSchedule(uint8_t id) {
+    for (size_t i = 0; i < MAX_SCHEDULES; i++) {
+        if (schedules[i].id == id) {
+            schedules[i] = ScheduleEntry();  // Clear
+            count--;
+            return true;
+        }
+    }
+    return false;
+}
+
 } // namespace BrewOS

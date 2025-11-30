@@ -5,6 +5,7 @@ import { Dashboard } from '@/pages/Dashboard';
 import { Brewing } from '@/pages/Brewing';
 import { Scale } from '@/pages/Scale';
 import { Settings } from '@/pages/Settings';
+import { Schedules } from '@/pages/Schedules';
 import { System } from '@/pages/System';
 import { About } from '@/pages/About';
 import { Setup } from '@/pages/Setup';
@@ -121,6 +122,7 @@ function App() {
           <Route path="brewing" element={<Brewing />} />
           <Route path="scale" element={<Scale />} />
           <Route path="settings" element={<Settings />} />
+          <Route path="schedules" element={<Schedules />} />
           <Route path="system" element={<System />} />
           <Route path="cloud" element={<Cloud />} />
           <Route path="about" element={<About />} />
@@ -177,6 +179,7 @@ function App() {
         <Route path="brewing" element={<Brewing />} />
         <Route path="scale" element={<Scale />} />
         <Route path="settings" element={<Settings />} />
+        <Route path="schedules" element={<Schedules />} />
         <Route path="system" element={<System />} />
         <Route path="about" element={<About />} />
       </Route>

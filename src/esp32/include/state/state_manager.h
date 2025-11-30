@@ -43,6 +43,7 @@ public:
     void saveCloudSettings();
     void saveScaleSettings();
     void saveDisplaySettings();
+    void saveScheduleSettings();
     
     // Reset settings to defaults
     void resetSettings();
@@ -99,6 +100,32 @@ public:
     void endShot();
     bool isShotActive() const { return _state.shotActive; }
     uint32_t getShotDuration() const;
+    
+    // ==========================================================================
+    // SCHEDULE MANAGEMENT
+    // ==========================================================================
+    
+    // Add or update a schedule
+    uint8_t addSchedule(const ScheduleEntry& entry);
+    bool updateSchedule(uint8_t id, const ScheduleEntry& entry);
+    bool removeSchedule(uint8_t id);
+    bool enableSchedule(uint8_t id, bool enabled);
+    
+    // Auto power-off settings
+    void setAutoPowerOff(bool enabled, uint16_t minutes);
+    bool getAutoPowerOffEnabled() const { return _settings.schedule.autoPowerOffEnabled; }
+    uint16_t getAutoPowerOffMinutes() const { return _settings.schedule.autoPowerOffMinutes; }
+    
+    // Schedule callbacks (for triggering actions)
+    using ScheduleCallback = std::function<void(const ScheduleEntry&)>;
+    void onScheduleTriggered(ScheduleCallback callback);
+    
+    // Check schedules (called from loop)
+    void checkSchedules();
+    
+    // Idle tracking for auto power-off
+    void resetIdleTimer();  // Call on user activity
+    bool isIdleTimeout() const;
     
     // ==========================================================================
     // CHANGE NOTIFICATIONS
@@ -161,13 +188,21 @@ private:
     // Timing
     uint32_t _lastStatsSave = 0;
     uint32_t _lastDailyReset = 0;
+    uint32_t _lastScheduleCheck = 0;
+    uint32_t _lastActivityTime = 0;
+    uint8_t _lastScheduleMinute = 255;  // Track last minute to avoid duplicate triggers
     static constexpr uint32_t STATS_SAVE_INTERVAL = 300000;  // 5 minutes
+    static constexpr uint32_t SCHEDULE_CHECK_INTERVAL = 10000;  // 10 seconds
+    
+    // Schedule callback
+    ScheduleCallback _onScheduleTriggered;
     
     // Persistence
     void loadSettings();
     void loadStats();
     void loadShotHistory();
     void saveShotHistory();
+    void loadScheduleSettings();
     
     // Helpers
     void notifySettingsChanged();
@@ -176,8 +211,8 @@ private:
     void checkDailyReset();
 };
 
-// Convenience macro
-#define State StateManager::getInstance()
-
 } // namespace BrewOS
+
+// Convenience macro (outside namespace for global access)
+#define State BrewOS::StateManager::getInstance()
 

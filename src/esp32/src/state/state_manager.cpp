@@ -23,14 +23,18 @@ void StateManager::begin() {
     loadSettings();
     loadStats();
     loadShotHistory();
+    loadScheduleSettings();
     
     // Initialize session
     _stats.sessionStartTimestamp = time(nullptr);
     _stats.sessionShots = 0;
     _state.uptime = millis();
+    _lastActivityTime = millis();
+    _lastScheduleCheck = millis();
+    _lastScheduleMinute = 255;
     
-    Serial.printf("[State] Loaded %d settings, %lu total shots, %d history entries\n",
-        1, _stats.totalShots, _shotHistory.count);
+    Serial.printf("[State] Loaded %d settings, %lu total shots, %d history entries, %d schedules\n",
+        1, _stats.totalShots, _shotHistory.count, _settings.schedule.count);
 }
 
 void StateManager::loop() {
@@ -45,6 +49,9 @@ void StateManager::loop() {
     
     // Daily reset check
     checkDailyReset();
+    
+    // Check schedules
+    checkSchedules();
 }
 
 // =============================================================================
@@ -599,6 +606,198 @@ void StateManager::checkDailyReset() {
         Serial.println("[State] Daily stats reset");
     }
     lastHour = tm_now->tm_hour;
+}
+
+// =============================================================================
+// SCHEDULE MANAGEMENT
+// =============================================================================
+
+static const char* NVS_SCHEDULES = "schedules";
+static const char* SCHEDULE_FILE = "/schedules.json";
+
+void StateManager::saveScheduleSettings() {
+    // Save to LittleFS as JSON (NVS has limited size for complex data)
+    File file = LittleFS.open(SCHEDULE_FILE, "w");
+    if (!file) {
+        Serial.println("[State] Failed to write schedules");
+        return;
+    }
+    
+    JsonDocument doc;
+    JsonObject obj = doc.to<JsonObject>();
+    _settings.schedule.toJson(obj);
+    
+    serializeJson(doc, file);
+    file.close();
+    
+    Serial.printf("[State] Schedules saved (%d active)\n", _settings.schedule.count);
+    notifySettingsChanged();
+}
+
+void StateManager::loadScheduleSettings() {
+    if (!LittleFS.exists(SCHEDULE_FILE)) {
+        Serial.println("[State] No schedules file");
+        return;
+    }
+    
+    File file = LittleFS.open(SCHEDULE_FILE, "r");
+    if (!file) {
+        Serial.println("[State] Failed to open schedules");
+        return;
+    }
+    
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, file);
+    file.close();
+    
+    if (error) {
+        Serial.printf("[State] Schedule parse error: %s\n", error.c_str());
+        return;
+    }
+    
+    _settings.schedule.fromJson(doc.as<JsonObjectConst>());
+    Serial.printf("[State] Loaded %d schedules\n", _settings.schedule.count);
+}
+
+uint8_t StateManager::addSchedule(const ScheduleEntry& entry) {
+    uint8_t id = _settings.schedule.addSchedule(entry);
+    if (id > 0) {
+        saveScheduleSettings();
+    }
+    return id;
+}
+
+bool StateManager::updateSchedule(uint8_t id, const ScheduleEntry& entry) {
+    ScheduleEntry* existing = _settings.schedule.findById(id);
+    if (!existing) {
+        return false;
+    }
+    
+    *existing = entry;
+    existing->id = id;  // Preserve ID
+    saveScheduleSettings();
+    return true;
+}
+
+bool StateManager::removeSchedule(uint8_t id) {
+    bool success = _settings.schedule.removeSchedule(id);
+    if (success) {
+        saveScheduleSettings();
+    }
+    return success;
+}
+
+bool StateManager::enableSchedule(uint8_t id, bool enabled) {
+    ScheduleEntry* entry = _settings.schedule.findById(id);
+    if (!entry) {
+        return false;
+    }
+    
+    entry->enabled = enabled;
+    saveScheduleSettings();
+    return true;
+}
+
+void StateManager::setAutoPowerOff(bool enabled, uint16_t minutes) {
+    _settings.schedule.autoPowerOffEnabled = enabled;
+    _settings.schedule.autoPowerOffMinutes = minutes;
+    saveScheduleSettings();
+}
+
+void StateManager::onScheduleTriggered(ScheduleCallback callback) {
+    _onScheduleTriggered = callback;
+}
+
+void StateManager::checkSchedules() {
+    uint32_t now = millis();
+    
+    // Only check every SCHEDULE_CHECK_INTERVAL
+    if (now - _lastScheduleCheck < SCHEDULE_CHECK_INTERVAL) {
+        return;
+    }
+    _lastScheduleCheck = now;
+    
+    // Get current time
+    time_t currentTime = time(nullptr);
+    if (currentTime < 1000000) {
+        // Time not set yet (NTP not synced)
+        return;
+    }
+    
+    struct tm* tm_now = localtime(&currentTime);
+    uint8_t currentHour = tm_now->tm_hour;
+    uint8_t currentMinute = tm_now->tm_min;
+    uint8_t currentDay = tm_now->tm_wday;  // 0 = Sunday
+    
+    // Avoid duplicate triggers within the same minute
+    uint8_t currentMinuteId = (currentHour * 60) + currentMinute;
+    if (_lastScheduleMinute == currentMinuteId) {
+        return;
+    }
+    
+    // Check each enabled schedule
+    for (size_t i = 0; i < MAX_SCHEDULES; i++) {
+        const ScheduleEntry& sched = _settings.schedule.schedules[i];
+        
+        if (sched.id == 0 || !sched.enabled) {
+            continue;
+        }
+        
+        // Check if schedule matches current time and day
+        if (sched.matchesTime(currentHour, currentMinute) && 
+            sched.isValidForDay(currentDay)) {
+            
+            Serial.printf("[Schedule] Triggered: %s (action=%s, strategy=%d)\n",
+                sched.name, sched.action == ACTION_TURN_ON ? "on" : "off", sched.strategy);
+            
+            if (_onScheduleTriggered) {
+                _onScheduleTriggered(sched);
+            }
+        }
+    }
+    
+    _lastScheduleMinute = currentMinuteId;
+    
+    // Check auto power-off
+    if (_settings.schedule.autoPowerOffEnabled && 
+        _settings.schedule.autoPowerOffMinutes > 0 &&
+        isIdleTimeout()) {
+        
+        // Create a virtual "off" schedule entry for the callback
+        ScheduleEntry autoPowerOff;
+        autoPowerOff.action = ACTION_TURN_OFF;
+        strncpy(autoPowerOff.name, "Auto Power-Off", sizeof(autoPowerOff.name) - 1);
+        
+        Serial.println("[Schedule] Auto power-off triggered");
+        
+        if (_onScheduleTriggered) {
+            _onScheduleTriggered(autoPowerOff);
+        }
+        
+        // Reset idle timer to prevent repeated triggers
+        resetIdleTimer();
+    }
+}
+
+void StateManager::resetIdleTimer() {
+    _lastActivityTime = millis();
+}
+
+bool StateManager::isIdleTimeout() const {
+    if (!_settings.schedule.autoPowerOffEnabled || 
+        _settings.schedule.autoPowerOffMinutes == 0) {
+        return false;
+    }
+    
+    // Only trigger auto power-off if machine is on and not brewing
+    if (_state.mode == MachineMode::STANDBY || _state.shotActive) {
+        return false;
+    }
+    
+    uint32_t idleMs = millis() - _lastActivityTime;
+    uint32_t timeoutMs = (uint32_t)_settings.schedule.autoPowerOffMinutes * 60 * 1000;
+    
+    return idleMs >= timeoutMs;
 }
 
 } // namespace BrewOS

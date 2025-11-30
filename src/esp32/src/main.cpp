@@ -37,6 +37,9 @@
 // Brew-by-Weight
 #include "brew_by_weight.h"
 
+// State Manager
+#include "state/state_manager.h"
+
 // Global instances
 WiFiManager wifiManager;
 PicoUART picoUart(Serial1);
@@ -416,6 +419,35 @@ void setup() {
     machineState.steam_max_temp = 160.0f;
     machineState.dose_weight = 18.0f;
     
+    // Initialize State Manager (schedules, settings persistence)
+    LOG_I("Initializing State Manager...");
+    State.begin();
+    
+    // Set up schedule callback
+    State.onScheduleTriggered([](const BrewOS::ScheduleEntry& schedule) {
+        LOG_I("Schedule triggered: %s", schedule.name);
+        
+        if (schedule.action == BrewOS::ACTION_TURN_ON) {
+            // Turn on machine with specified heating strategy
+            uint8_t modeCmd = 0x01;  // MODE_BREW
+            picoUart.sendCommand(MSG_CMD_MODE, &modeCmd, 1);
+            
+            // Set heating strategy if not default
+            if (schedule.strategy != BrewOS::STRATEGY_SEQUENTIAL) {
+                uint8_t strategyPayload[2] = {0x01, schedule.strategy};  // CONFIG_HEATING_STRATEGY
+                picoUart.sendCommand(MSG_CMD_CONFIG, strategyPayload, 2);
+            }
+            
+            ui.showNotification("Schedule: ON", 3000);
+        } else {
+            // Turn off machine
+            uint8_t modeCmd = 0x00;  // MODE_IDLE
+            picoUart.sendCommand(MSG_CMD_MODE, &modeCmd, 1);
+            
+            ui.showNotification("Schedule: OFF", 3000);
+        }
+    });
+    
     LOG_I("Setup complete. Free heap: %d bytes", ESP.getFreeHeap());
 }
 
@@ -449,6 +481,18 @@ void loop() {
         scaleManager.getState().weight,
         scaleManager.isConnected()
     );
+    
+    // Update State Manager (schedules, auto power-off)
+    State.loop();
+    
+    // Reset idle timer on user activity (brewing, encoder, etc.)
+    static bool lastPressed = false;
+    bool currentPressed = encoder.isPressed();
+    if (machineState.is_brewing || (currentPressed && !lastPressed) || encoder.getPosition() != 0) {
+        State.resetIdleTimer();
+        encoder.resetPosition();  // Reset so we detect the next movement
+    }
+    lastPressed = currentPressed;
     
     // Sync BBW state to machine state
     if (brewByWeight.isActive()) {

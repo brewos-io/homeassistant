@@ -427,12 +427,45 @@ make
 
 ---
 
+## ESP32 Features
+
+| Feature | Status | Module | Notes |
+|---------|--------|--------|-------|
+| **WiFi Manager** | ✅ | `wifi_manager.cpp` | AP mode setup, STA mode connection |
+| **Web Server** | ✅ | `web_server.cpp` | REST API, WebSocket, LittleFS |
+| **MQTT Client** | ✅ | `mqtt_client.cpp` | Home Assistant integration |
+| **BLE Scale Manager** | ✅ | `scale/scale_manager.cpp` | Acaia, Felicita, Lunar scales |
+| **Brew-by-Weight** | ✅ | `brew_by_weight.cpp` | Automatic weight-based stopping |
+| **Display/UI** | ✅ | `display/`, `ui/` | LVGL-based round display |
+| **State Manager** | ✅ | `state/state_manager.cpp` | Settings, stats, history persistence |
+| **Schedules & Automation** | ✅ | `state/state_manager.cpp` | Time-based on/off, auto power-off |
+| **Eco Mode** | ✅ | Multiple | Reduced temp after idle, auto-wake |
+| **Cloud Integration** | ✅ | `cloud/` | Remote monitoring and control |
+| **OTA Updates** | ✅ | `web_server.cpp` | ESP32 and Pico firmware updates |
+| **First Run Wizard** | ✅ | Web UI | Guided setup flow |
+
+### Schedule & Auto Power-Off
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Multiple Schedules** | ✅ | Up to 10 schedules, persisted to LittleFS |
+| **Day Selection** | ✅ | Weekdays, weekends, specific days |
+| **Turn On/Off Actions** | ✅ | Each schedule can turn machine on or off |
+| **Heating Strategy** | ✅ | Configurable strategy for ON schedules |
+| **Auto Power-Off** | ✅ | Idle timeout (5-480 minutes) |
+| **Activity Detection** | ✅ | Brewing, encoder, commands reset timer |
+| **Web UI** | ✅ | `/schedules` page for configuration |
+| **REST API** | ✅ | `/api/schedules/*` endpoints |
+| **WebSocket Commands** | ✅ | Real-time schedule management |
+
+---
+
 ## Statistics
 
-- **Total Features:** ~155
-- **Completed:** ~140 (90%)
+- **Total Features:** ~165
+- **Completed:** ~150 (91%)
 - **Partial:** ~8 (5%)
-- **Not Implemented:** ~7 (5%)
+- **Not Implemented:** ~7 (4%)
 
 ---
 

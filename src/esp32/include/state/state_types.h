@@ -98,6 +98,79 @@ struct DisplaySettings {
     bool fromJson(JsonObjectConst obj);
 };
 
+// =============================================================================
+// SCHEDULE SETTINGS - Time-based automation
+// =============================================================================
+
+// Days of week bitmask
+enum DayOfWeek : uint8_t {
+    SUNDAY    = 0x01,
+    MONDAY    = 0x02,
+    TUESDAY   = 0x04,
+    WEDNESDAY = 0x08,
+    THURSDAY  = 0x10,
+    FRIDAY    = 0x20,
+    SATURDAY  = 0x40,
+    WEEKDAYS  = MONDAY | TUESDAY | WEDNESDAY | THURSDAY | FRIDAY,
+    WEEKENDS  = SATURDAY | SUNDAY,
+    EVERY_DAY = 0x7F
+};
+
+// Schedule action types
+enum ScheduleAction : uint8_t {
+    ACTION_TURN_ON = 0,
+    ACTION_TURN_OFF = 1
+};
+
+// Heating strategies (matches protocol_defs.h values)
+// Note: Using different names to avoid macro conflicts with protocol_defs.h
+enum HeatingStrategy : uint8_t {
+    STRATEGY_BREW_ONLY = 0,
+    STRATEGY_SEQUENTIAL = 1,
+    STRATEGY_PARALLEL = 2,
+    STRATEGY_STEAM_PRIORITY = 3,
+    STRATEGY_SMART_STAGGER = 4
+};
+
+// Single schedule entry
+struct ScheduleEntry {
+    uint8_t id = 0;                    // Unique ID (1-10, 0 = unused)
+    bool enabled = false;              // Schedule is active
+    uint8_t days = EVERY_DAY;          // Day of week bitmask
+    uint8_t hour = 7;                  // Hour (0-23)
+    uint8_t minute = 0;                // Minute (0-59)
+    ScheduleAction action = ACTION_TURN_ON;
+    HeatingStrategy strategy = STRATEGY_SEQUENTIAL;  // Only used for TURN_ON
+    char name[24] = {0};               // User-friendly name
+    
+    void toJson(JsonObject& obj) const;
+    bool fromJson(JsonObjectConst obj);
+    bool isValidForDay(uint8_t dayOfWeek) const;  // dayOfWeek: 0=Sun, 1=Mon, etc.
+    bool matchesTime(uint8_t h, uint8_t m) const;
+};
+
+// Maximum number of schedules
+constexpr size_t MAX_SCHEDULES = 10;
+
+struct ScheduleSettings {
+    ScheduleEntry schedules[MAX_SCHEDULES];
+    uint8_t count = 0;                 // Number of active schedules
+    
+    // Auto power-off settings
+    bool autoPowerOffEnabled = false;
+    uint16_t autoPowerOffMinutes = 60; // Minutes of idle before power off (0 = disabled)
+    
+    void toJson(JsonObject& obj) const;
+    bool fromJson(JsonObjectConst obj);
+    
+    // Helper methods
+    ScheduleEntry* findById(uint8_t id);
+    const ScheduleEntry* findById(uint8_t id) const;
+    uint8_t addSchedule(const ScheduleEntry& entry);  // Returns new ID or 0 on failure
+    bool removeSchedule(uint8_t id);
+    uint8_t getNextId() const;
+};
+
 // All settings combined
 struct Settings {
     TemperatureSettings temperature;
@@ -108,6 +181,7 @@ struct Settings {
     CloudSettings cloud;
     ScaleSettings scale;
     DisplaySettings display;
+    ScheduleSettings schedule;
     
     void toJson(JsonDocument& doc) const;
     bool fromJson(const JsonDocument& doc);
