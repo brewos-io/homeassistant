@@ -156,7 +156,9 @@ export interface CloudConfig {
 export interface DeviceInfo {
   deviceId: string;
   deviceName: string;
-  machineType: string;
+  machineBrand: string;
+  machineModel: string;
+  machineType: string;  // Computed: dual_boiler, single_boiler, etc.
   firmwareVersion: string;
 }
 

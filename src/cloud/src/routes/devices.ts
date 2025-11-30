@@ -8,6 +8,7 @@ import {
   getDevice,
   removeDevice,
   renameDevice,
+  updateDeviceMachineInfo,
   userOwnsDevice,
 } from '../services/device.js';
 
@@ -88,6 +89,8 @@ router.get('/', supabaseAuthMiddleware, (req, res) => {
       devices: devices.map(d => ({
         id: d.id,
         name: d.name,
+        machineBrand: d.machine_brand,
+        machineModel: d.machine_model,
         isOnline: !!d.is_online,
         lastSeen: d.last_seen_at,
         firmwareVersion: d.firmware_version,
@@ -122,6 +125,8 @@ router.get('/:id', supabaseAuthMiddleware, (req, res) => {
       device: {
         id: device.id,
         name: device.name,
+        machineBrand: device.machine_brand,
+        machineModel: device.machine_model,
         isOnline: !!device.is_online,
         lastSeen: device.last_seen_at,
         firmwareVersion: device.firmware_version,
@@ -136,18 +141,19 @@ router.get('/:id', supabaseAuthMiddleware, (req, res) => {
 
 /**
  * PATCH /api/devices/:id
- * Update device (rename)
+ * Update device (name, brand, model)
  */
 router.patch('/:id', supabaseAuthMiddleware, (req, res) => {
   try {
     const { id } = req.params;
-    const { name } = req.body;
+    const { name, brand, model } = req.body;
 
-    if (!name) {
-      return res.status(400).json({ error: 'Missing name' });
+    // At least one field must be provided
+    if (!name && !brand && !model) {
+      return res.status(400).json({ error: 'Missing name, brand, or model' });
     }
 
-    renameDevice(id, req.user!.id, name);
+    updateDeviceMachineInfo(id, req.user!.id, { name, brand, model });
 
     res.json({ success: true });
   } catch (error) {

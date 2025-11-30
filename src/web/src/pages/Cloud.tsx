@@ -21,10 +21,10 @@ import {
 import { QRCodeSVG } from 'qrcode.react';
 
 interface PairingData {
-  qrData: string;
-  pairingUrl: string;
   deviceId: string;
-  expiresAt: string;
+  token: string;
+  url: string;
+  expiresIn: number; // seconds until expiry
 }
 
 interface CloudStatus {
@@ -86,10 +86,21 @@ export function Cloud() {
 
   // Copy pairing URL
   const copyPairingUrl = () => {
-    if (pairing?.pairingUrl) {
-      navigator.clipboard.writeText(pairing.pairingUrl);
+    if (pairing?.url) {
+      navigator.clipboard.writeText(pairing.url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  // Copy manual pairing code
+  const [copiedCode, setCopiedCode] = useState(false);
+  const copyPairingCode = () => {
+    if (pairing) {
+      const code = `${pairing.deviceId}:${pairing.token}`;
+      navigator.clipboard.writeText(code);
+      setCopiedCode(true);
+      setTimeout(() => setCopiedCode(false), 2000);
     }
   };
 
@@ -134,7 +145,7 @@ export function Cloud() {
   }, []);
 
   // Check if pairing code is expired
-  const isExpired = pairing?.expiresAt && new Date(pairing.expiresAt) < new Date();
+  const isExpired = pairing?.expiresIn !== undefined && pairing.expiresIn <= 0;
 
   return (
     <div className="space-y-6">
@@ -180,16 +191,20 @@ export function Cloud() {
               <>
                 <div className={`p-3 bg-white rounded-xl ${isExpired ? 'opacity-50' : ''}`}>
                   <QRCodeSVG 
-                    value={pairing.qrData} 
+                    value={pairing.url} 
                     size={180}
                     level="M"
                     includeMargin={false}
                   />
                 </div>
-                {isExpired && (
+                {isExpired ? (
                   <Badge variant="warning" className="mt-3">
                     Code expired
                   </Badge>
+                ) : (
+                  <p className="text-xs text-coffee-400 mt-2">
+                    Expires in {Math.floor(pairing.expiresIn / 60)}m {pairing.expiresIn % 60}s
+                  </p>
                 )}
               </>
             ) : null}
@@ -217,7 +232,7 @@ export function Cloud() {
             
             {pairing && (
               <a 
-                href={pairing.pairingUrl}
+                href={pairing.url}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center justify-center gap-2 text-sm text-accent hover:underline"
@@ -228,12 +243,34 @@ export function Cloud() {
             )}
           </div>
 
+          {/* Manual Pairing Code */}
+          {pairing && (
+            <div className="mt-4 pt-4 border-t border-cream-200">
+              <h3 className="text-sm font-medium text-coffee-900 mb-2">Manual Pairing Code</h3>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 bg-cream-100 px-3 py-2 rounded-lg text-xs font-mono text-coffee-700 break-all">
+                  {pairing.deviceId}:{pairing.token}
+                </code>
+                <Button 
+                  variant="secondary" 
+                  size="sm"
+                  onClick={copyPairingCode}
+                >
+                  {copiedCode ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                </Button>
+              </div>
+              <p className="text-xs text-coffee-400 mt-2">
+                Enter this code at cloud.brewos.io if you can't scan the QR
+              </p>
+            </div>
+          )}
+
           <div className="mt-4 pt-4 border-t border-cream-200">
             <h3 className="text-sm font-medium text-coffee-900 mb-2">How to pair:</h3>
             <ol className="text-sm text-coffee-500 space-y-1 list-decimal list-inside">
               <li>Open <span className="text-accent">cloud.brewos.io</span> on your phone</li>
               <li>Sign in with Google</li>
-              <li>Scan this QR code or use the link</li>
+              <li>Scan this QR code or enter the code above</li>
               <li>Give your machine a name</li>
             </ol>
           </div>

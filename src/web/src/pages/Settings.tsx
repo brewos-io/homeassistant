@@ -25,14 +25,18 @@ export function Settings() {
   const wifi = useStore((s) => s.wifi);
   const mqtt = useStore((s) => s.mqtt);
 
-  // Device name
+  // Device identity
   const [deviceName, setDeviceName] = useState(device.deviceName);
-  const [savingName, setSavingName] = useState(false);
+  const [machineBrand, setMachineBrand] = useState(device.machineBrand || '');
+  const [machineModel, setMachineModel] = useState(device.machineModel || '');
+  const [savingMachine, setSavingMachine] = useState(false);
   
-  // Sync device name when it changes from server
+  // Sync device info when it changes from server
   useEffect(() => {
     setDeviceName(device.deviceName);
-  }, [device.deviceName]);
+    setMachineBrand(device.machineBrand || '');
+    setMachineModel(device.machineModel || '');
+  }, [device.deviceName, device.machineBrand, device.machineModel]);
 
   // Local state for forms
   const [brewTemp, setBrewTemp] = useState(temps.brew.setpoint);
@@ -53,13 +57,23 @@ export function Settings() {
   });
   const [testingMqtt, setTestingMqtt] = useState(false);
 
-  const saveDeviceName = async () => {
-    if (!deviceName.trim()) return;
-    setSavingName(true);
-    getConnection()?.sendCommand('set_device_name', { name: deviceName.trim() });
+  const saveMachineInfo = async () => {
+    if (!deviceName.trim() || !machineBrand.trim() || !machineModel.trim()) return;
+    setSavingMachine(true);
+    getConnection()?.sendCommand('set_machine_info', { 
+      name: deviceName.trim(),
+      brand: machineBrand.trim(),
+      model: machineModel.trim(),
+    });
     // Simulate success
-    setTimeout(() => setSavingName(false), 500);
+    setTimeout(() => setSavingMachine(false), 500);
   };
+  
+  const isMachineInfoValid = deviceName.trim() && machineBrand.trim() && machineModel.trim();
+  const isMachineInfoChanged = 
+    deviceName !== device.deviceName || 
+    machineBrand !== (device.machineBrand || '') || 
+    machineModel !== (device.machineModel || '');
 
   const saveTemps = () => {
     getConnection()?.sendCommand('set_temp', { boiler: 'brew', temp: brewTemp });
@@ -101,30 +115,47 @@ export function Settings() {
         </CardHeader>
 
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1">
-              <Input
-                label="Machine Name"
-                placeholder="Kitchen Espresso"
-                value={deviceName}
-                onChange={(e) => setDeviceName(e.target.value)}
-                hint="Give your machine a friendly name"
-              />
-            </div>
-            <div className="flex items-end">
-              <Button 
-                onClick={saveDeviceName} 
-                loading={savingName}
-                disabled={deviceName === device.deviceName}
-              >
-                <Save className="w-4 h-4" />
-                Save
-              </Button>
-            </div>
+          <Input
+            label="Machine Name"
+            placeholder="Kitchen Espresso"
+            value={deviceName}
+            onChange={(e) => setDeviceName(e.target.value)}
+            hint="Give your machine a friendly name"
+            required
+          />
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Brand"
+              placeholder="ECM, Profitec, Rancilio..."
+              value={machineBrand}
+              onChange={(e) => setMachineBrand(e.target.value)}
+              hint="Machine manufacturer"
+              required
+            />
+            <Input
+              label="Model"
+              placeholder="Synchronika, Pro 700, Silvia..."
+              value={machineModel}
+              onChange={(e) => setMachineModel(e.target.value)}
+              hint="Machine model name"
+              required
+            />
+          </div>
+          
+          <div className="flex justify-end">
+            <Button 
+              onClick={saveMachineInfo} 
+              loading={savingMachine}
+              disabled={!isMachineInfoValid || !isMachineInfoChanged}
+            >
+              <Save className="w-4 h-4" />
+              Save Machine Info
+            </Button>
           </div>
           
           {device.deviceId && (
-            <div className="grid grid-cols-2 gap-4 pt-2">
+            <div className="grid grid-cols-2 gap-4 pt-2 border-t border-cream-200">
               <StatusRow label="Device ID" value={device.deviceId} mono />
               <StatusRow label="Machine Type" value={device.machineType || 'Not set'} />
             </div>

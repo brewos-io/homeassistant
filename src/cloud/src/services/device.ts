@@ -230,6 +230,48 @@ export function renameDevice(
 }
 
 /**
+ * Update device machine info (brand, model)
+ */
+export function updateDeviceMachineInfo(
+  deviceId: string,
+  userId: string,
+  data: { name?: string; brand?: string; model?: string }
+): void {
+  const db = getDb();
+  const now = new Date().toISOString();
+
+  // Build update query dynamically based on provided fields
+  const updates: string[] = ['updated_at = ?'];
+  const values: unknown[] = [now];
+
+  if (data.name) {
+    updates.push('name = ?');
+    values.push(data.name);
+  }
+  if (data.brand) {
+    updates.push('machine_brand = ?');
+    values.push(data.brand);
+  }
+  if (data.model) {
+    updates.push('machine_model = ?');
+    values.push(data.model);
+  }
+
+  values.push(deviceId, userId);
+
+  db.run(
+    `UPDATE devices SET ${updates.join(', ')} WHERE id = ? AND owner_id = ?`,
+    values
+  );
+
+  if (db.getRowsModified() === 0) {
+    throw new Error('Failed to update device');
+  }
+
+  saveDatabase();
+}
+
+/**
  * Cleanup expired claim tokens
  */
 export function cleanupExpiredTokens(): number {

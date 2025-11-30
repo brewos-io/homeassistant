@@ -155,6 +155,8 @@ const defaultStats: Statistics = {
 const defaultDevice: DeviceInfo = {
   deviceId: '',
   deviceName: 'My BrewOS',
+  machineBrand: '',
+  machineModel: '',
   machineType: '',
   firmwareVersion: '',
 };
@@ -294,6 +296,8 @@ export const useStore = create<BrewOSState>()(
             device: {
               deviceId: (data.deviceId as string) || state.device.deviceId,
               deviceName: (data.deviceName as string) || state.device.deviceName,
+              machineBrand: (data.machineBrand as string) || state.device.machineBrand,
+              machineModel: (data.machineModel as string) || state.device.machineModel,
               machineType: (data.machineType as string) || state.device.machineType,
               firmwareVersion: (data.firmwareVersion as string) || state.device.firmwareVersion,
             },

@@ -37,6 +37,8 @@ export async function initDatabase(): Promise<SqlJsDatabase> {
       id TEXT PRIMARY KEY,
       owner_id TEXT,
       name TEXT NOT NULL DEFAULT 'My BrewOS',
+      machine_brand TEXT,
+      machine_model TEXT,
       firmware_version TEXT,
       hardware_version TEXT,
       machine_type TEXT,
@@ -70,6 +72,19 @@ export async function initDatabase(): Promise<SqlJsDatabase> {
   // Create indexes
   db.run(`CREATE INDEX IF NOT EXISTS idx_devices_owner ON devices(owner_id)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_claim_tokens_expires ON device_claim_tokens(expires_at)`);
+
+  // Migrations for existing databases
+  // Add machine_brand and machine_model columns if they don't exist
+  try {
+    db.run(`ALTER TABLE devices ADD COLUMN machine_brand TEXT`);
+  } catch {
+    // Column already exists
+  }
+  try {
+    db.run(`ALTER TABLE devices ADD COLUMN machine_model TEXT`);
+  } catch {
+    // Column already exists
+  }
 
   // Save initial database
   saveDatabase();
@@ -109,6 +124,8 @@ export interface Device {
   id: string;
   owner_id: string | null;
   name: string;
+  machine_brand: string | null;
+  machine_model: string | null;
   firmware_version: string | null;
   hardware_version: string | null;
   machine_type: string | null;
