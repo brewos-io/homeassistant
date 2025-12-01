@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { Outlet, NavLink, useNavigate, useParams } from 'react-router-dom';
 import { useStore } from '@/lib/store';
 import { useAppStore } from '@/lib/mode';
 import { DeviceSelector } from './DeviceSelector';
 import { Logo } from './Logo';
+import { InstallPrompt } from './InstallPrompt';
 import { 
   LayoutGrid, 
   Coffee, 
@@ -14,6 +16,7 @@ import {
   Cloud,
   LogOut,
   Home,
+  X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -38,12 +41,21 @@ export function Layout() {
   const connectionState = useStore((s) => s.connectionState);
   const deviceName = useStore((s) => s.device.deviceName);
   const { mode, user, signOut, getSelectedDevice } = useAppStore();
+  const [showInstallBanner, setShowInstallBanner] = useState(() => {
+    // Check if user previously dismissed the banner
+    return localStorage.getItem('brewos-install-dismissed') !== 'true';
+  });
   
   const isCloud = mode === 'cloud';
   const selectedDevice = getSelectedDevice();
   
   const isConnected = connectionState === 'connected';
   const isConnecting = connectionState === 'connecting' || connectionState === 'reconnecting';
+  
+  const dismissInstallBanner = () => {
+    setShowInstallBanner(false);
+    localStorage.setItem('brewos-install-dismissed', 'true');
+  };
   
   const navigation = getNavigation(isCloud, deviceId || selectedDevice?.id);
 
@@ -129,6 +141,28 @@ export function Layout() {
           </div>
         </div>
       </header>
+
+      {/* Install App Banner - shown to mobile users */}
+      {showInstallBanner && (
+        <div className="bg-accent/10 border-b border-accent/20">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
+            <div className="flex items-center justify-between gap-4">
+              <InstallPrompt 
+                variant="banner" 
+                className="flex-1 border-0 p-0 bg-transparent"
+                onInstalled={dismissInstallBanner}
+              />
+              <button
+                onClick={dismissInstallBanner}
+                className="p-1 hover:bg-accent/10 rounded-lg transition-colors text-theme-muted"
+                aria-label="Dismiss"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Navigation - Desktop: horizontal tabs, Mobile: bottom bar style */}
       <nav className="sticky top-16 z-40 nav-bg border-b border-theme">

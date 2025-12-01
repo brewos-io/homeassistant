@@ -1,12 +1,21 @@
 {
   "name": "BrewOS - Smart Espresso Machine Controller",
   "short_name": "BrewOS",
-  "description": "Open Source Espresso Machine Firmware",
+  "description": "Control your espresso machine from anywhere. Monitor temperatures, pull shots, and manage schedules with precision PID control.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#391f12",
   "theme_color": "#391f12",
   "orientation": "portrait-primary",
+  "scope": "/",
+  "id": "brewos-pwa",
+  "prefer_related_applications": false,
+  "related_applications": [
+    {
+      "platform": "webapp",
+      "url": "https://cloud.brewos.io/manifest.json"
+    }
+  ],
   "icons": [
     {
       "src": "/logo-icon.svg",
