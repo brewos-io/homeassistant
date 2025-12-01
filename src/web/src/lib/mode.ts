@@ -5,6 +5,7 @@ import {
   getStoredSession, 
   clearSession, 
   handleGoogleSuccess,
+  isSessionExpiringSoon,
   type GoogleUser,
 } from './google-auth';
 
@@ -25,6 +26,49 @@ async function fetchModeFromServer(): Promise<{ mode: ConnectionMode; apMode?: b
     // If fetch fails, default to local (ESP32 might be in AP mode with no network)
   }
   return { mode: 'local', apMode: false };
+}
+
+/**
+ * Monitor token expiration and automatically sign out when expired
+ * Checks every minute
+ */
+let tokenMonitorInterval: number | null = null;
+
+function startTokenExpirationMonitor() {
+  // Clear existing monitor
+  if (tokenMonitorInterval !== null) {
+    clearInterval(tokenMonitorInterval);
+  }
+  
+  // Check every minute
+  tokenMonitorInterval = window.setInterval(() => {
+    const session = getStoredSession();
+    const store = useAppStore.getState();
+    
+    // If we have a user but session is expired/expiring, sign out
+    if (store.user && (!session || isSessionExpiringSoon(session, 0))) {
+      console.log('[Auth] Token expired, signing out');
+      store.signOut();
+      
+      // Clear monitor
+      if (tokenMonitorInterval !== null) {
+        clearInterval(tokenMonitorInterval);
+        tokenMonitorInterval = null;
+      }
+      
+      // Redirect to login if not already there
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login?expired=true';
+      }
+    }
+  }, 60 * 1000); // Check every minute
+}
+
+function stopTokenExpirationMonitor() {
+  if (tokenMonitorInterval !== null) {
+    clearInterval(tokenMonitorInterval);
+    tokenMonitorInterval = null;
+  }
 }
 
 interface AppState {
@@ -97,6 +141,9 @@ export const useAppStore = create<AppState>()(
           
           // Fetch devices
           get().fetchDevices();
+          
+          // Start token expiration monitoring
+          startTokenExpirationMonitor();
         } else {
           set({ authLoading: false, initialized: true });
         }
@@ -114,11 +161,15 @@ export const useAppStore = create<AppState>()(
           
           // Fetch devices after login
           get().fetchDevices();
+          
+          // Start token expiration monitoring
+          startTokenExpirationMonitor();
         }
       },
 
       signOut: () => {
         clearSession();
+        stopTokenExpirationMonitor();
         set({ 
           user: null, 
           idToken: null, 
