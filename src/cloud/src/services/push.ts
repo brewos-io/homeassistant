@@ -22,8 +22,21 @@ export function initializePushNotifications(): void {
   const publicKey = process.env.VAPID_PUBLIC_KEY;
   const privateKey = process.env.VAPID_PRIVATE_KEY;
 
-  if (!publicKey || !privateKey) {
-    console.warn('[Push] VAPID keys not configured. Generating new keys...');
+  // Check if keys are missing, empty, or placeholder values
+  const isPlaceholder = (key: string | undefined): boolean => {
+    if (!key) return true;
+    // Check for common placeholder patterns
+    if (key.startsWith('your-') || key === 'your-vapid-public-key' || key === 'your-vapid-private-key') {
+      return true;
+    }
+    // VAPID public key should be 65 bytes (base64url encoded ~87 chars)
+    // VAPID private key should be 32 bytes (base64url encoded ~43 chars)
+    if (key.length < 40) return true;
+    return false;
+  };
+
+  if (isPlaceholder(publicKey) || isPlaceholder(privateKey)) {
+    console.warn('[Push] VAPID keys not configured or invalid. Generating new keys...');
     const keys = webpush.generateVAPIDKeys();
     vapidKeys = {
       publicKey: keys.publicKey,
@@ -34,8 +47,8 @@ export function initializePushNotifications(): void {
     console.warn(`VAPID_PRIVATE_KEY=${keys.privateKey}`);
   } else {
     vapidKeys = {
-      publicKey,
-      privateKey,
+      publicKey: publicKey!,
+      privateKey: privateKey!,
     };
   }
 
