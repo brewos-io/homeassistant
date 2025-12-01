@@ -1,4 +1,3 @@
-import React from 'react';
 import { useThemeStore } from '@/lib/themeStore';
 import { themeList } from '@/lib/themes';
 import { Card, CardHeader, CardTitle } from '@/components/Card';
@@ -48,16 +47,14 @@ export function ThemeSettings() {
                 key={theme.id}
                 onClick={() => setTheme(theme.id)}
                 className={cn(
-                  'relative p-3 rounded-xl border-2 transition-all text-left group overflow-hidden',
+                  'relative p-3 rounded-xl transition-all text-left group overflow-hidden',
                   isActive
-                    ? 'ring-2 ring-offset-2'
-                    : 'hover:scale-[1.02]'
+                    ? 'border-[3px] shadow-md'
+                    : 'border hover:scale-[1.02] hover:shadow-sm'
                 )}
                 style={{
                   backgroundColor: theme.colors.bg,
                   borderColor: isActive ? theme.preview.accent : theme.colors.border,
-                  '--tw-ring-color': theme.preview.accent,
-                  '--tw-ring-offset-color': 'var(--bg)',
                 } as React.CSSProperties}
               >
                 {/* Theme Preview Colors */}
@@ -106,16 +103,14 @@ export function ThemeSettings() {
                 key={theme.id}
                 onClick={() => setTheme(theme.id)}
                 className={cn(
-                  'relative p-3 rounded-xl border-2 transition-all text-left group overflow-hidden',
+                  'relative p-3 rounded-xl transition-all text-left group overflow-hidden',
                   isActive
-                    ? 'ring-2 ring-offset-2'
-                    : 'hover:scale-[1.02]'
+                    ? 'border-[3px] shadow-md'
+                    : 'border hover:scale-[1.02] hover:shadow-sm'
                 )}
                 style={{
                   backgroundColor: theme.colors.bg,
                   borderColor: isActive ? theme.preview.accent : theme.colors.border,
-                  '--tw-ring-color': theme.preview.accent,
-                  '--tw-ring-offset-color': 'var(--bg)',
                 } as React.CSSProperties}
               >
                 {/* Theme Preview Colors */}
