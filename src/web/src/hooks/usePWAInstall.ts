@@ -27,6 +27,35 @@ interface PWAInstallState {
   dismiss: () => void;
 }
 
+/**
+ * Detect if the device is a mobile device
+ * Uses multiple checks to ensure accuracy
+ */
+function detectMobile(): boolean {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+  
+  const userAgent = navigator.userAgent.toLowerCase();
+  
+  // Check user agent for mobile keywords
+  const mobileKeywords = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile|tablet/i;
+  const isMobileUA = mobileKeywords.test(userAgent);
+  
+  // Check for touch capability + small screen (tablets have touch but larger screens)
+  const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  const isSmallScreen = window.innerWidth <= 768;
+  
+  // Check if it's NOT a desktop browser pretending to be mobile (Chrome DevTools)
+  // Desktop Chrome's UA doesn't include mobile keywords unless DevTools is emulating
+  const isDesktopChrome = /chrome/.test(userAgent) && !/mobile/.test(userAgent) && !/android/.test(userAgent);
+  
+  // If it's desktop Chrome without mobile UA, it's not mobile
+  if (isDesktopChrome && !isSmallScreen) {
+    return false;
+  }
+  
+  return isMobileUA || (hasTouch && isSmallScreen);
+}
+
 export function usePWAInstall(): PWAInstallState {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(false);
@@ -34,12 +63,22 @@ export function usePWAInstall(): PWAInstallState {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem(DISMISSED_KEY) === 'true';
   });
+  const [isMobile, setIsMobile] = useState(() => detectMobile());
 
   // Detect platform
   const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent.toLowerCase() : '';
   const isIOS = /iphone|ipad|ipod/.test(userAgent);
   const isAndroid = /android/.test(userAgent);
-  const isMobile = isIOS || isAndroid || /mobile/.test(userAgent);
+  
+  // Update mobile detection on resize
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(detectMobile());
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Check if already installed (standalone mode or via getInstalledRelatedApps)
   useEffect(() => {

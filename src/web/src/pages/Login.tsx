@@ -3,7 +3,6 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { GoogleLogin, CredentialResponse } from '@react-oauth/google';
 import { Card } from '@/components/Card';
 import { Logo } from '@/components/Logo';
-import { InstallPrompt } from '@/components/InstallPrompt';
 import { useAuth } from '@/lib/auth';
 import { isGoogleAuthConfigured } from '@/lib/google-auth';
 import { AlertCircle } from 'lucide-react';
@@ -95,11 +94,6 @@ export function Login() {
           </p>
         </div>
       </Card>
-
-      {/* Install App prompt for mobile users only */}
-      <div className="mt-4 w-full max-w-md">
-        <InstallPrompt variant="card" />
-      </div>
     </div>
   );
 }
