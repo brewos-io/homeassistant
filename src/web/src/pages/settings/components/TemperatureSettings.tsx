@@ -1,21 +1,78 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useStore } from '@/lib/store';
 import { getConnection } from '@/lib/connection';
 import { Card, CardHeader, CardTitle } from '@/components/Card';
 import { Input } from '@/components/Input';
 import { Button } from '@/components/Button';
 import { Thermometer } from 'lucide-react';
+import { 
+  convertFromCelsius, 
+  convertToCelsius, 
+  getUnitSymbol, 
+  getTemperatureStep,
+  getTemperatureRanges,
+} from '@/lib/temperature';
 
 export function TemperatureSettings() {
   const temps = useStore((s) => s.temps);
+  const device = useStore((s) => s.device);
+  const temperatureUnit = useStore((s) => s.preferences.temperatureUnit);
 
-  const [brewTemp, setBrewTemp] = useState(temps.brew.setpoint);
-  const [steamTemp, setSteamTemp] = useState(temps.steam.setpoint);
+  // Store values in display unit for the UI
+  const [brewTempDisplay, setBrewTempDisplay] = useState(() => 
+    convertFromCelsius(temps.brew.setpoint, temperatureUnit)
+  );
+  const [steamTempDisplay, setSteamTempDisplay] = useState(() => 
+    convertFromCelsius(temps.steam.setpoint, temperatureUnit)
+  );
+
+  // Get temperature ranges in current unit
+  const ranges = useMemo(() => getTemperatureRanges(temperatureUnit), [temperatureUnit]);
+  const step = getTemperatureStep(temperatureUnit);
+  const unitSymbol = getUnitSymbol(temperatureUnit);
+
+  // Update display values when unit changes or temps change from server
+  useEffect(() => {
+    setBrewTempDisplay(convertFromCelsius(temps.brew.setpoint, temperatureUnit));
+    setSteamTempDisplay(convertFromCelsius(temps.steam.setpoint, temperatureUnit));
+  }, [temps.brew.setpoint, temps.steam.setpoint, temperatureUnit]);
+
+  const isDualBoiler = device.machineType === 'dual_boiler';
+  const isSingleBoiler = device.machineType === 'single_boiler';
+  const isHeatExchanger = device.machineType === 'heat_exchanger';
 
   const saveTemps = () => {
-    getConnection()?.sendCommand('set_temp', { boiler: 'brew', temp: brewTemp });
-    getConnection()?.sendCommand('set_temp', { boiler: 'steam', temp: steamTemp });
+    // Convert back to Celsius before sending to backend
+    const brewTempCelsius = convertToCelsius(brewTempDisplay, temperatureUnit);
+    const steamTempCelsius = convertToCelsius(steamTempDisplay, temperatureUnit);
+
+    if (isDualBoiler || isSingleBoiler || !device.machineType) {
+      getConnection()?.sendCommand('set_temp', { boiler: 'brew', temp: brewTempCelsius });
+    }
+    if (isDualBoiler || isHeatExchanger || !device.machineType) {
+      getConnection()?.sendCommand('set_temp', { boiler: 'steam', temp: steamTempCelsius });
+    }
   };
+
+  // Determine what controls to show based on machine type
+  const showBrewControl = isDualBoiler || isSingleBoiler || !device.machineType;
+  const showSteamControl = isDualBoiler || isHeatExchanger || !device.machineType;
+
+  // Get appropriate labels and hints based on machine type and unit
+  const brewLabel = isSingleBoiler ? 'Boiler Temperature' : 'Brew Temperature';
+  const brewHint = isSingleBoiler 
+    ? `Brew mode: ${ranges.brew.recommended.min.toFixed(0)}-${ranges.brew.recommended.max.toFixed(0)}${unitSymbol}`
+    : `Recommended: ${ranges.brew.recommended.min.toFixed(0)}-${ranges.brew.recommended.max.toFixed(0)}${unitSymbol}`;
+  const steamLabel = isHeatExchanger ? 'Boiler Temperature' : 'Steam Temperature';
+  const steamHint = isHeatExchanger 
+    ? 'Controls HX brew water temperature' 
+    : 'For milk frothing';
+
+  // Calculate min/max for inputs
+  const brewMin = ranges.brew.min;
+  const brewMax = isSingleBoiler ? ranges.boiler.max : ranges.brew.max;
+  const steamMin = isHeatExchanger ? convertFromCelsius(100, temperatureUnit) : ranges.steam.min;
+  const steamMax = ranges.steam.max;
 
   return (
     <Card>
@@ -25,29 +82,33 @@ export function TemperatureSettings() {
         </CardTitle>
       </CardHeader>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-        <Input
-          label="Brew Temperature"
-          type="number"
-          min={80}
-          max={105}
-          step={0.5}
-          value={brewTemp}
-          onChange={(e) => setBrewTemp(parseFloat(e.target.value))}
-          unit="°C"
-          hint="Recommended: 92-96°C"
-        />
-        <Input
-          label="Steam Temperature"
-          type="number"
-          min={120}
-          max={160}
-          step={1}
-          value={steamTemp}
-          onChange={(e) => setSteamTemp(parseFloat(e.target.value))}
-          unit="°C"
-          hint="For milk frothing"
-        />
+      <div className={`grid grid-cols-1 ${showBrewControl && showSteamControl ? 'sm:grid-cols-2' : ''} gap-4 mb-6`}>
+        {showBrewControl && (
+          <Input
+            label={brewLabel}
+            type="number"
+            min={brewMin}
+            max={brewMax}
+            step={step}
+            value={brewTempDisplay}
+            onChange={(e) => setBrewTempDisplay(parseFloat(e.target.value))}
+            unit={unitSymbol}
+            hint={brewHint}
+          />
+        )}
+        {showSteamControl && (
+          <Input
+            label={steamLabel}
+            type="number"
+            min={steamMin}
+            max={steamMax}
+            step={step}
+            value={steamTempDisplay}
+            onChange={(e) => setSteamTempDisplay(parseFloat(e.target.value))}
+            unit={unitSymbol}
+            hint={steamHint}
+          />
+        )}
       </div>
 
       <div className="flex justify-end">

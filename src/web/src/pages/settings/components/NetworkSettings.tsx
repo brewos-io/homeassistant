@@ -130,20 +130,20 @@ export function NetworkSettings() {
               type="checkbox"
               checked={mqttConfig.discovery}
               onChange={(e) => setMqttConfig({ ...mqttConfig, discovery: e.target.checked })}
-              className="w-4 h-4 rounded border-cream-300 text-accent focus:ring-accent"
+              className="w-4 h-4 rounded border-theme text-accent focus:ring-accent"
             />
-            <span className="text-sm text-coffee-700">Enable Home Assistant auto-discovery</span>
+            <span className="text-sm text-theme-secondary">Enable Home Assistant auto-discovery</span>
           </label>
 
-          <div className="flex items-center gap-2 p-3 bg-cream-100 rounded-xl">
+          <div className="flex items-center gap-2 p-3 bg-theme-secondary rounded-xl">
             {mqtt.connected ? (
-              <Check className="w-4 h-4 text-emerald-600" />
+              <Check className="w-4 h-4 text-emerald-500" />
             ) : mqtt.enabled ? (
               <X className="w-4 h-4 text-red-500" />
             ) : (
-              <div className="w-4 h-4 rounded-full bg-cream-300" />
+              <div className="w-4 h-4 rounded-full bg-theme-muted/30" />
             )}
-            <span className="text-sm text-coffee-700">
+            <span className="text-sm text-theme-secondary">
               {mqtt.connected ? 'Connected to broker' : mqtt.enabled ? 'Disconnected' : 'Disabled'}
             </span>
           </div>

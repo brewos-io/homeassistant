@@ -84,6 +84,7 @@ const defaultMachine: MachineStatus = {
 const defaultTemps: Temperatures = {
   brew: { current: 0, setpoint: 93.5, max: 105 },
   steam: { current: 0, setpoint: 145, max: 160 },
+  group: 0,
 };
 
 const defaultPower: PowerStatus = {
@@ -189,7 +190,7 @@ const defaultDevice: DeviceInfo = {
   deviceName: 'My BrewOS',
   machineBrand: '',
   machineModel: '',
-  machineType: '',
+  machineType: '' as DeviceInfo['machineType'],
   firmwareVersion: '',
 };
 
@@ -198,6 +199,7 @@ const loadPreferences = (): UserPreferences => {
   const defaults: UserPreferences = {
     firstDayOfWeek: 'sunday',
     use24HourTime: false,
+    temperatureUnit: 'celsius',
   };
   
   try {
@@ -302,6 +304,7 @@ export const useStore = create<BrewOSState>()(
                 setpoint: (data.steamSetpoint as number) ?? state.temps.steam.setpoint,
                 max: state.temps.steam.max,
               },
+              group: (data.groupTemp as number) ?? state.temps.group,
             },
             pressure: (data.pressure as number) ?? state.pressure,
             power: {
@@ -386,7 +389,7 @@ export const useStore = create<BrewOSState>()(
               deviceName: (data.deviceName as string) || state.device.deviceName,
               machineBrand: (data.machineBrand as string) || state.device.machineBrand,
               machineModel: (data.machineModel as string) || state.device.machineModel,
-              machineType: (data.machineType as string) || state.device.machineType,
+              machineType: (data.machineType as DeviceInfo['machineType']) || state.device.machineType,
               firmwareVersion: (data.firmwareVersion as string) || state.device.firmwareVersion,
             },
           }));

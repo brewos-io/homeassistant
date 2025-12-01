@@ -66,6 +66,7 @@ export interface BoilerTemp {
 export interface Temperatures {
   brew: BoilerTemp;
   steam: BoilerTemp;
+  group: number;  // Group head temp for HX machines (°C)
 }
 
 // Power
@@ -155,13 +156,16 @@ export interface CloudConfig {
   deviceId: string;
 }
 
+// Machine type enum for type-safe comparisons
+export type MachineType = 'dual_boiler' | 'single_boiler' | 'heat_exchanger' | '';
+
 // Device info
 export interface DeviceInfo {
   deviceId: string;
   deviceName: string;
   machineBrand: string;
   machineModel: string;
-  machineType: string;  // Computed: dual_boiler, single_boiler, etc.
+  machineType: MachineType;  // dual_boiler, single_boiler, heat_exchanger
   firmwareVersion: string;
 }
 
@@ -240,8 +244,10 @@ export interface CloudDevice {
 
 // User preferences (stored in localStorage)
 export type FirstDayOfWeek = 'sunday' | 'monday';
+export type TemperatureUnit = 'celsius' | 'fahrenheit';
 
 export interface UserPreferences {
   firstDayOfWeek: FirstDayOfWeek;
   use24HourTime: boolean;
+  temperatureUnit: TemperatureUnit;
 }

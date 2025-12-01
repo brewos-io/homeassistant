@@ -218,9 +218,12 @@ void UI::clearAlarm() {
 void UI::handleEncoder(int direction) {
     switch (_currentScreen) {
         case SCREEN_IDLE:
-            // Navigate heating strategies
-            screen_idle_select_strategy(
-                screen_idle_get_selected_strategy() + direction);
+            // Navigate heating strategies (only for dual boiler machines)
+            if (screen_idle_is_showing_strategies()) {
+                screen_idle_select_strategy(
+                    screen_idle_get_selected_strategy() + direction);
+            }
+            // For non-dual-boiler, encoder does nothing on idle screen
             break;
             
         case SCREEN_HOME:

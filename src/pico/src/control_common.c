@@ -9,16 +9,18 @@
  */
 
 #include "pico/stdlib.h"
+#include "pico/time.h"
+#include "hardware/gpio.h"
+#include "hardware/pwm.h"
 #include "control.h"
 #include "control_impl.h"
 #include "config.h"
 #include "sensors.h"
 #include "protocol.h"
-#include "machine_electrical.h"
+#include "machine_config.h"
 #include "environmental_config.h"
 #include "hardware.h"
 #include "pcb_config.h"
-#include "machine_config.h"
 #include "safety.h"
 #include "state.h"
 #include "pzem.h"
@@ -48,6 +50,23 @@ static uint8_t g_pwm_slice_steam = 0xFF;
 static float g_sequential_threshold_pct = 80.0f;
 static float g_max_combined_duty = 150.0f;
 static uint8_t g_stagger_priority = 0;
+
+// Phase synchronization for HEAT_SMART_STAGGER
+#define PHASE_SYNC_PERIOD_MS 1000  // 1 second period for phase sync
+typedef struct {
+    uint32_t start_ms;      // Start time within period (0-1000ms)
+    uint32_t duration_ms;   // Duration ON (0-1000ms)
+    bool active;            // True if schedule is active
+} ssr_schedule_t;
+
+static ssr_schedule_t g_brew_schedule = {0};
+static ssr_schedule_t g_steam_schedule = {0};
+static struct repeating_timer g_phase_timer;
+static bool g_phase_sync_active = false;
+static uint32_t g_phase_period_start = 0;  // Timestamp of current period start
+
+// Forward declaration for phase sync helper
+static void set_ssr_schedule(uint8_t ssr_id, uint32_t start_ms, uint32_t duration_ms);
 
 // =============================================================================
 // PID Initialization
@@ -169,28 +188,48 @@ void apply_heating_strategy(
         }
             
         case HEAT_SMART_STAGGER: {
-            float brew_current = elec_state.brew_heater_current * (brew_demand / 100.0f);
-            float steam_current = elec_state.steam_heater_current * (steam_demand / 100.0f);
-            float total_current = brew_current + steam_current;
+            // Phase-synchronized control: Calculate duty cycles and phase offsets
+            float brew_duty_pct = brew_demand;
+            float steam_duty_pct = steam_demand;
             
-            if (total_current <= elec_state.max_combined_current) {
-                *brew_duty = brew_demand;
-                *steam_duty = steam_demand;
-            } else {
+            // Clamp total based on max_combined_duty
+            float max_total = g_max_combined_duty;
+            float total_req = brew_duty_pct + steam_duty_pct;
+            
+            if (total_req > max_total) {
                 if (g_stagger_priority == 0) {
-                    *brew_duty = fminf(brew_demand, 100.0f);
-                    float remaining = elec_state.max_combined_current - 
-                                     (elec_state.brew_heater_current * (*brew_duty / 100.0f));
-                    *steam_duty = (remaining > 0) ? 
-                        fminf(steam_demand, (remaining / elec_state.steam_heater_current) * 100.0f) : 0.0f;
+                    // Brew priority: give brew what it wants, steam gets remainder
+                    if (brew_duty_pct > max_total) brew_duty_pct = max_total;
+                    steam_duty_pct = max_total - brew_duty_pct;
                 } else {
-                    *steam_duty = fminf(steam_demand, 100.0f);
-                    float remaining = elec_state.max_combined_current - 
-                                     (elec_state.steam_heater_current * (*steam_duty / 100.0f));
-                    *brew_duty = (remaining > 0) ? 
-                        fminf(brew_demand, (remaining / elec_state.brew_heater_current) * 100.0f) : 0.0f;
+                    // Steam priority
+                    if (steam_duty_pct > max_total) steam_duty_pct = max_total;
+                    brew_duty_pct = max_total - steam_duty_pct;
                 }
             }
+            
+            // Convert duty % to time (ms) within 1-second period
+            uint32_t brew_time_ms = (uint32_t)(brew_duty_pct * 10.0f);  // 0-1000ms
+            uint32_t steam_time_ms = (uint32_t)(steam_duty_pct * 10.0f);
+            
+            // PHASE SHIFT: Brew starts at t=0, Steam starts AFTER brew finishes
+            // This ensures strict interleaving (no overlap)
+            uint32_t brew_start = 0;
+            uint32_t steam_start = brew_time_ms;
+            
+            // If total > 1000ms, steam wraps to beginning (creates controlled overlap)
+            if (steam_start + steam_time_ms > PHASE_SYNC_PERIOD_MS) {
+                steam_start = 0;  // Wrap to beginning
+                // Note: This creates overlap, but it's controlled and intentional
+            }
+            
+            // Set schedules for phase-synchronized control
+            set_ssr_schedule(0, brew_start, brew_time_ms);      // Brew SSR
+            set_ssr_schedule(1, steam_start, steam_time_ms);     // Steam SSR
+            
+            // Return duty values for reporting (but actual control uses phase sync)
+            *brew_duty = brew_duty_pct;
+            *steam_duty = steam_duty_pct;
             break;
         }
             
@@ -204,6 +243,137 @@ void apply_heating_strategy(
     float max_duty = 95.0f;
     *brew_duty = fminf(*brew_duty, max_duty);
     *steam_duty = fminf(*steam_duty, max_duty);
+}
+
+// =============================================================================
+// Phase Synchronization Timer (for HEAT_SMART_STAGGER)
+// =============================================================================
+
+/**
+ * Timer callback for phase-synchronized SSR control
+ * Called every 10ms to check and update SSR states based on schedules
+ */
+static bool phase_sync_timer_callback(struct repeating_timer *t) {
+    (void)t;  // Unused
+    
+    const pcb_config_t* pcb = pcb_config_get();
+    if (!pcb) return true;
+    
+    uint32_t now = to_ms_since_boot(get_absolute_time());
+    uint32_t period_offset = (now - g_phase_period_start) % PHASE_SYNC_PERIOD_MS;
+    
+    // Update brew SSR based on schedule
+    if (pcb->pins.ssr_brew >= 0 && g_brew_schedule.active) {
+        bool should_be_on = (period_offset >= g_brew_schedule.start_ms) &&
+                            (period_offset < (g_brew_schedule.start_ms + g_brew_schedule.duration_ms));
+        hw_set_gpio((uint8_t)pcb->pins.ssr_brew, should_be_on);
+    }
+    
+    // Update steam SSR based on schedule
+    if (pcb->pins.ssr_steam >= 0 && g_steam_schedule.active) {
+        bool should_be_on = (period_offset >= g_steam_schedule.start_ms) &&
+                            (period_offset < (g_steam_schedule.start_ms + g_steam_schedule.duration_ms));
+        hw_set_gpio((uint8_t)pcb->pins.ssr_steam, should_be_on);
+    }
+    
+    return true;  // Continue repeating
+}
+
+/**
+ * Start phase synchronization timer
+ */
+static bool start_phase_sync(void) {
+    if (g_phase_sync_active) {
+        return true;  // Already active
+    }
+    
+    // Disable hardware PWM for SSRs (we'll control GPIO directly)
+    const pcb_config_t* pcb = pcb_config_get();
+    if (pcb) {
+        if (pcb->pins.ssr_brew >= 0 && g_pwm_slice_brew != 0xFF) {
+            hw_pwm_set_enabled(g_pwm_slice_brew, false);
+            // Set GPIO to output mode for direct control
+            hw_gpio_init_output((uint8_t)pcb->pins.ssr_brew, false);
+        }
+        if (pcb->pins.ssr_steam >= 0 && g_pwm_slice_steam != 0xFF) {
+            hw_pwm_set_enabled(g_pwm_slice_steam, false);
+            // Set GPIO to output mode for direct control
+            hw_gpio_init_output((uint8_t)pcb->pins.ssr_steam, false);
+        }
+    }
+    
+    // Initialize schedules
+    g_brew_schedule.active = false;
+    g_steam_schedule.active = false;
+    g_phase_period_start = to_ms_since_boot(get_absolute_time());
+    
+    // Start repeating timer (10ms resolution for smooth control)
+    if (add_repeating_timer_ms(-10, phase_sync_timer_callback, NULL, &g_phase_timer)) {
+        g_phase_sync_active = true;
+        DEBUG_PRINT("Control: Phase sync timer started\n");
+        return true;
+    }
+    
+    return false;
+}
+
+/**
+ * Stop phase synchronization timer and restore hardware PWM
+ */
+static void stop_phase_sync(void) {
+    if (!g_phase_sync_active) {
+        return;
+    }
+    
+    // Cancel timer
+    cancel_repeating_timer(&g_phase_timer);
+    g_phase_sync_active = false;
+    
+    // Turn off SSRs
+    const pcb_config_t* pcb = pcb_config_get();
+    if (pcb) {
+        if (pcb->pins.ssr_brew >= 0) {
+            hw_set_gpio((uint8_t)pcb->pins.ssr_brew, false);
+            // Restore PWM function
+            gpio_set_function((uint)pcb->pins.ssr_brew, GPIO_FUNC_PWM);
+            if (g_pwm_slice_brew != 0xFF) {
+                hw_pwm_set_enabled(g_pwm_slice_brew, true);
+            }
+        }
+        if (pcb->pins.ssr_steam >= 0) {
+            hw_set_gpio((uint8_t)pcb->pins.ssr_steam, false);
+            // Restore PWM function
+            gpio_set_function((uint)pcb->pins.ssr_steam, GPIO_FUNC_PWM);
+            if (g_pwm_slice_steam != 0xFF) {
+                hw_pwm_set_enabled(g_pwm_slice_steam, true);
+            }
+        }
+    }
+    
+    g_brew_schedule.active = false;
+    g_steam_schedule.active = false;
+    
+    DEBUG_PRINT("Control: Phase sync timer stopped\n");
+}
+
+/**
+ * Set SSR schedule for phase-synchronized control
+ */
+static void set_ssr_schedule(uint8_t ssr_id, uint32_t start_ms, uint32_t duration_ms) {
+    if (start_ms >= PHASE_SYNC_PERIOD_MS) {
+        start_ms = start_ms % PHASE_SYNC_PERIOD_MS;
+    }
+    if (duration_ms > PHASE_SYNC_PERIOD_MS) {
+        duration_ms = PHASE_SYNC_PERIOD_MS;
+    }
+    
+    ssr_schedule_t* schedule = (ssr_id == 0) ? &g_brew_schedule : &g_steam_schedule;
+    schedule->start_ms = start_ms;
+    schedule->duration_ms = duration_ms;
+    schedule->active = (duration_ms > 0);
+    
+    // Reset period start when schedules change to ensure clean phase alignment
+    g_phase_period_start = to_ms_since_boot(get_absolute_time());
 }
 
 // =============================================================================
@@ -243,25 +413,40 @@ void apply_hardware_outputs(uint8_t brew_heater, uint8_t steam_heater, uint8_t p
     const pcb_config_t* pcb = pcb_config_get();
     if (!pcb || !g_outputs_initialized) return;
     
-    // Apply SSR outputs
-    if (g_pwm_slice_brew != 0xFF && pcb->pins.ssr_brew >= 0) {
-        hw_set_pwm_duty(g_pwm_slice_brew, (float)brew_heater);
+    // For HEAT_SMART_STAGGER, phase sync timer handles SSR control
+    // Schedules are set in apply_heating_strategy()
+    if (g_heating_strategy == HEAT_SMART_STAGGER) {
+        // Phase sync is active, timer callback handles SSR states
+        // Just ensure timer is running
+        if (!g_phase_sync_active) {
+            start_phase_sync();
+        }
+    } else {
+        // Other strategies use hardware PWM
+        if (g_phase_sync_active) {
+            stop_phase_sync();
+        }
+        
+        // Apply SSR outputs via hardware PWM
+        if (g_pwm_slice_brew != 0xFF && pcb->pins.ssr_brew >= 0) {
+            hw_set_pwm_duty(g_pwm_slice_brew, (float)brew_heater);
+        }
+        
+        if (g_pwm_slice_steam != 0xFF && pcb->pins.ssr_steam >= 0) {
+            hw_set_pwm_duty(g_pwm_slice_steam, (float)steam_heater);
+        }
     }
     
-    if (g_pwm_slice_steam != 0xFF && pcb->pins.ssr_steam >= 0) {
-        hw_set_pwm_duty(g_pwm_slice_steam, (float)steam_heater);
-    }
-    
-    // Apply relay outputs
+    // Apply relay outputs (always direct GPIO)
     if (pcb->pins.relay_pump >= 0) {
         hw_set_gpio(pcb->pins.relay_pump, pump > 0);
     }
 }
 
 uint16_t estimate_power_watts(uint8_t brew_duty, uint8_t steam_duty) {
-    const machine_electrical_t* machine_elec = &MACHINE_ELECTRICAL_CONFIG;
-    uint16_t brew_watts = (brew_duty * machine_elec->brew_heater_power) / 100;
-    uint16_t steam_watts = (steam_duty * machine_elec->steam_heater_power) / 100;
+    const machine_electrical_t* elec = machine_get_electrical();
+    uint16_t brew_watts = (brew_duty * elec->brew_heater_power) / 100;
+    uint16_t steam_watts = (steam_duty * elec->steam_heater_power) / 100;
     return brew_watts + steam_watts;
 }
 
@@ -491,6 +676,15 @@ uint8_t control_get_allowed_strategies(uint8_t* allowed, uint8_t max_count) {
 }
 
 bool control_set_heating_strategy(uint8_t strategy) {
+    // Stop phase sync if switching away from HEAT_SMART_STAGGER
+    if (g_heating_strategy == HEAT_SMART_STAGGER && strategy != HEAT_SMART_STAGGER) {
+        stop_phase_sync();
+    }
+    
+    // Start phase sync if switching to HEAT_SMART_STAGGER
+    if (strategy == HEAT_SMART_STAGGER && g_heating_strategy != HEAT_SMART_STAGGER) {
+        start_phase_sync();
+    }
     if (strategy > HEAT_SMART_STAGGER) return false;
     
     // Heating strategies only apply to dual boiler machines

@@ -86,6 +86,23 @@ typedef struct {
 } machine_features_t;
 
 // =============================================================================
+// Machine Electrical Specifications
+// =============================================================================
+
+/**
+ * Defines machine-specific electrical specifications.
+ * These are hardware-fixed values from manufacturer specs.
+ * Used for power calculations and heating strategy decisions.
+ */
+typedef struct {
+    uint16_t brew_heater_power;     // Brew heater power in Watts (0 if none)
+    uint16_t steam_heater_power;    // Steam heater power in Watts (0 if none)
+    // Future expansion:
+    // uint16_t pump_power;         // Pump motor power rating
+    // uint16_t other_loads_power;  // Other electrical loads
+} machine_electrical_t;
+
+// =============================================================================
 // Single Boiler Configuration
 // =============================================================================
 
@@ -166,6 +183,7 @@ typedef struct {
 
 typedef struct {
     machine_features_t features;
+    machine_electrical_t electrical;
     
     // Mode-specific configuration (only one applies based on machine type)
     union {
@@ -204,6 +222,10 @@ static const machine_config_t MACHINE_CONFIG_DUAL_BOILER = {
         .num_ssrs               = 2,
         .has_separate_steam_ssr = true,
     },
+    .electrical = {
+        .brew_heater_power      = 1500,  // Typical dual boiler brew heater (ECM Synchronika)
+        .steam_heater_power     = 1000,  // Typical dual boiler steam heater (ECM Synchronika)
+    },
     .mode_config = { 0 },  // Not used for dual boiler
 };
 
@@ -231,6 +253,10 @@ static const machine_config_t MACHINE_CONFIG_SINGLE_BOILER = {
         
         .num_ssrs               = 1,      // Single SSR for the boiler
         .has_separate_steam_ssr = false,
+    },
+    .electrical = {
+        .brew_heater_power      = 1200,   // Typical single boiler heater (Rancilio Silvia)
+        .steam_heater_power     = 0,      // Same heater used for both (accounted in brew)
     },
     .mode_config.single_boiler = {
         .brew_setpoint          = 93.0f,
@@ -265,6 +291,10 @@ static const machine_config_t MACHINE_CONFIG_HEAT_EXCHANGER = {
         
         .num_ssrs               = 1,      // Only steam boiler SSR
         .has_separate_steam_ssr = false,  // It's the only SSR
+    },
+    .electrical = {
+        .brew_heater_power      = 0,      // No separate brew heater (passive HX)
+        .steam_heater_power     = 1400,   // Typical HX steam boiler heater (Bezzera BZ10)
     },
     .mode_config.heat_exchanger = {
         // Control mode - default to temperature PID (modern retrofit)
@@ -349,6 +379,11 @@ const single_boiler_config_t* machine_get_single_boiler_config(void);
  * Get heat exchanger config (only valid for MACHINE_TYPE_HEAT_EXCHANGER)
  */
 const heat_exchanger_config_t* machine_get_hx_config(void);
+
+/**
+ * Get machine electrical specifications
+ */
+const machine_electrical_t* machine_get_electrical(void);
 
 #endif // MACHINE_CONFIG_H
 

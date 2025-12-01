@@ -1,14 +1,17 @@
 import { cn } from '@/lib/utils';
+import { useStore } from '@/lib/store';
+import { getUnitSymbol, convertFromCelsius } from '@/lib/temperature';
 
 interface GaugeProps {
-  value: number;
-  max: number;
-  setpoint?: number;
+  value: number;           // Always in Celsius from backend
+  max: number;             // Always in Celsius
+  setpoint?: number;       // Always in Celsius
   label: string;
-  unit: string;
+  unit?: string;           // Override unit symbol (for non-temperature gauges)
   icon?: React.ReactNode;
   variant?: 'default' | 'steam' | 'pressure';
   showSetpoint?: boolean;
+  isTemperature?: boolean; // Set to false for pressure, etc.
 }
 
 export function Gauge({
@@ -20,7 +23,18 @@ export function Gauge({
   icon,
   variant = 'default',
   showSetpoint = true,
+  isTemperature = true,
 }: GaugeProps) {
+  const temperatureUnit = useStore((s) => s.preferences.temperatureUnit);
+  
+  // Convert values if this is a temperature gauge
+  const displayValue = isTemperature ? convertFromCelsius(value, temperatureUnit) : value;
+  const displaySetpoint = setpoint && isTemperature ? convertFromCelsius(setpoint, temperatureUnit) : setpoint;
+  
+  // Use appropriate unit symbol
+  const displayUnit = unit || (isTemperature ? getUnitSymbol(temperatureUnit) : '');
+  
+  // Calculate percentage based on original Celsius values (for consistent bar behavior)
   const percentage = Math.min(100, (value / (setpoint || max)) * 100);
   
   const barColors = {
@@ -38,9 +52,9 @@ export function Gauge({
       
       <div className="flex items-baseline gap-1 mb-3">
         <span className="text-4xl font-bold text-accent tabular-nums">
-          {value.toFixed(1)}
+          {displayValue.toFixed(1)}
         </span>
-        <span className="text-xl text-theme-muted">{unit}</span>
+        <span className="text-xl text-theme-muted">{displayUnit}</span>
       </div>
       
       <div className="relative h-3 bg-theme-secondary rounded-full overflow-hidden">
@@ -59,9 +73,9 @@ export function Gauge({
         )}
       </div>
       
-      {setpoint && showSetpoint && (
+      {displaySetpoint && showSetpoint && (
         <div className="mt-2 text-sm text-theme-muted">
-          Setpoint: <span className="font-semibold text-theme-secondary">{setpoint.toFixed(1)}{unit}</span>
+          Setpoint: <span className="font-semibold text-theme-secondary">{displaySetpoint.toFixed(1)}{displayUnit}</span>
         </div>
       )}
     </div>

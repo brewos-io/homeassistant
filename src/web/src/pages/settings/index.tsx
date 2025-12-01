@@ -12,6 +12,7 @@ import {
   CloudSettings,
   TimeSettings,
   RegionalSettings,
+  UnitsSettings,
   ThemeSettings,
   SystemSettings,
   PushNotificationSettings,
@@ -67,11 +68,12 @@ export function Settings() {
       {/* Cloud Settings (local mode only) */}
       {activeTab === 'cloud' && !isCloud && <CloudSettings />}
 
-      {/* Time Settings */}
-      {activeTab === 'time' && (
+      {/* Regional Settings (Time, Locale, Units) */}
+      {activeTab === 'regional' && (
         <>
           <TimeSettings />
           <RegionalSettings />
+          <UnitsSettings />
         </>
       )}
 

@@ -49,6 +49,7 @@ static lv_obj_t* strategy_dots[STRATEGY_COUNT] = {nullptr};
 // State
 static int selected_index = 0;
 static idle_turn_on_callback_t turn_on_callback = nullptr;
+static bool show_strategies = true;  // Default to showing (assume dual boiler until told otherwise)
 
 // =============================================================================
 // Screen Creation
@@ -175,8 +176,14 @@ lv_obj_t* screen_idle_create(void) {
 void screen_idle_update(const ui_state_t* state) {
     if (!screen || !state) return;
     
-    // Update selected strategy from state if not idle (e.g., coming from settings)
-    // The current selection is maintained by the screen itself during rotation
+    // Update strategy visibility based on machine type
+    // Heating strategies only apply to dual boiler machines (type 1)
+    // machine_type: 0=unknown, 1=dual_boiler, 2=single_boiler, 3=heat_exchanger
+    bool is_dual_boiler = (state->machine_type == 0 || state->machine_type == 1);
+    
+    if (show_strategies != is_dual_boiler) {
+        screen_idle_set_show_strategies(is_dual_boiler);
+    }
 }
 
 void screen_idle_select_strategy(int index) {
@@ -215,5 +222,48 @@ heating_strategy_t screen_idle_get_selected_strategy(void) {
 
 void screen_idle_set_turn_on_callback(idle_turn_on_callback_t callback) {
     turn_on_callback = callback;
+}
+
+void screen_idle_set_show_strategies(bool show) {
+    show_strategies = show;
+    
+    // Update visibility of strategy-related UI elements
+    if (strategy_name_label) {
+        if (show) {
+            lv_obj_clear_flag(strategy_name_label, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(strategy_name_label, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+    
+    if (strategy_desc_label) {
+        if (show) {
+            lv_obj_clear_flag(strategy_desc_label, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(strategy_desc_label, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+    
+    if (dots_container) {
+        if (show) {
+            lv_obj_clear_flag(dots_container, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(dots_container, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+    
+    if (hint_label) {
+        if (show) {
+            lv_label_set_text(hint_label, LV_SYMBOL_LOOP " Rotate to select");
+        } else {
+            lv_label_set_text(hint_label, "Press to start");
+        }
+    }
+    
+    LOG_I("Idle screen: strategy selection %s", show ? "shown" : "hidden");
+}
+
+bool screen_idle_is_showing_strategies(void) {
+    return show_strategies;
 }
 

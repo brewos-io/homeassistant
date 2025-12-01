@@ -218,6 +218,12 @@ void setup() {
                 webServer.broadcastLog("Pico booted", "info");
                 ui.showNotification("Pico Connected", 2000);
                 machineState.pico_connected = true;
+                // Parse boot payload for machine type
+                if (packet.length >= 4) {
+                    // Boot payload: version_major, version_minor, version_patch, machine_type, ...
+                    machineState.machine_type = packet.payload[3];
+                    LOG_I("Machine type: %d", machineState.machine_type);
+                }
                 break;
                 
             case MSG_STATUS:
@@ -616,32 +622,57 @@ void loop() {
 
 /**
  * Parse status message from Pico and update machine state
+ * 
+ * Status payload structure (from protocol.h status_payload_t):
+ * Offset  0-1:  brew_temp (int16, °C * 10)
+ * Offset  2-3:  steam_temp (int16, °C * 10)
+ * Offset  4-5:  group_temp (int16, °C * 10)
+ * Offset  6-7:  pressure (uint16, bar * 100)
+ * Offset  8-9:  brew_setpoint (int16, °C * 10)
+ * Offset 10-11: steam_setpoint (int16, °C * 10)
+ * Offset 12:    brew_output (uint8, 0-100%)
+ * Offset 13:    steam_output (uint8, 0-100%)
+ * Offset 14:    pump_output (uint8, 0-100%)
+ * Offset 15:    state (uint8)
+ * Offset 16:    flags (uint8)
+ * Offset 17:    water_level (uint8, 0-100%)
+ * Offset 18-19: power_watts (uint16)
+ * Offset 20-23: uptime_ms (uint32)
+ * Offset 24-27: shot_start_timestamp_ms (uint32)
  */
 void parsePicoStatus(const uint8_t* payload, uint8_t length) {
-    if (length < 20) return;  // Minimum status size
+    if (length < 18) return;  // Minimum status size (up to water_level)
     
-    // Status payload structure (from protocol):
-    // Offset 0: state (uint8)
-    // Offset 1: flags (uint8)
-    // Offset 2-5: brew_temp (float)
-    // Offset 6-9: steam_temp (float)
-    // Offset 10-13: pressure (float)
-    // Offset 14-17: brew_sp (float)
-    // Offset 18-21: steam_sp (float)
+    // Parse temperatures (int16 scaled by 10 -> float)
+    int16_t brew_temp_raw, steam_temp_raw, group_temp_raw;
+    memcpy(&brew_temp_raw, &payload[0], sizeof(int16_t));
+    memcpy(&steam_temp_raw, &payload[2], sizeof(int16_t));
+    memcpy(&group_temp_raw, &payload[4], sizeof(int16_t));
     
-    machineState.machine_state = payload[0];
-    uint8_t flags = payload[1];
+    machineState.brew_temp = brew_temp_raw / 10.0f;
+    machineState.steam_temp = steam_temp_raw / 10.0f;
+    machineState.group_temp = group_temp_raw / 10.0f;
+    
+    // Parse pressure (uint16 scaled by 100 -> float)
+    uint16_t pressure_raw;
+    memcpy(&pressure_raw, &payload[6], sizeof(uint16_t));
+    machineState.pressure = pressure_raw / 100.0f;
+    
+    // Parse setpoints (int16 scaled by 10 -> float)
+    int16_t brew_sp_raw, steam_sp_raw;
+    memcpy(&brew_sp_raw, &payload[8], sizeof(int16_t));
+    memcpy(&steam_sp_raw, &payload[10], sizeof(int16_t));
+    machineState.brew_setpoint = brew_sp_raw / 10.0f;
+    machineState.steam_setpoint = steam_sp_raw / 10.0f;
+    
+    // Parse state and flags
+    machineState.machine_state = payload[15];
+    uint8_t flags = payload[16];
     
     machineState.is_brewing = (flags & 0x01) != 0;
     machineState.is_heating = (flags & 0x02) != 0;
     machineState.water_low = (flags & 0x08) != 0;
     machineState.alarm_active = (flags & 0x10) != 0;
-    
-    memcpy(&machineState.brew_temp, &payload[2], sizeof(float));
-    memcpy(&machineState.steam_temp, &payload[6], sizeof(float));
-    memcpy(&machineState.pressure, &payload[10], sizeof(float));
-    memcpy(&machineState.brew_setpoint, &payload[14], sizeof(float));
-    memcpy(&machineState.steam_setpoint, &payload[18], sizeof(float));
     
     // Auto-switch screens is now handled by UI::checkAutoScreenSwitch()
 }

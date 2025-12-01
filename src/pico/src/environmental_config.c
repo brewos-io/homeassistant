@@ -5,7 +5,6 @@
  */
 
 #include "environmental_config.h"
-#include "machine_electrical.h"
 
 // Current electrical state (computed from machine + environment)
 static electrical_state_t g_electrical_state = {0};
@@ -48,7 +47,7 @@ void electrical_state_get(electrical_state_t* state) {
         // Initialize from current configs if not already initialized
         if (g_electrical_state.nominal_voltage == 0) {
             electrical_state_init(&g_electrical_state, 
-                                 &MACHINE_ELECTRICAL_CONFIG,
+                                 machine_get_electrical(),
                                  &g_environmental_config);
         }
         *state = g_electrical_state;
@@ -64,7 +63,7 @@ void environmental_config_set(const environmental_electrical_t* config) {
         g_environmental_config = *config;
         // Recalculate electrical state
         electrical_state_init(&g_electrical_state,
-                             &MACHINE_ELECTRICAL_CONFIG,
+                             machine_get_electrical(),
                              &g_environmental_config);
     }
 }

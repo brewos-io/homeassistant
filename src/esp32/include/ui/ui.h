@@ -66,6 +66,7 @@ typedef struct {
     float brew_setpoint;
     float steam_temp;
     float steam_setpoint;
+    float group_temp;       // Group head temp (for HX machines)
     
     // Limits
     float brew_max_temp;
@@ -77,6 +78,7 @@ typedef struct {
     // State
     uint8_t machine_state;      // machine_state_t
     uint8_t heating_strategy;   // heating_strategy_t
+    uint8_t machine_type;       // 0=unknown, 1=dual_boiler, 2=single_boiler, 3=heat_exchanger
     bool is_brewing;
     bool is_heating;
     bool water_low;

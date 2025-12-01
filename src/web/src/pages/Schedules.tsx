@@ -83,12 +83,16 @@ const defaultSchedule: ScheduleFormData = {
 
 export function Schedules() {
   const preferences = useStore((s) => s.preferences);
+  const device = useStore((s) => s.device);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [autoPowerOff, setAutoPowerOff] = useState({ enabled: false, minutes: 60 });
   const [isEditing, setIsEditing] = useState<number | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [formData, setFormData] = useState<ScheduleFormData>(defaultSchedule);
   const [loading, setLoading] = useState(true);
+
+  // Heating strategies only apply to dual boiler machines
+  const isDualBoiler = device.machineType === 'dual_boiler';
 
   // Get ordered days based on user preference
   const orderedDays = useMemo(() => 
@@ -299,6 +303,7 @@ export function Schedules() {
                     toggleDay={toggleDay}
                     setPresetDays={setPresetDays}
                     orderedDays={orderedDays}
+                    isDualBoiler={isDualBoiler}
                   />
                 ) : (
                   <div className="flex items-center justify-between">
@@ -317,7 +322,8 @@ export function Schedules() {
                         <div className="text-sm text-coffee-500">
                           {formatTime(schedule.hour, schedule.minute)} • {getDaysLabel(schedule.days)}
                         </div>
-                        {schedule.action === 'on' && (
+                        {/* Show heating strategy only for dual boiler machines */}
+                        {schedule.action === 'on' && isDualBoiler && (
                           <div className="text-xs text-coffee-400 mt-1">
                             <Flame className="w-3 h-3 inline mr-1" />
                             {STRATEGIES.find(s => s.value === schedule.strategy)?.label || 'Sequential'}
@@ -352,6 +358,7 @@ export function Schedules() {
                   toggleDay={toggleDay}
                   setPresetDays={setPresetDays}
                   orderedDays={orderedDays}
+                  isDualBoiler={isDualBoiler}
                 />
               </div>
             )}
@@ -417,9 +424,10 @@ interface ScheduleFormProps {
   toggleDay: (day: number) => void;
   setPresetDays: (preset: 'weekdays' | 'weekends' | 'everyday') => void;
   orderedDays: DayInfo[];
+  isDualBoiler: boolean;
 }
 
-function ScheduleForm({ data, onChange, onSave, onCancel, toggleDay, setPresetDays, orderedDays }: ScheduleFormProps) {
+function ScheduleForm({ data, onChange, onSave, onCancel, toggleDay, setPresetDays, orderedDays, isDualBoiler }: ScheduleFormProps) {
   return (
     <div className="space-y-4">
       <Input
@@ -530,7 +538,8 @@ function ScheduleForm({ data, onChange, onSave, onCancel, toggleDay, setPresetDa
         </div>
       </div>
 
-      {data.action === 'on' && (
+      {/* Heating strategy selection - only for dual boiler machines */}
+      {data.action === 'on' && isDualBoiler && (
         <div>
           <label className="block text-xs font-semibold uppercase tracking-wider text-coffee-500 mb-1.5">
             Heating Strategy

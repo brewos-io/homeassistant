@@ -24,6 +24,8 @@ The firmware supports multiple espresso machine types through compile-time confi
 
 ## Heating Strategies
 
+> **⚠️ DUAL BOILER ONLY:** Heating strategies are only applicable to **dual boiler machines**. Single boiler and heat exchanger machines have only one SSR controlling heating, so they always use `HEAT_BREW_ONLY`. The ESP32 UI and web app should hide heating strategy selection for non-dual-boiler machines.
+
 Different heating strategies optimize for different use cases:
 
 ```
@@ -629,7 +631,7 @@ The following table summarizes the key differences between machine types:
 | **Group thermocouple** |   Optional   |   Optional    |  **Required**  |
 | **Number of SSRs**     |      2       |       1       |       1        |
 | **Steam level probe**  |      ✓       |       ✗       |       ✓        |
-| **Heating strategies** |    All 5     |   BREW_ONLY   |   BREW_ONLY    |
+| **Heating strategies** | **All 4** ✓  |   BREW_ONLY   |   BREW_ONLY    |
 | **Mode switching**     |      No      |      Yes      |       No       |
 | **Ready detection**    |   Brew NTC   |   Brew NTC    |    Group TC    |
 

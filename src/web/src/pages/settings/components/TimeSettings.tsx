@@ -5,8 +5,10 @@ import { Input } from '@/components/Input';
 import { Button } from '@/components/Button';
 import { Toggle } from '@/components/Toggle';
 import { Badge } from '@/components/Badge';
-import { Clock, Globe, RefreshCw, Save } from 'lucide-react';
+import { Clock, Globe, RefreshCw, Save, Thermometer } from 'lucide-react';
 import { TIMEZONES } from '../constants/timezones';
+import { getUnitLabel } from '@/lib/temperature';
+import type { TemperatureUnit } from '@/lib/types';
 
 interface TimeStatus {
   synced: boolean;
@@ -235,6 +237,55 @@ export function RegionalSettings() {
             />
             <span className="text-sm text-theme-secondary">Use 24-hour time format</span>
           </label>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+export function UnitsSettings() {
+  const preferences = useStore((s) => s.preferences);
+  const setPreference = useStore((s) => s.setPreference);
+  
+  const units: TemperatureUnit[] = ['celsius', 'fahrenheit'];
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle icon={<Thermometer className="w-5 h-5" />}>Units</CardTitle>
+      </CardHeader>
+      <p className="text-sm text-theme-muted mb-4">
+        Choose your preferred measurement units.
+      </p>
+      
+      <div className="space-y-4">
+        <div>
+          <label className="block text-xs font-semibold uppercase tracking-wider text-theme-muted mb-1.5">
+            Temperature
+          </label>
+          <div className="flex gap-2">
+            {units.map((unit) => (
+              <button
+                key={unit}
+                onClick={() => setPreference('temperatureUnit', unit)}
+                className={`flex-1 py-2.5 px-4 rounded-xl border text-sm font-medium transition-all ${
+                  preferences.temperatureUnit === unit
+                    ? 'bg-accent text-white border-accent'
+                    : 'bg-theme-secondary border-theme text-theme-secondary hover:border-theme-light'
+                }`}
+              >
+                <span className="block font-semibold">{getUnitLabel(unit)}</span>
+                <span className="text-xs opacity-80">
+                  {unit === 'celsius' ? '°C' : '°F'}
+                </span>
+              </button>
+            ))}
+          </div>
+          <p className="mt-1.5 text-xs text-theme-muted">
+            {preferences.temperatureUnit === 'celsius' 
+              ? 'Using metric system (93°C = brew temperature)'
+              : 'Using imperial system (200°F = brew temperature)'}
+          </p>
         </div>
       </div>
     </Card>

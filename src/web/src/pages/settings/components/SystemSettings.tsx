@@ -417,8 +417,8 @@ export function SystemSettings() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <Card className="w-full max-w-md">
             <div className="text-center p-6">
-              <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <FlaskConical className="w-8 h-8 text-amber-600" />
+              <div className="w-16 h-16 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <FlaskConical className="w-8 h-8 text-amber-500" />
               </div>
               <h3 className="text-xl font-bold text-theme mb-2">
                 Enable Beta Updates?
@@ -427,11 +427,11 @@ export function SystemSettings() {
                 Beta versions include new features before they're officially
                 released. They may contain bugs or incomplete features.
               </p>
-              <div className="p-3 bg-amber-50 rounded-lg mb-6 text-left">
-                <h4 className="font-semibold text-amber-800 text-sm mb-2 flex items-center gap-2">
+              <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg mb-6 text-left">
+                <h4 className="font-semibold text-amber-500 text-sm mb-2 flex items-center gap-2">
                   <Info className="w-4 h-4" /> What to expect:
                 </h4>
-                <ul className="text-xs text-amber-700 space-y-1">
+                <ul className="text-xs text-theme-muted space-y-1">
                   <li>• Early access to new features</li>
                   <li>• Potential bugs or stability issues</li>
                   <li>• More frequent updates</li>
@@ -475,7 +475,7 @@ export function SystemSettings() {
       </Card>
 
       {/* Danger Zone */}
-      <Card className="border-red-200">
+      <Card>
         <CardHeader>
           <CardTitle icon={<AlertTriangle className="w-5 h-5 text-red-500" />}>
             <span className="text-red-600">Danger Zone</span>

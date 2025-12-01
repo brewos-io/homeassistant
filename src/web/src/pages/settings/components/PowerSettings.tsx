@@ -1,27 +1,54 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import { getConnection } from '@/lib/connection';
 import { Card, CardHeader, CardTitle } from '@/components/Card';
 import { Input } from '@/components/Input';
 import { Button } from '@/components/Button';
 import { Zap, Leaf } from 'lucide-react';
+import { 
+  convertFromCelsius, 
+  convertToCelsius, 
+  getUnitSymbol,
+  getTemperatureStep,
+} from '@/lib/temperature';
 
 export function PowerSettings() {
   const power = useStore((s) => s.power);
+  const temperatureUnit = useStore((s) => s.preferences.temperatureUnit);
 
   const [voltage, setVoltage] = useState(power.voltage);
   const [maxCurrent, setMaxCurrent] = useState(13);
-  const [ecoSettings, setEcoSettings] = useState({
-    brewTemp: 80,
-    timeout: 30,
-  });
+  
+  // Eco temp stored internally in Celsius (80°C default)
+  const [ecoBrewTempCelsius] = useState(80);
+  const [ecoBrewTempDisplay, setEcoBrewTempDisplay] = useState(() => 
+    convertFromCelsius(80, temperatureUnit)
+  );
+  const [ecoTimeout, setEcoTimeout] = useState(30);
+
+  // Update display when unit changes
+  useEffect(() => {
+    setEcoBrewTempDisplay(convertFromCelsius(ecoBrewTempCelsius, temperatureUnit));
+  }, [temperatureUnit, ecoBrewTempCelsius]);
+
+  const unitSymbol = getUnitSymbol(temperatureUnit);
+  const step = getTemperatureStep(temperatureUnit);
+  
+  // Calculate min/max in display unit
+  const ecoTempMin = convertFromCelsius(60, temperatureUnit);
+  const ecoTempMax = convertFromCelsius(90, temperatureUnit);
 
   const savePower = () => {
     getConnection()?.sendCommand('set_power', { voltage, maxCurrent });
   };
 
   const saveEco = () => {
-    getConnection()?.sendCommand('set_eco', ecoSettings);
+    // Convert display value back to Celsius for backend
+    const brewTempCelsius = convertToCelsius(ecoBrewTempDisplay, temperatureUnit);
+    getConnection()?.sendCommand('set_eco', { 
+      brewTemp: brewTempCelsius, 
+      timeout: ecoTimeout 
+    });
   };
 
   return (
@@ -40,11 +67,12 @@ export function PowerSettings() {
           <Input
             label="Eco Brew Temp"
             type="number"
-            min={60}
-            max={90}
-            value={ecoSettings.brewTemp}
-            onChange={(e) => setEcoSettings({ ...ecoSettings, brewTemp: parseFloat(e.target.value) })}
-            unit="°C"
+            min={ecoTempMin}
+            max={ecoTempMax}
+            step={step}
+            value={ecoBrewTempDisplay}
+            onChange={(e) => setEcoBrewTempDisplay(parseFloat(e.target.value))}
+            unit={unitSymbol}
           />
           <Input
             label="Auto-Eco After"
@@ -52,8 +80,8 @@ export function PowerSettings() {
             min={5}
             max={120}
             step={5}
-            value={ecoSettings.timeout}
-            onChange={(e) => setEcoSettings({ ...ecoSettings, timeout: parseInt(e.target.value) })}
+            value={ecoTimeout}
+            onChange={(e) => setEcoTimeout(parseInt(e.target.value))}
             unit="min"
           />
         </div>

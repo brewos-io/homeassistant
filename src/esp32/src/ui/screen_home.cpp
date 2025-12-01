@@ -15,13 +15,19 @@ static lv_obj_t* screen = nullptr;
 static lv_obj_t* brew_temp_label = nullptr;
 static lv_obj_t* brew_temp_arc = nullptr;
 static lv_obj_t* brew_setpoint_label = nullptr;
+static lv_obj_t* brew_label_text = nullptr;  // "BREW" or "BOILER" label
 static lv_obj_t* steam_temp_label = nullptr;
+static lv_obj_t* steam_card = nullptr;       // Steam card container
+static lv_obj_t* steam_title = nullptr;      // "STEAM" or "GROUP" label
 static lv_obj_t* pressure_label = nullptr;
 static lv_obj_t* status_label = nullptr;
 static lv_obj_t* status_dot = nullptr;
 static lv_obj_t* conn_icons = nullptr;
 static lv_obj_t* wifi_icon = nullptr;
 static lv_obj_t* scale_icon = nullptr;
+
+// Cached machine type for dynamic updates
+static uint8_t cached_machine_type = 0;
 
 // =============================================================================
 // Screen Creation
@@ -84,13 +90,13 @@ lv_obj_t* screen_home_create(void) {
     lv_obj_set_style_text_color(brew_temp_label, COLOR_TEXT_PRIMARY, 0);
     lv_obj_align(brew_temp_label, LV_ALIGN_CENTER, 0, -35);
     
-    // Brew label
-    lv_obj_t* brew_label = lv_label_create(screen);
-    lv_label_set_text(brew_label, "BREW");
-    lv_obj_set_style_text_font(brew_label, FONT_SMALL, 0);
-    lv_obj_set_style_text_color(brew_label, COLOR_TEXT_MUTED, 0);
-    lv_obj_set_style_text_letter_space(brew_label, 2, 0);
-    lv_obj_align(brew_label, LV_ALIGN_CENTER, 0, 5);
+    // Brew label (dynamically updated based on machine type)
+    brew_label_text = lv_label_create(screen);
+    lv_label_set_text(brew_label_text, "BREW");
+    lv_obj_set_style_text_font(brew_label_text, FONT_SMALL, 0);
+    lv_obj_set_style_text_color(brew_label_text, COLOR_TEXT_MUTED, 0);
+    lv_obj_set_style_text_letter_space(brew_label_text, 2, 0);
+    lv_obj_align(brew_label_text, LV_ALIGN_CENTER, 0, 5);
     
     // Setpoint
     brew_setpoint_label = lv_label_create(screen);
@@ -107,8 +113,8 @@ lv_obj_t* screen_home_create(void) {
     lv_obj_set_flex_flow(cards_row, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(cards_row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     
-    // === Steam Temperature card ===
-    lv_obj_t* steam_card = lv_obj_create(cards_row);
+    // === Steam/Group Temperature card (adapts to machine type) ===
+    steam_card = lv_obj_create(cards_row);
     lv_obj_set_size(steam_card, 100, 50);
     lv_obj_set_style_bg_color(steam_card, COLOR_BG_CARD, 0);
     lv_obj_set_style_radius(steam_card, 10, 0);
@@ -116,7 +122,7 @@ lv_obj_t* screen_home_create(void) {
     lv_obj_set_style_pad_all(steam_card, 6, 0);
     lv_obj_clear_flag(steam_card, LV_OBJ_FLAG_SCROLLABLE);
     
-    lv_obj_t* steam_title = lv_label_create(steam_card);
+    steam_title = lv_label_create(steam_card);
     lv_label_set_text(steam_title, "STEAM");
     lv_obj_set_style_text_font(steam_title, FONT_SMALL, 0);
     lv_obj_set_style_text_color(steam_title, COLOR_TEXT_MUTED, 0);
@@ -187,29 +193,68 @@ lv_obj_t* screen_home_create(void) {
 void screen_home_update(lv_obj_t* scr, const ui_state_t* state) {
     if (!state || !screen) return;
     
-    // Update brew temperature
+    // Update labels if machine type changed
+    // machine_type: 0=unknown, 1=dual_boiler, 2=single_boiler, 3=heat_exchanger
+    if (cached_machine_type != state->machine_type) {
+        cached_machine_type = state->machine_type;
+        
+        // Update main temperature label based on machine type
+        if (state->machine_type == 2) {  // Single boiler
+            lv_label_set_text(brew_label_text, "BOILER");
+        } else if (state->machine_type == 3) {  // Heat exchanger
+            lv_label_set_text(brew_label_text, "GROUP");
+        } else {  // Dual boiler or unknown
+            lv_label_set_text(brew_label_text, "BREW");
+        }
+        
+        // Update secondary card label
+        if (state->machine_type == 2) {  // Single boiler - hide steam
+            lv_obj_add_flag(steam_card, LV_OBJ_FLAG_HIDDEN);
+        } else if (state->machine_type == 3) {  // Heat exchanger - show as BOILER
+            lv_obj_clear_flag(steam_card, LV_OBJ_FLAG_HIDDEN);
+            lv_label_set_text(steam_title, "BOILER");
+        } else {  // Dual boiler - show STEAM
+            lv_obj_clear_flag(steam_card, LV_OBJ_FLAG_HIDDEN);
+            lv_label_set_text(steam_title, "STEAM");
+        }
+    }
+    
+    // Update main temperature display based on machine type
     char temp_str[16];
-    snprintf(temp_str, sizeof(temp_str), "%.1f°", state->brew_temp);
+    float main_temp = state->brew_temp;
+    float main_setpoint = state->brew_setpoint;
+    
+    // For HX machines, main display shows group temp
+    if (state->machine_type == 3) {
+        main_temp = state->group_temp;
+        main_setpoint = 93.0f;  // Typical group target
+    }
+    
+    snprintf(temp_str, sizeof(temp_str), "%.1f°", main_temp);
     lv_label_set_text(brew_temp_label, temp_str);
     
     // Update setpoint
-    snprintf(temp_str, sizeof(temp_str), "→ %.1f°C", state->brew_setpoint);
+    snprintf(temp_str, sizeof(temp_str), "→ %.1f°C", main_setpoint);
     lv_label_set_text(brew_setpoint_label, temp_str);
     
     // Update brew arc (percentage of setpoint)
-    if (state->brew_setpoint > 0) {
-        int pct = (int)((state->brew_temp / state->brew_setpoint) * 100);
+    if (main_setpoint > 0) {
+        int pct = (int)((main_temp / main_setpoint) * 100);
         pct = LV_CLAMP(0, pct, 100);
         lv_arc_set_value(brew_temp_arc, pct);
         
         // Update arc color based on temperature state
-        lv_color_t temp_color = theme_get_temp_color(state->brew_temp, state->brew_setpoint);
+        lv_color_t temp_color = theme_get_temp_color(main_temp, main_setpoint);
         lv_obj_set_style_arc_color(brew_temp_arc, temp_color, LV_PART_INDICATOR);
     }
     
-    // Update steam temperature
-    snprintf(temp_str, sizeof(temp_str), "%.0f°", state->steam_temp);
-    lv_label_set_text(steam_temp_label, temp_str);
+    // Update secondary temperature card
+    // For HX: shows steam boiler temp; For dual boiler: shows steam temp
+    // For single boiler: card is hidden
+    if (state->machine_type != 2) {  // Not single boiler
+        snprintf(temp_str, sizeof(temp_str), "%.0f°", state->steam_temp);
+        lv_label_set_text(steam_temp_label, temp_str);
+    }
     
     // Update pressure
     snprintf(temp_str, sizeof(temp_str), "%.1f", state->pressure);

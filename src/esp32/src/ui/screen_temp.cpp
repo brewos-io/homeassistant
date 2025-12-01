@@ -25,6 +25,7 @@ static temp_edit_mode_t current_mode = TEMP_EDIT_NONE;
 static float brew_setpoint = 93.0f;
 static float steam_setpoint = 145.0f;
 static temp_change_callback_t change_callback = nullptr;
+static uint8_t cached_machine_type = 0;
 
 // Limits
 static const float BREW_MIN = 80.0f;
@@ -32,6 +33,10 @@ static const float BREW_MAX = 105.0f;
 static const float STEAM_MIN = 120.0f;
 static const float STEAM_MAX = 160.0f;
 static const float TEMP_STEP = 0.5f;
+
+// Labels for title elements (to update dynamically)
+static lv_obj_t* brew_title_label = nullptr;
+static lv_obj_t* steam_title_label = nullptr;
 
 // =============================================================================
 // Helper Functions
@@ -121,12 +126,12 @@ lv_obj_t* screen_temp_create(void) {
     lv_obj_set_style_pad_all(brew_card, 12, 0);
     lv_obj_clear_flag(brew_card, LV_OBJ_FLAG_SCROLLABLE);
     
-    lv_obj_t* brew_title = lv_label_create(brew_card);
-    lv_label_set_text(brew_title, "BREW");
-    lv_obj_set_style_text_font(brew_title, FONT_SMALL, 0);
-    lv_obj_set_style_text_color(brew_title, COLOR_TEXT_MUTED, 0);
-    lv_obj_set_style_text_letter_space(brew_title, 2, 0);
-    lv_obj_align(brew_title, LV_ALIGN_TOP_MID, 0, 0);
+    brew_title_label = lv_label_create(brew_card);
+    lv_label_set_text(brew_title_label, "BREW");
+    lv_obj_set_style_text_font(brew_title_label, FONT_SMALL, 0);
+    lv_obj_set_style_text_color(brew_title_label, COLOR_TEXT_MUTED, 0);
+    lv_obj_set_style_text_letter_space(brew_title_label, 2, 0);
+    lv_obj_align(brew_title_label, LV_ALIGN_TOP_MID, 0, 0);
     
     brew_sp_label = lv_label_create(brew_card);
     lv_label_set_text(brew_sp_label, "93.0°C");
@@ -151,12 +156,12 @@ lv_obj_t* screen_temp_create(void) {
     lv_obj_set_style_pad_all(steam_card, 12, 0);
     lv_obj_clear_flag(steam_card, LV_OBJ_FLAG_SCROLLABLE);
     
-    lv_obj_t* steam_title = lv_label_create(steam_card);
-    lv_label_set_text(steam_title, "STEAM");
-    lv_obj_set_style_text_font(steam_title, FONT_SMALL, 0);
-    lv_obj_set_style_text_color(steam_title, COLOR_TEXT_MUTED, 0);
-    lv_obj_set_style_text_letter_space(steam_title, 2, 0);
-    lv_obj_align(steam_title, LV_ALIGN_TOP_MID, 0, 0);
+    steam_title_label = lv_label_create(steam_card);
+    lv_label_set_text(steam_title_label, "STEAM");
+    lv_obj_set_style_text_font(steam_title_label, FONT_SMALL, 0);
+    lv_obj_set_style_text_color(steam_title_label, COLOR_TEXT_MUTED, 0);
+    lv_obj_set_style_text_letter_space(steam_title_label, 2, 0);
+    lv_obj_align(steam_title_label, LV_ALIGN_TOP_MID, 0, 0);
     
     steam_sp_label = lv_label_create(steam_card);
     lv_label_set_text(steam_sp_label, "145.0°C");
@@ -193,9 +198,40 @@ lv_obj_t* screen_temp_create(void) {
 void screen_temp_update(const ui_state_t* state) {
     if (!state || !screen) return;
     
+    // Update labels if machine type changed
+    // machine_type: 0=unknown, 1=dual_boiler, 2=single_boiler, 3=heat_exchanger
+    if (cached_machine_type != state->machine_type) {
+        cached_machine_type = state->machine_type;
+        
+        if (state->machine_type == 2) {  // Single boiler
+            lv_label_set_text(brew_title_label, "BOILER");
+            // Hide steam card for single boiler
+            lv_obj_add_flag(steam_card, LV_OBJ_FLAG_HIDDEN);
+            // Reposition brew card to center
+            lv_obj_align(brew_card, LV_ALIGN_CENTER, 0, 30);
+        } else if (state->machine_type == 3) {  // Heat exchanger
+            // HX: show only steam boiler (controls HX)
+            lv_obj_add_flag(brew_card, LV_OBJ_FLAG_HIDDEN);
+            lv_label_set_text(steam_title_label, "BOILER");
+            // Reposition steam card to center
+            lv_obj_align(steam_card, LV_ALIGN_CENTER, 0, 30);
+        } else {  // Dual boiler or unknown - show both
+            lv_label_set_text(brew_title_label, "BREW");
+            lv_label_set_text(steam_title_label, "STEAM");
+            lv_obj_clear_flag(brew_card, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_clear_flag(steam_card, LV_OBJ_FLAG_HIDDEN);
+            // Reset positions
+            lv_obj_align(brew_card, LV_ALIGN_CENTER, 0, -30);
+            lv_obj_align(steam_card, LV_ALIGN_CENTER, 0, 90);
+        }
+    }
+    
     // Update current temperature displays
     char buf[32];
-    snprintf(buf, sizeof(buf), "Current: %.1f°C", state->brew_temp);
+    
+    // For HX: brew temp comes from group_temp
+    float display_brew_temp = (state->machine_type == 3) ? state->group_temp : state->brew_temp;
+    snprintf(buf, sizeof(buf), "Current: %.1f°C", display_brew_temp);
     lv_label_set_text(brew_temp_label, buf);
     
     snprintf(buf, sizeof(buf), "Current: %.1f°C", state->steam_temp);

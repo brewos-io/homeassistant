@@ -11,7 +11,7 @@
 #define ENVIRONMENTAL_CONFIG_H
 
 #include <stdint.h>
-#include "machine_electrical.h"  // For machine_electrical_t
+#include "machine_config.h"  // For machine_electrical_t
 
 // =============================================================================
 // Environmental Electrical Configuration (Installation-specific)

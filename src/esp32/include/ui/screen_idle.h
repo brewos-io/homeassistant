@@ -34,6 +34,18 @@ void screen_idle_select_strategy(int index);
 heating_strategy_t screen_idle_get_selected_strategy(void);
 
 /**
+ * Set whether heating strategy selection should be shown
+ * Heating strategies only apply to dual boiler machines
+ * @param show true to show strategy selection, false to hide
+ */
+void screen_idle_set_show_strategies(bool show);
+
+/**
+ * Check if strategy selection is visible
+ */
+bool screen_idle_is_showing_strategies(void);
+
+/**
  * Callback type for turn on action
  */
 typedef void (*idle_turn_on_callback_t)(heating_strategy_t strategy);

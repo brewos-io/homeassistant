@@ -7,7 +7,7 @@ export { PowerSettings } from './PowerSettings';
 export { NetworkSettings } from './NetworkSettings';
 export { ScaleSettings } from './ScaleSettings';
 export { CloudSettings } from './CloudSettings';
-export { TimeSettings, RegionalSettings } from './TimeSettings';
+export { TimeSettings, RegionalSettings, UnitsSettings } from './TimeSettings';
 export { ThemeSettings } from './ThemeSettings';
 export { SystemSettings } from './SystemSettings';
 export { PushNotificationSettings } from './PushNotificationSettings';

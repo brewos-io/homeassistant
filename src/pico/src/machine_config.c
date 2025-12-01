@@ -100,3 +100,8 @@ const heat_exchanger_config_t* machine_get_hx_config(void) {
     return NULL;
 }
 
+const machine_electrical_t* machine_get_electrical(void) {
+    ensure_config_initialized();
+    return g_machine_config ? &g_machine_config->electrical : NULL;
+}
+

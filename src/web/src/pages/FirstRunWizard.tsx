@@ -1,20 +1,29 @@
-import { useState, useEffect } from 'react';
-import { Card } from '@/components/Card';
-import { Button } from '@/components/Button';
-import { Input } from '@/components/Input';
-import { Logo } from '@/components/Logo';
-import { getConnection } from '@/lib/connection';
-import { 
-  Coffee, 
-  Settings, 
-  Cloud, 
-  Check, 
-  ArrowRight, 
+import { useState, useEffect, useMemo } from "react";
+import { Card } from "@/components/Card";
+import { Button } from "@/components/Button";
+import { Input } from "@/components/Input";
+import { Logo } from "@/components/Logo";
+import { getConnection } from "@/lib/connection";
+import { useStore } from "@/lib/store";
+import {
+  Coffee,
+  Settings,
+  Cloud,
+  Check,
+  ArrowRight,
   ArrowLeft,
   Loader2,
   Copy,
-} from 'lucide-react';
-import { QRCodeSVG } from 'qrcode.react';
+  ChevronDown,
+} from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
+import {
+  getMachinesGroupedByBrand,
+  getMachineById,
+  getMachineTypeLabel,
+} from "@/lib/machines";
+import { cn } from "@/lib/utils";
+import { formatTemperatureWithUnit } from "@/lib/temperature";
 
 interface WizardStep {
   id: string;
@@ -30,10 +39,14 @@ interface PairingData {
 }
 
 const STEPS: WizardStep[] = [
-  { id: 'welcome', title: 'Welcome', icon: <Coffee className="w-5 h-5" /> },
-  { id: 'machine', title: 'Your Machine', icon: <Settings className="w-5 h-5" /> },
-  { id: 'cloud', title: 'Cloud Access', icon: <Cloud className="w-5 h-5" /> },
-  { id: 'done', title: 'All Set!', icon: <Check className="w-5 h-5" /> },
+  { id: "welcome", title: "Welcome", icon: <Coffee className="w-5 h-5" /> },
+  {
+    id: "machine",
+    title: "Your Machine",
+    icon: <Settings className="w-5 h-5" />,
+  },
+  { id: "cloud", title: "Cloud Access", icon: <Cloud className="w-5 h-5" /> },
+  { id: "done", title: "All Set!", icon: <Check className="w-5 h-5" /> },
 ];
 
 interface FirstRunWizardProps {
@@ -41,25 +54,35 @@ interface FirstRunWizardProps {
 }
 
 export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
+  const temperatureUnit = useStore((s) => s.preferences.temperatureUnit);
+
   const [currentStep, setCurrentStep] = useState(0);
   const [saving, setSaving] = useState(false);
-  
+
   // Machine info
-  const [machineName, setMachineName] = useState('');
-  const [machineBrand, setMachineBrand] = useState('');
-  const [machineModel, setMachineModel] = useState('');
-  
+  const [machineName, setMachineName] = useState("");
+  const [selectedMachineId, setSelectedMachineId] = useState("");
+
+  // Get grouped machines for the dropdown
+  const machineGroups = useMemo(() => getMachinesGroupedByBrand(), []);
+
+  // Find currently selected machine
+  const selectedMachine = useMemo(
+    () => (selectedMachineId ? getMachineById(selectedMachineId) : undefined),
+    [selectedMachineId]
+  );
+
   // Cloud pairing
   const [pairing, setPairing] = useState<PairingData | null>(null);
   const [loadingQR, setLoadingQR] = useState(false);
   const [copied, setCopied] = useState(false);
-  
+
   // Validation
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Fetch pairing QR on cloud step
   useEffect(() => {
-    if (STEPS[currentStep].id === 'cloud') {
+    if (STEPS[currentStep].id === "cloud") {
       fetchPairingQR();
     }
   }, [currentStep]);
@@ -67,13 +90,13 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
   const fetchPairingQR = async () => {
     setLoadingQR(true);
     try {
-      const response = await fetch('/api/pairing/qr');
+      const response = await fetch("/api/pairing/qr");
       if (response.ok) {
         const data = await response.json();
         setPairing(data);
       }
     } catch {
-      console.log('Failed to fetch pairing QR');
+      console.log("Failed to fetch pairing QR");
     }
     setLoadingQR(false);
   };
@@ -88,43 +111,48 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
 
   const validateMachineStep = (): boolean => {
     const newErrors: Record<string, string> = {};
-    
+
     if (!machineName.trim()) {
-      newErrors.machineName = 'Please give your machine a name';
+      newErrors.machineName = "Please give your machine a name";
     }
-    if (!machineBrand.trim()) {
-      newErrors.machineBrand = 'Please enter the machine brand';
+    if (!selectedMachineId) {
+      newErrors.machineModel = "Please select your machine model";
     }
-    if (!machineModel.trim()) {
-      newErrors.machineModel = 'Please enter the machine model';
-    }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const saveMachineInfo = async () => {
+    if (!selectedMachine) return;
+
     setSaving(true);
     try {
-      // Send to ESP32 via WebSocket
-      getConnection()?.sendCommand('set_device_info', {
+      // Send to ESP32 via WebSocket with machine type
+      getConnection()?.sendCommand("set_device_info", {
         name: machineName,
-        machineBrand,
-        machineModel,
+        machineBrand: selectedMachine.brand,
+        machineModel: selectedMachine.model,
+        machineType: selectedMachine.type,
+        machineId: selectedMachine.id,
+        defaultBrewTemp: selectedMachine.defaults.brewTemp,
+        defaultSteamTemp: selectedMachine.defaults.steamTemp,
       });
-      
+
       // Also save via REST API for immediate persistence
-      await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           machineName,
-          machineBrand,
-          machineModel,
+          machineBrand: selectedMachine.brand,
+          machineModel: selectedMachine.model,
+          machineType: selectedMachine.type,
+          machineId: selectedMachine.id,
         }),
       });
     } catch (error) {
-      console.error('Failed to save machine info:', error);
+      console.error("Failed to save machine info:", error);
     }
     setSaving(false);
   };
@@ -133,7 +161,7 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
     setSaving(true);
     try {
       // Mark setup as complete
-      await fetch('/api/setup/complete', { method: 'POST' });
+      await fetch("/api/setup/complete", { method: "POST" });
       onComplete();
     } catch {
       // Still complete even if API fails
@@ -144,17 +172,17 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
 
   const nextStep = async () => {
     const stepId = STEPS[currentStep].id;
-    
-    if (stepId === 'machine') {
+
+    if (stepId === "machine") {
       if (!validateMachineStep()) return;
       await saveMachineInfo();
     }
-    
-    if (stepId === 'done') {
+
+    if (stepId === "done") {
       await completeSetup();
       return;
     }
-    
+
     setCurrentStep((prev) => Math.min(prev + 1, STEPS.length - 1));
   };
 
@@ -170,7 +198,7 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
     const stepId = STEPS[currentStep].id;
 
     switch (stepId) {
-      case 'welcome':
+      case "welcome":
         return (
           <div className="text-center py-8">
             <div className="flex justify-center mb-6">
@@ -182,7 +210,7 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
             <p className="text-theme-muted max-w-md mx-auto mb-8">
               Let's set up your espresso machine. This will only take a minute.
             </p>
-            
+
             <div className="flex flex-col items-center gap-4 text-sm text-coffee-400">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center">
@@ -200,7 +228,7 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
           </div>
         );
 
-      case 'machine':
+      case "machine":
         return (
           <div className="py-6">
             <div className="text-center mb-8">
@@ -208,10 +236,10 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
                 <Coffee className="w-8 h-8 text-accent" />
               </div>
               <h2 className="text-2xl font-bold text-coffee-900 mb-2">
-                About Your Machine
+                Select Your Machine
               </h2>
               <p className="text-coffee-500">
-                Tell us about your espresso machine
+                Choose your espresso machine from our supported list
               </p>
             </div>
 
@@ -224,27 +252,85 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
                 error={errors.machineName}
                 hint="Give it a friendly name"
               />
-              
-              <Input
-                label="Brand"
-                placeholder="ECM"
-                value={machineBrand}
-                onChange={(e) => setMachineBrand(e.target.value)}
-                error={errors.machineBrand}
-              />
-              
-              <Input
-                label="Model"
-                placeholder="Synchronika"
-                value={machineModel}
-                onChange={(e) => setMachineModel(e.target.value)}
-                error={errors.machineModel}
-              />
+
+              {/* Machine Selector */}
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-theme">
+                  Machine Model <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedMachineId}
+                    onChange={(e) => setSelectedMachineId(e.target.value)}
+                    className={cn(
+                      "w-full px-4 py-3 pr-10 rounded-xl appearance-none",
+                      "bg-theme-secondary border border-theme",
+                      "text-theme text-sm",
+                      "focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent",
+                      "transition-all duration-200",
+                      !selectedMachineId && "text-theme-muted",
+                      errors.machineModel && "border-red-500"
+                    )}
+                  >
+                    <option value="">Select your machine...</option>
+                    {machineGroups.map((group) => (
+                      <optgroup key={group.brand} label={group.brand}>
+                        {group.machines.map((machine) => (
+                          <option key={machine.id} value={machine.id}>
+                            {machine.model} ({getMachineTypeLabel(machine.type)}
+                            )
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-theme-muted pointer-events-none" />
+                </div>
+                {errors.machineModel && (
+                  <p className="text-xs text-red-500">{errors.machineModel}</p>
+                )}
+              </div>
+
+              {/* Selected Machine Info */}
+              {selectedMachine && (
+                <div className="p-4 rounded-xl bg-accent/5 border border-accent/20 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Coffee className="w-5 h-5 text-accent" />
+                    <span className="font-semibold text-theme">
+                      {selectedMachine.brand} {selectedMachine.model}
+                    </span>
+                  </div>
+                  <p className="text-sm text-theme-muted">
+                    {selectedMachine.description}
+                  </p>
+                  <div className="flex flex-wrap gap-3 text-xs">
+                    <span className="px-2 py-1 rounded-full bg-theme-secondary text-theme-muted">
+                      {getMachineTypeLabel(selectedMachine.type)}
+                    </span>
+                    <span className="px-2 py-1 rounded-full bg-theme-secondary text-theme-muted">
+                      Brew:{" "}
+                      {formatTemperatureWithUnit(
+                        selectedMachine.defaults.brewTemp,
+                        temperatureUnit,
+                        0
+                      )}
+                    </span>
+                    <span className="px-2 py-1 rounded-full bg-theme-secondary text-theme-muted">
+                      Steam:{" "}
+                      {formatTemperatureWithUnit(
+                        selectedMachine.defaults.steamTemp,
+                        temperatureUnit,
+                        0
+                      )}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         );
 
-      case 'cloud':
+      case "cloud":
         return (
           <div className="py-6">
             <div className="text-center mb-6">
@@ -271,9 +357,9 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
                       <QRCodeSVG value={pairing.url} size={160} level="M" />
                     </div>
                     <p className="text-sm text-coffee-500 mb-3">
-                      Scan with your phone or visit{' '}
-                      <a 
-                        href="https://cloud.brewos.io" 
+                      Scan with your phone or visit{" "}
+                      <a
+                        href="https://cloud.brewos.io"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-accent hover:underline"
@@ -281,31 +367,37 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
                         cloud.brewos.io
                       </a>
                     </p>
-                    
+
                     {/* Manual code */}
                     <div className="w-full max-w-xs">
                       <div className="flex items-center gap-2">
                         <code className="flex-1 bg-white px-3 py-2 rounded-lg text-xs font-mono text-coffee-600 text-center">
                           {pairing.deviceId}:{pairing.token.substring(0, 8)}...
                         </code>
-                        <Button 
-                          variant="secondary" 
+                        <Button
+                          variant="secondary"
                           size="sm"
                           onClick={copyPairingCode}
                         >
-                          {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                          {copied ? (
+                            <Check className="w-4 h-4" />
+                          ) : (
+                            <Copy className="w-4 h-4" />
+                          )}
                         </Button>
                       </div>
                     </div>
                   </>
                 ) : (
-                  <p className="text-coffee-400">Could not generate pairing code</p>
+                  <p className="text-coffee-400">
+                    Could not generate pairing code
+                  </p>
                 )}
               </div>
             </div>
 
             <div className="text-center">
-              <button 
+              <button
                 onClick={skipCloud}
                 className="text-sm text-coffee-400 hover:text-coffee-600 hover:underline"
               >
@@ -315,7 +407,7 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
           </div>
         );
 
-      case 'done':
+      case "done":
         return (
           <div className="text-center py-12">
             <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -325,14 +417,19 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
               You're All Set!
             </h2>
             <p className="text-coffee-500 max-w-sm mx-auto mb-8">
-              Your {machineName || 'machine'} is ready to brew. 
-              Enjoy your perfect espresso!
+              Your {machineName || "machine"} is ready to brew. Enjoy your
+              perfect espresso!
             </p>
-            
+
             <div className="bg-cream-100 rounded-xl p-4 max-w-sm mx-auto">
-              <h3 className="font-semibold text-coffee-800 mb-2">Quick Tips:</h3>
+              <h3 className="font-semibold text-coffee-800 mb-2">
+                Quick Tips:
+              </h3>
               <ul className="text-sm text-coffee-500 text-left space-y-1">
-                <li>• Access locally at <span className="font-mono text-accent">brewos.local</span></li>
+                <li>
+                  • Access locally at{" "}
+                  <span className="font-mono text-accent">brewos.local</span>
+                </li>
                 <li>• Adjust brew temperature in Settings</li>
                 <li>• Connect a scale for brew-by-weight</li>
               </ul>
@@ -350,13 +447,13 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
           <div className="flex items-center gap-2">
             {STEPS.map((step, index) => (
               <div key={step.id} className="flex items-center">
-                <div 
+                <div
                   className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
-                    index < currentStep 
-                      ? 'bg-emerald-500 text-white' 
-                      : index === currentStep 
-                        ? 'bg-accent text-white' 
-                        : 'bg-cream-700/30 text-cream-400'
+                    index < currentStep
+                      ? "bg-emerald-500 text-white"
+                      : index === currentStep
+                      ? "bg-accent text-white"
+                      : "bg-cream-700/30 text-cream-400"
                   }`}
                 >
                   {index < currentStep ? (
@@ -366,9 +463,9 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
                   )}
                 </div>
                 {index < STEPS.length - 1 && (
-                  <div 
+                  <div
                     className={`w-8 h-0.5 mx-1 transition-colors ${
-                      index < currentStep ? 'bg-emerald-500' : 'bg-cream-700/30'
+                      index < currentStep ? "bg-emerald-500" : "bg-cream-700/30"
                     }`}
                   />
                 )}
@@ -383,7 +480,7 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
 
           {/* Navigation buttons */}
           <div className="flex justify-between pt-6 border-t border-cream-200 mt-6">
-            {currentStep > 0 && STEPS[currentStep].id !== 'done' ? (
+            {currentStep > 0 && STEPS[currentStep].id !== "done" ? (
               <Button variant="ghost" onClick={prevStep}>
                 <ArrowLeft className="w-4 h-4" />
                 Back
@@ -391,11 +488,11 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
             ) : (
               <div />
             )}
-            
+
             <Button onClick={nextStep} loading={saving}>
-              {STEPS[currentStep].id === 'done' ? (
-                'Start Brewing'
-              ) : STEPS[currentStep].id === 'cloud' ? (
+              {STEPS[currentStep].id === "done" ? (
+                "Start Brewing"
+              ) : STEPS[currentStep].id === "cloud" ? (
                 <>
                   Continue
                   <ArrowRight className="w-4 h-4" />
@@ -413,4 +510,3 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
     </div>
   );
 }
-

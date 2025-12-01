@@ -3,7 +3,7 @@ import {
   Wifi,
   Scale as ScaleIcon,
   Cloud,
-  Clock,
+  Globe,
   Palette,
   Server,
   Info,
@@ -14,7 +14,7 @@ export type SettingsTab =
   | 'network' 
   | 'scale' 
   | 'cloud' 
-  | 'time' 
+  | 'regional' 
   | 'appearance' 
   | 'system' 
   | 'about';
@@ -38,7 +38,7 @@ export const getSettingsTabs = (isCloud: boolean): TabConfig[] => {
   }
   
   tabs.push(
-    { id: 'time', label: 'Time', icon: Clock },
+    { id: 'regional', label: 'Regional', icon: Globe },
     { id: 'appearance', label: 'Theme', icon: Palette },
     { id: 'system', label: 'System', icon: Server },
     { id: 'about', label: 'About', icon: Info },

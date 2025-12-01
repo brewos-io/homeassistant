@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useAppStore } from "@/lib/mode";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import {
   Card,
@@ -143,7 +142,6 @@ const notificationCategories = [
 ];
 
 export function PushNotificationSettings() {
-  const { mode } = useAppStore();
   const {
     isSupported,
     isRegistered,
