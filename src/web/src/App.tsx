@@ -1,42 +1,46 @@
-import { useEffect, useState } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
-import { Layout } from '@/components/Layout';
-import { Dashboard } from '@/pages/Dashboard';
-import { Brewing } from '@/pages/Brewing';
-import { Stats } from '@/pages/Stats';
-import { Settings } from '@/pages/settings';
-import { Schedules } from '@/pages/Schedules';
-import { Setup } from '@/pages/Setup';
-import { Login } from '@/pages/Login';
-import { Devices } from '@/pages/Devices';
-import { AuthCallback } from '@/pages/AuthCallback';
-import { Pair } from '@/pages/Pair';
-import { Onboarding } from '@/pages/Onboarding';
-import { FirstRunWizard } from '@/pages/FirstRunWizard';
-import { initConnection, getConnection, setActiveConnection } from '@/lib/connection';
-import { initializeStore } from '@/lib/store';
-import { useAppStore } from '@/lib/mode';
-import { useThemeStore } from '@/lib/themeStore';
-import { Loading } from '@/components/Loading';
-import { DemoBanner } from '@/components/DemoBanner';
-import { getDemoConnection, clearDemoConnection } from '@/lib/demo-connection';
-import { isDemoMode } from '@/lib/demo-mode';
+import { useEffect, useState } from "react";
+import { Routes, Route, Navigate } from "react-router-dom";
+import { Layout } from "@/components/Layout";
+import { Dashboard } from "@/pages/Dashboard";
+import { Brewing } from "@/pages/Brewing";
+import { Stats } from "@/pages/Stats";
+import { Settings } from "@/pages/settings";
+import { Schedules } from "@/pages/Schedules";
+import { Setup } from "@/pages/Setup";
+import { Login } from "@/pages/Login";
+import { Machines } from "@/pages/Machines";
+import { AuthCallback } from "@/pages/AuthCallback";
+import { Pair } from "@/pages/Pair";
+import { Onboarding } from "@/pages/Onboarding";
+import { FirstRunWizard } from "@/pages/FirstRunWizard";
+import {
+  initConnection,
+  getConnection,
+  setActiveConnection,
+} from "@/lib/connection";
+import { initializeStore } from "@/lib/store";
+import { useAppStore } from "@/lib/mode";
+import { useThemeStore } from "@/lib/themeStore";
+import { Loading } from "@/components/Loading";
+import { DemoBanner } from "@/components/DemoBanner";
+import { getDemoConnection, clearDemoConnection } from "@/lib/demo-connection";
+import { isDemoMode } from "@/lib/demo-mode";
 
 function App() {
   const [loading, setLoading] = useState(true);
   const [setupComplete, setSetupComplete] = useState(true); // Default true to avoid flash
   const [inDemoMode] = useState(() => isDemoMode());
-  
-  const { 
+
+  const {
     mode,
     apMode,
-    initialized, 
-    user, 
-    devices, 
+    initialized,
+    user,
+    devices,
     initialize,
     getSelectedDevice,
   } = useAppStore();
-  
+
   const initTheme = useThemeStore((s) => s.initTheme);
 
   // Initialize demo mode
@@ -45,14 +49,14 @@ function App() {
 
     const initDemo = async () => {
       initTheme();
-      
+
       const demoConnection = getDemoConnection();
-      
+
       // Set as active connection so useCommand works
       setActiveConnection(demoConnection);
-      
+
       initializeStore(demoConnection);
-      
+
       await demoConnection.connect();
       setLoading(false);
     };
@@ -68,11 +72,11 @@ function App() {
   // Initialize normal mode
   useEffect(() => {
     if (inDemoMode) return;
-    
+
     const init = async () => {
       // Initialize theme first for immediate visual consistency
       initTheme();
-      
+
       // Initialize app - this fetches mode from server
       await initialize();
     };
@@ -86,10 +90,10 @@ function App() {
     if (!initialized) return;
 
     const setupLocalMode = async () => {
-      if (mode === 'local' && !apMode) {
+      if (mode === "local" && !apMode) {
         // Check if setup is complete
         try {
-          const setupResponse = await fetch('/api/setup/status');
+          const setupResponse = await fetch("/api/setup/status");
           if (setupResponse.ok) {
             const setupData = await setupResponse.json();
             setSetupComplete(setupData.complete);
@@ -101,14 +105,14 @@ function App() {
 
         // Initialize WebSocket connection
         const connection = initConnection({
-          mode: 'local',
-          endpoint: '/ws',
+          mode: "local",
+          endpoint: "/ws",
         });
 
         initializeStore(connection);
 
         connection.connect().catch((error) => {
-          console.error('Initial connection failed:', error);
+          console.error("Initial connection failed:", error);
         });
       }
 
@@ -131,7 +135,7 @@ function App() {
   const handleExitDemo = () => {
     // Navigate to login page - the login page will clear demo mode
     // Don't clear here to avoid connection errors during navigation
-    window.location.href = '/login?exitDemo=true';
+    window.location.href = "/login?exitDemo=true";
   };
 
   // Show loading state
@@ -145,7 +149,8 @@ function App() {
       <>
         <DemoBanner onExit={handleExitDemo} />
         <Routes>
-          <Route path="/" element={<Layout />}>
+          <Route path="/machines" element={<Machines />} />
+          <Route path="/" element={<Layout onExitDemo={handleExitDemo} />}>
             <Route index element={<Dashboard />} />
             <Route path="brewing" element={<Brewing />} />
             <Route path="stats" element={<Stats />} />
@@ -159,7 +164,7 @@ function App() {
   }
 
   // ===== LOCAL MODE (ESP32) =====
-  if (mode === 'local') {
+  if (mode === "local") {
     // Show WiFi setup page in AP mode
     if (apMode) {
       return <Setup />;
@@ -186,7 +191,7 @@ function App() {
   }
 
   // ===== CLOUD MODE =====
-  
+
   // Not logged in -> Login
   if (!user) {
     return (
@@ -213,39 +218,39 @@ function App() {
 
   // Logged in with devices -> Full app
   const selectedDevice = getSelectedDevice();
-  
+
   return (
     <Routes>
       {/* Auth routes */}
       <Route path="/auth/callback" element={<AuthCallback />} />
       <Route path="/pair" element={<Pair />} />
       <Route path="/onboarding" element={<Onboarding />} />
-      
-      {/* Device management */}
-      <Route path="/devices" element={<Devices />} />
-      <Route path="/login" element={<Navigate to="/devices" replace />} />
-      
-      {/* Device control (when connected via cloud) */}
-      <Route path="/device/:deviceId" element={<Layout />}>
+
+      {/* Machine management */}
+      <Route path="/machines" element={<Machines />} />
+      <Route path="/login" element={<Navigate to="/machines" replace />} />
+
+      {/* Machine control (when connected via cloud) */}
+      <Route path="/machine/:deviceId" element={<Layout />}>
         <Route index element={<Dashboard />} />
         <Route path="brewing" element={<Brewing />} />
         <Route path="stats" element={<Stats />} />
         <Route path="schedules" element={<Schedules />} />
         <Route path="settings" element={<Settings />} />
       </Route>
-      
-      {/* Root: redirect to selected device or first device */}
-      <Route 
-        path="/" 
+
+      {/* Root: redirect to selected machine or machines list */}
+      <Route
+        path="/"
         element={
-          <Navigate 
-            to={selectedDevice ? `/device/${selectedDevice.id}` : '/devices'} 
-            replace 
+          <Navigate
+            to={selectedDevice ? `/machine/${selectedDevice.id}` : "/machines"}
+            replace
           />
-        } 
+        }
       />
-      
-      {/* Default: redirect to devices */}
+
+      {/* Default: redirect to machines */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

@@ -1,20 +1,20 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useStore } from '@/lib/store';
-import { getActiveConnection } from '@/lib/connection';
-import { Card, CardHeader, CardTitle } from '@/components/Card';
-import { Input } from '@/components/Input';
-import { Button } from '@/components/Button';
-import { useToast } from '@/components/Toast';
-import { Coffee, Save, ChevronDown, AlertCircle } from 'lucide-react';
-import { StatusRow } from './StatusRow';
-import { 
-  SUPPORTED_MACHINES, 
-  getMachinesGroupedByBrand, 
+import { useState, useEffect, useMemo } from "react";
+import { useStore } from "@/lib/store";
+import { getActiveConnection } from "@/lib/connection";
+import { Card, CardHeader, CardTitle } from "@/components/Card";
+import { Input } from "@/components/Input";
+import { Button } from "@/components/Button";
+import { useToast } from "@/components/Toast";
+import { Coffee, Save, ChevronDown, AlertCircle } from "lucide-react";
+import { StatusRow } from "./StatusRow";
+import {
+  SUPPORTED_MACHINES,
+  getMachinesGroupedByBrand,
   getMachineById,
   getMachineTypeLabel,
-} from '@/lib/machines';
-import { cn } from '@/lib/utils';
-import { formatTemperatureWithUnit } from '@/lib/temperature';
+} from "@/lib/machines";
+import { cn } from "@/lib/utils";
+import { formatTemperatureWithUnit } from "@/lib/temperature";
 
 export function MachineSettings() {
   const device = useStore((s) => s.device);
@@ -24,27 +24,28 @@ export function MachineSettings() {
 
   // Device identity
   const [deviceName, setDeviceName] = useState(device.deviceName);
-  const [selectedMachineId, setSelectedMachineId] = useState<string>('');
+  const [selectedMachineId, setSelectedMachineId] = useState<string>("");
   const [savingMachine, setSavingMachine] = useState(false);
-  
+
   // Get grouped machines for the dropdown
   const machineGroups = useMemo(() => getMachinesGroupedByBrand(), []);
-  
+
   // Find currently selected machine
-  const selectedMachine = useMemo(() => 
-    selectedMachineId ? getMachineById(selectedMachineId) : undefined,
+  const selectedMachine = useMemo(
+    () => (selectedMachineId ? getMachineById(selectedMachineId) : undefined),
     [selectedMachineId]
   );
-  
+
   // Try to match existing brand/model to a supported machine
   useEffect(() => {
     setDeviceName(device.deviceName);
-    
+
     // Try to find matching machine from current brand/model
     if (device.machineBrand && device.machineModel) {
       const match = SUPPORTED_MACHINES.find(
-        m => m.brand.toLowerCase() === device.machineBrand.toLowerCase() &&
-             m.model.toLowerCase() === device.machineModel.toLowerCase()
+        (m) =>
+          m.brand.toLowerCase() === device.machineBrand.toLowerCase() &&
+          m.model.toLowerCase() === device.machineModel.toLowerCase()
       );
       if (match) {
         setSelectedMachineId(match.id);
@@ -54,23 +55,23 @@ export function MachineSettings() {
 
   const saveMachineInfo = async () => {
     if (!deviceName.trim() || !selectedMachine) return;
-    
+
     // Check if connected
-    if (connectionState !== 'connected') {
-      error('Not connected to machine. Please wait for connection.');
+    if (connectionState !== "connected") {
+      error("Not connected to machine. Please wait for connection.");
       return;
     }
-    
+
     setSavingMachine(true);
-    
+
     try {
       const connection = getActiveConnection();
       if (!connection) {
-        throw new Error('No connection available');
+        throw new Error("No connection available");
       }
-      
+
       // Send machine info including the type
-      connection.sendCommand('set_machine_info', { 
+      connection.sendCommand("set_machine_info", {
         name: deviceName.trim(),
         brand: selectedMachine.brand,
         model: selectedMachine.model,
@@ -80,32 +81,29 @@ export function MachineSettings() {
         defaultBrewTemp: selectedMachine.defaults.brewTemp,
         defaultSteamTemp: selectedMachine.defaults.steamTemp,
       });
-      
+
       // Wait a bit for command to be sent, then show success
-      await new Promise(resolve => setTimeout(resolve, 300));
-      success('Machine info saved successfully');
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      success("Machine info saved successfully");
     } catch (err) {
-      console.error('Failed to save machine info:', err);
-      error('Failed to save machine info. Please try again.');
+      console.error("Failed to save machine info:", err);
+      error("Failed to save machine info. Please try again.");
     } finally {
       setSavingMachine(false);
     }
   };
-  
+
   const isMachineInfoValid = deviceName.trim() && selectedMachine;
-  const isMachineInfoChanged = 
-    deviceName !== device.deviceName || 
-    (selectedMachine && (
-      selectedMachine.brand !== device.machineBrand || 
-      selectedMachine.model !== device.machineModel
-    ));
+  const isMachineInfoChanged =
+    deviceName !== device.deviceName ||
+    (selectedMachine &&
+      (selectedMachine.brand !== device.machineBrand ||
+        selectedMachine.model !== device.machineModel));
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle icon={<Coffee className="w-5 h-5" />}>
-          Machine
-        </CardTitle>
+        <CardTitle icon={<Coffee className="w-5 h-5" />}>Machine</CardTitle>
       </CardHeader>
 
       <div className="space-y-4">
@@ -117,7 +115,7 @@ export function MachineSettings() {
           hint="Give your machine a friendly name"
           required
         />
-        
+
         {/* Machine Selector */}
         <div className="space-y-2">
           <label className="block text-sm font-medium text-theme">
@@ -153,7 +151,7 @@ export function MachineSettings() {
             Select your espresso machine from the supported list
           </p>
         </div>
-        
+
         {/* Selected Machine Info */}
         {selectedMachine && (
           <div className="p-4 rounded-xl bg-theme-tertiary space-y-3">
@@ -168,23 +166,27 @@ export function MachineSettings() {
                 </p>
               </div>
             </div>
-            
+
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
-                <span className="text-theme-muted">Type:</span>{' '}
+                <span className="text-theme-muted">Type:</span>{" "}
                 <span className="font-medium text-theme">
                   {getMachineTypeLabel(selectedMachine.type)}
                 </span>
               </div>
               <div>
-                <span className="text-theme-muted">Default Brew:</span>{' '}
+                <span className="text-theme-muted">Default Brew:</span>{" "}
                 <span className="font-medium text-theme">
-                  {formatTemperatureWithUnit(selectedMachine.defaults.brewTemp, temperatureUnit, 0)}
+                  {formatTemperatureWithUnit(
+                    selectedMachine.defaults.brewTemp,
+                    temperatureUnit,
+                    0
+                  )}
                 </span>
               </div>
               {selectedMachine.specs.brewPowerWatts && (
                 <div>
-                  <span className="text-theme-muted">Brew Power:</span>{' '}
+                  <span className="text-theme-muted">Brew Power:</span>{" "}
                   <span className="font-medium text-theme">
                     {selectedMachine.specs.brewPowerWatts}W
                   </span>
@@ -192,7 +194,7 @@ export function MachineSettings() {
               )}
               {selectedMachine.specs.steamPowerWatts && (
                 <div>
-                  <span className="text-theme-muted">Steam Power:</span>{' '}
+                  <span className="text-theme-muted">Steam Power:</span>{" "}
                   <span className="font-medium text-theme">
                     {selectedMachine.specs.steamPowerWatts}W
                   </span>
@@ -201,7 +203,7 @@ export function MachineSettings() {
             </div>
           </div>
         )}
-        
+
         {/* Machine not found notice */}
         {!selectedMachine && device.machineBrand && device.machineModel && (
           <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
@@ -211,7 +213,8 @@ export function MachineSettings() {
                 Current machine not in supported list
               </p>
               <p className="text-theme-muted mt-1">
-                Currently configured: {device.machineBrand} {device.machineModel}
+                Currently configured: {device.machineBrand}{" "}
+                {device.machineModel}
               </p>
               <p className="text-theme-muted">
                 Please select from the dropdown to ensure proper configuration.
@@ -219,10 +222,10 @@ export function MachineSettings() {
             </div>
           </div>
         )}
-        
+
         <div className="flex justify-end">
-          <Button 
-            onClick={saveMachineInfo} 
+          <Button
+            onClick={saveMachineInfo}
             loading={savingMachine}
             disabled={!isMachineInfoValid || !isMachineInfoChanged}
           >
@@ -230,16 +233,6 @@ export function MachineSettings() {
             Save Machine Info
           </Button>
         </div>
-        
-        {device.deviceId && (
-          <div className="grid grid-cols-2 gap-4 pt-2 border-t border-theme">
-            <StatusRow label="Device ID" value={device.deviceId} mono />
-            <StatusRow 
-              label="Machine Type" 
-              value={device.machineType ? getMachineTypeLabel(device.machineType) : 'Not set'} 
-            />
-          </div>
-        )}
       </div>
     </Card>
   );

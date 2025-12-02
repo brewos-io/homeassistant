@@ -12,7 +12,7 @@ export function AuthCallback() {
 
   useEffect(() => {
     // Just redirect to devices or login
-    navigate('/devices');
+    navigate('/machines');
   }, [navigate]);
 
   return (

@@ -11,11 +11,13 @@ The cloud service handles push notification subscriptions and delivery for BrewO
 ### Components
 
 1. **Push Service** (`src/services/push.ts`)
+
    - Manages VAPID keys
    - Handles subscription storage
    - Sends push notifications
 
 2. **Push Routes** (`src/routes/push.ts`)
+
    - API endpoints for subscription management
    - ESP32 notification endpoint
 
@@ -32,6 +34,7 @@ npx web-push generate-vapid-keys
 ```
 
 This will output:
+
 ```
 Public Key: <your-public-key>
 Private Key: <your-private-key>
@@ -44,12 +47,13 @@ Add to `.env`:
 ```env
 VAPID_PUBLIC_KEY=your-public-key-here
 VAPID_PRIVATE_KEY=your-private-key-here
-VAPID_SUBJECT=mailto:admin@brewos.app
+VAPID_SUBJECT=mailto:admin@brewos.io
 ```
 
 **Note:** The `VAPID_SUBJECT` should be either:
-- An email address: `mailto:admin@brewos.app`
-- A URL: `https://brewos.app`
+
+- An email address: `mailto:admin@brewos.io`
+- A URL: `https://brewos.io`
 
 ### 3. Initialize on Startup
 
@@ -57,7 +61,7 @@ The push service is automatically initialized when the server starts:
 
 ```typescript
 // src/server.ts
-import { initializePushNotifications } from './services/push.js';
+import { initializePushNotifications } from "./services/push.js";
 
 async function start() {
   await initDatabase();
@@ -67,6 +71,7 @@ async function start() {
 ```
 
 If VAPID keys are not configured, the server will:
+
 - Generate new keys automatically
 - Log them to console
 - **Important:** Copy these keys to your `.env` file for persistence
@@ -90,6 +95,7 @@ CREATE TABLE push_subscriptions (
 ```
 
 **Indexes:**
+
 - `idx_push_subscriptions_user` on `user_id`
 - `idx_push_subscriptions_device` on `device_id`
 
@@ -100,6 +106,7 @@ CREATE TABLE push_subscriptions (
 Returns the VAPID public key for client subscription.
 
 **Response:**
+
 ```json
 {
   "publicKey": "base64-encoded-key"
@@ -116,6 +123,7 @@ Subscribe a user to push notifications.
 **Authentication:** Required (Google OAuth)
 
 **Request:**
+
 ```json
 {
   "subscription": {
@@ -130,6 +138,7 @@ Subscribe a user to push notifications.
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -147,6 +156,7 @@ Subscribe a user to push notifications.
 ```
 
 **Behavior:**
+
 - If subscription with same endpoint exists, updates it
 - Otherwise, creates new subscription
 - Links subscription to user and optionally device
@@ -158,6 +168,7 @@ Unsubscribe from push notifications.
 **Authentication:** Required (Google OAuth)
 
 **Request:**
+
 ```json
 {
   "subscription": {
@@ -171,6 +182,7 @@ Unsubscribe from push notifications.
 ```
 
 **Response:**
+
 ```json
 {
   "success": true
@@ -184,6 +196,7 @@ Get all push subscriptions for the authenticated user.
 **Authentication:** Required (Google OAuth)
 
 **Response:**
+
 ```json
 {
   "subscriptions": [
@@ -205,6 +218,7 @@ Send a push notification from ESP32 device.
 **Authentication:** None (device ID is the auth)
 
 **Request:**
+
 ```json
 {
   "deviceId": "BRW-12345678",
@@ -218,6 +232,7 @@ Send a push notification from ESP32 device.
 ```
 
 **Notification Types:**
+
 - `MACHINE_READY` - Machine reached brewing temperature
 - `WATER_EMPTY` - Water tank needs refill
 - `DESCALE_DUE` - Time to descale
@@ -227,6 +242,7 @@ Send a push notification from ESP32 device.
 - `PICO_OFFLINE` - Control board offline
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -235,6 +251,7 @@ Send a push notification from ESP32 device.
 ```
 
 **Behavior:**
+
 1. Validates device ID format
 2. Verifies device exists and is claimed
 3. Looks up all subscriptions for device owner
@@ -303,6 +320,7 @@ sendPushNotification(
 ```
 
 **Payload:**
+
 ```typescript
 {
   title: string;
@@ -316,6 +334,7 @@ sendPushNotification(
 ```
 
 **Behavior:**
+
 - Sends notification via web-push
 - Handles invalid subscriptions (410, 404)
 - Automatically removes invalid subscriptions
@@ -356,6 +375,7 @@ sendPushNotificationToDevice(
 ### Invalid Subscriptions
 
 When a push notification fails with status 410 (Gone) or 404 (Not Found):
+
 - Subscription is automatically removed from database
 - Error is logged
 - Function continues with other subscriptions
@@ -363,6 +383,7 @@ When a push notification fails with status 410 (Gone) or 404 (Not Found):
 ### Network Errors
 
 Network errors are caught and logged:
+
 - Subscription is not removed (may be temporary)
 - Error is logged for monitoring
 - Function returns false
@@ -388,6 +409,7 @@ The notification payload sent to browsers:
 ```
 
 **Fields:**
+
 - `title` - Notification title
 - `body` - Notification message
 - `icon` - Icon URL (default: `/logo-icon.svg`)
@@ -401,6 +423,7 @@ The notification payload sent to browsers:
 ### Manual Testing
 
 1. **Subscribe:**
+
    ```bash
    curl -X POST http://localhost:3001/api/push/subscribe \
      -H "Content-Type: application/json" \
@@ -435,6 +458,7 @@ See test files in `src/cloud/tests/` (if available).
 ### Logs
 
 The service logs:
+
 - VAPID key initialization
 - Subscription creation/updates
 - Push notification sends
@@ -451,16 +475,19 @@ The service logs:
 ## Security Considerations
 
 1. **VAPID Keys**
+
    - Private key must never be exposed
    - Store in environment variables only
    - Rotate keys periodically
 
 2. **Device Authentication**
+
    - `/api/push/notify` endpoint validates device ID format
    - Verifies device is claimed before sending
    - No user authentication required (device ID is auth)
 
 3. **User Authentication**
+
    - Subscription management requires OAuth
    - User can only manage their own subscriptions
    - Device ownership verified
@@ -486,7 +513,7 @@ The service logs:
 ```env
 VAPID_PUBLIC_KEY=your-public-key
 VAPID_PRIVATE_KEY=your-private-key
-VAPID_SUBJECT=mailto:admin@brewos.app
+VAPID_SUBJECT=mailto:admin@brewos.io
 ```
 
 ## Troubleshooting
@@ -494,14 +521,17 @@ VAPID_SUBJECT=mailto:admin@brewos.app
 ### Notifications Not Sending
 
 1. **Check VAPID keys:**
+
    - Verify keys are set in environment
    - Check server logs for key initialization
 
 2. **Check subscriptions:**
+
    - Query database for user subscriptions
    - Verify subscriptions are valid
 
 3. **Check device:**
+
    - Verify device is claimed
    - Check device ID format
 
@@ -512,6 +542,7 @@ VAPID_SUBJECT=mailto:admin@brewos.app
 ### Invalid Subscriptions
 
 If subscriptions are being removed:
+
 - Check push service endpoint is valid
 - Verify VAPID keys are correct
 - Check network connectivity to push service
@@ -525,4 +556,3 @@ If subscriptions are being removed:
 - [ ] Notification scheduling
 - [ ] Rate limiting
 - [ ] Analytics
-

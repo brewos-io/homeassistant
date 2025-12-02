@@ -5,7 +5,7 @@ export { Settings } from './settings';
 export { Schedules } from './Schedules';
 export { Setup } from './Setup';
 export { Login } from './Login';
-export { Devices } from './Devices';
+export { Machines } from './Machines';
 export { AuthCallback } from './AuthCallback';
 export { Pair } from './Pair';
 export { Onboarding } from './Onboarding';

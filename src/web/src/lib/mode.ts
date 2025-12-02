@@ -336,13 +336,19 @@ export const useAppStore = create<AppState>()(
           });
 
           if (response.ok) {
-            set((state) => ({
-              devices: state.devices.filter((d) => d.id !== deviceId),
-              selectedDeviceId:
+            set((state) => {
+              const remainingDevices = state.devices.filter((d) => d.id !== deviceId);
+              // If removing the selected device, select the first remaining one
+              const newSelectedId =
                 state.selectedDeviceId === deviceId
-                  ? state.devices[0]?.id ?? null
-                  : state.selectedDeviceId,
-            }));
+                  ? remainingDevices[0]?.id ?? null
+                  : state.selectedDeviceId;
+              
+              return {
+                devices: remainingDevices,
+                selectedDeviceId: newSelectedId,
+              };
+            });
             return true;
           }
         } catch (error) {

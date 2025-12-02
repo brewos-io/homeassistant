@@ -23,7 +23,7 @@ export function Pair() {
 
   useEffect(() => {
     if (!deviceId || !token) {
-      navigate('/devices');
+      navigate('/machines');
     }
   }, [deviceId, token, navigate]);
 
@@ -38,7 +38,7 @@ export function Pair() {
       
       if (success) {
         setStatus('success');
-        setTimeout(() => navigate('/devices'), 2000);
+        setTimeout(() => navigate('/machines'), 2000);
       } else {
         setStatus('error');
         setErrorMessage('Failed to pair device. The code may have expired.');
@@ -85,8 +85,8 @@ export function Pair() {
             <h2 className="text-xl font-bold text-coffee-900 mb-2">Pairing Failed</h2>
             <p className="text-coffee-500 mb-6">{errorMessage}</p>
             <div className="flex gap-3 justify-center">
-              <Button variant="secondary" onClick={() => navigate('/devices')}>
-                Go to Devices
+              <Button variant="secondary" onClick={() => navigate('/machines')}>
+                Go to Machines
               </Button>
               <Button onClick={() => setStatus('idle')}>
                 Try Again
@@ -128,7 +128,7 @@ export function Pair() {
                 className="w-full"
                 onClick={handlePair}
               >
-                Add to My Devices
+                Add to My Machines
               </Button>
             ) : (
               <div className="space-y-4">

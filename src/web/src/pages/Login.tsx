@@ -22,7 +22,7 @@ export function Login() {
 
   useEffect(() => {
     if (user) {
-      navigate("/devices");
+      navigate("/machines");
     }
   }, [user, navigate]);
 

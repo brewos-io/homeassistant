@@ -5,6 +5,7 @@ BrewOS supports push notifications to alert you when your espresso machine needs
 ## Overview
 
 Push notifications are delivered through the web browser's Push API, allowing you to receive alerts:
+
 - **When the app is closed** - Notifications work in the background
 - **On any device** - Works on desktop and mobile browsers
 - **Real-time** - Instant delivery when events occur
@@ -14,30 +15,32 @@ Push notifications are delivered through the web browser's Push API, allowing yo
 
 ### Reminders
 
-| Type | Description | When Triggered |
-|------|-------------|----------------|
-| **Machine Ready** | Machine has reached brewing temperature | Brew temp stable |
-| **Water Empty** | Water tank needs refill | Tank sensor triggered |
-| **Descale Due** | Time to descale the machine | X days since last descale |
-| **Service Due** | Maintenance recommended | Shot counter threshold reached |
-| **Backflush Due** | Backflush reminder | Daily/weekly schedule |
+| Type              | Description                             | When Triggered                 |
+| ----------------- | --------------------------------------- | ------------------------------ |
+| **Machine Ready** | Machine has reached brewing temperature | Brew temp stable               |
+| **Water Empty**   | Water tank needs refill                 | Tank sensor triggered          |
+| **Descale Due**   | Time to descale the machine             | X days since last descale      |
+| **Service Due**   | Maintenance recommended                 | Shot counter threshold reached |
+| **Backflush Due** | Backflush reminder                      | Daily/weekly schedule          |
 
 ### Alerts (Critical)
 
-| Type | Description | When Triggered |
-|------|-------------|----------------|
-| **Machine Error** | Machine needs attention | Any Pico alarm |
-| **Pico Offline** | Control board disconnected | UART timeout > 30s |
+| Type              | Description                | When Triggered     |
+| ----------------- | -------------------------- | ------------------ |
+| **Machine Error** | Machine needs attention    | Any Pico alarm     |
+| **Pico Offline**  | Control board disconnected | UART timeout > 30s |
 
 ## Setup
 
 ### For Users
 
 1. **Open Settings:**
+
    - Navigate to Settings > System (cloud mode only)
    - Find "Push Notifications" section
 
 2. **Enable Notifications:**
+
    - Click "Enable Push Notifications"
    - Grant browser permission when prompted
 
@@ -51,16 +54,18 @@ Push notifications are delivered through the web browser's Push API, allowing yo
 #### Cloud Server Setup
 
 1. **Generate VAPID Keys:**
+
    ```bash
    cd src/cloud
    npx web-push generate-vapid-keys
    ```
 
 2. **Add to Environment:**
+
    ```env
    VAPID_PUBLIC_KEY=your-public-key-here
    VAPID_PRIVATE_KEY=your-private-key-here
-   VAPID_SUBJECT=mailto:admin@brewos.app
+   VAPID_SUBJECT=mailto:admin@brewos.io
    ```
 
 3. **Restart Server:**
@@ -71,6 +76,7 @@ Push notifications are delivered through the web browser's Push API, allowing yo
 #### ESP32 Configuration
 
 The ESP32 automatically sends notifications to the cloud when:
+
 - Cloud URL is configured in settings
 - Device is claimed by a user
 - WiFi is connected
@@ -100,7 +106,7 @@ sequenceDiagram
     participant Cloud
     participant PushService
     participant Browser
-    
+
     ESP32->>Cloud: POST /api/push/notify
     Cloud->>Cloud: Lookup subscriptions
     Cloud->>PushService: Send push (VAPID)
@@ -121,6 +127,7 @@ sequenceDiagram
 **Authentication:** Required (Google OAuth)
 
 **Request:**
+
 ```json
 {
   "subscription": {
@@ -135,6 +142,7 @@ sequenceDiagram
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -155,6 +163,7 @@ sequenceDiagram
 **Authentication:** Required (Google OAuth)
 
 **Request:**
+
 ```json
 {
   "subscription": {
@@ -168,6 +177,7 @@ sequenceDiagram
 ```
 
 **Response:**
+
 ```json
 {
   "success": true
@@ -179,6 +189,7 @@ sequenceDiagram
 **Endpoint:** `GET /api/push/vapid-key`
 
 **Response:**
+
 ```json
 {
   "publicKey": "base64-encoded-vapid-public-key"
@@ -192,6 +203,7 @@ sequenceDiagram
 **Authentication:** Required (Google OAuth)
 
 **Response:**
+
 ```json
 {
   "subscriptions": [
@@ -215,6 +227,7 @@ sequenceDiagram
 **Authentication:** None (device ID is the auth)
 
 **Request:**
+
 ```json
 {
   "deviceId": "BRW-12345678",
@@ -228,6 +241,7 @@ sequenceDiagram
 ```
 
 **Notification Types:**
+
 - `MACHINE_READY`
 - `WATER_EMPTY`
 - `DESCALE_DUE`
@@ -237,6 +251,7 @@ sequenceDiagram
 - `PICO_OFFLINE`
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -261,21 +276,25 @@ Preferences are stored in ESP32 NVS and respected when sending to cloud.
 ### Notifications Not Received
 
 1. **Check subscription status:**
+
    - Go to Settings > System > Push Notifications
    - Verify subscription is "Active"
    - Check permission is "Granted"
 
 2. **Check browser support:**
+
    - Chrome/Edge: ✅ Full support
    - Firefox: ✅ Full support
    - Safari: ❌ Not supported (no Push API)
 
 3. **Check service worker:**
+
    - Open DevTools > Application > Service Workers
    - Verify service worker is active
    - Check for errors in console
 
 4. **Check cloud server:**
+
    - Verify VAPID keys are configured
    - Check server logs for errors
    - Verify device is claimed
@@ -290,6 +309,7 @@ Preferences are stored in ESP32 NVS and respected when sending to cloud.
 If permission is denied:
 
 1. **Reset in browser:**
+
    - Chrome: Settings > Privacy > Site Settings > Notifications
    - Firefox: Preferences > Privacy & Security > Permissions > Notifications
    - Find BrewOS and reset permission
@@ -303,6 +323,7 @@ If permission is denied:
 If subscription is lost:
 
 1. **Check database:**
+
    - Verify subscription is stored in cloud database
    - Check user ID matches
 
@@ -313,14 +334,17 @@ If subscription is lost:
 ### Notifications Not Sending from ESP32
 
 1. **Check cloud URL:**
+
    - Verify cloud URL is set in ESP32 settings
    - Test connectivity: `curl https://your-cloud-url/api/health`
 
 2. **Check device ID:**
+
    - Verify device ID format: `BRW-XXXXXXXX`
    - Check device is claimed
 
 3. **Check notification preferences:**
+
    - Verify push is enabled in ESP32 settings
    - Check notification type is enabled
 
@@ -353,17 +377,19 @@ If subscription is lost:
 ### Testing Push Notifications
 
 1. **Local testing:**
+
    ```bash
    # Start cloud server
    cd src/cloud
    npm run dev
-   
+
    # Start web app
    cd src/web
    npm run dev
    ```
 
 2. **Test subscription:**
+
    - Open app in browser
    - Enable push notifications
    - Check DevTools > Application > Service Workers
@@ -386,15 +412,18 @@ If subscription is lost:
 ### Debugging
 
 **Service Worker:**
+
 - Open DevTools > Application > Service Workers
 - Check "Update on reload" for development
 - View console logs in service worker context
 
 **Push Events:**
+
 - Service worker logs push events: `[SW] Push notification received`
 - Check notification payload in service worker console
 
 **Cloud Server:**
+
 - Check logs for subscription management
 - Verify VAPID key generation
 - Monitor push delivery success/failure
@@ -406,4 +435,3 @@ If subscription is lost:
 3. **Rate limit notifications** - Prevent notification fatigue
 4. **Provide clear actions** - Make notifications actionable
 5. **Test on multiple browsers** - Ensure cross-browser compatibility
-

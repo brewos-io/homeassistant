@@ -1,12 +1,13 @@
 import { useState } from "react";
-import { Outlet, NavLink, useNavigate, useParams } from "react-router-dom";
+import { Outlet, NavLink, useParams } from "react-router-dom";
 import { useStore } from "@/lib/store";
 import { useAppStore } from "@/lib/mode";
-import { DeviceSelector } from "./DeviceSelector";
+import { MachineSelector } from "./MachineSelector";
 import { Logo } from "./Logo";
 import { InstallPrompt, usePWAInstall } from "./InstallPrompt";
 import { ConnectionOverlay } from "./ConnectionOverlay";
 import { VersionWarning } from "./VersionWarning";
+import { UserMenu } from "./UserMenu";
 import { isDemoMode } from "@/lib/demo-mode";
 import {
   LayoutGrid,
@@ -17,14 +18,13 @@ import {
   Wifi,
   WifiOff,
   Cloud,
-  LogOut,
-  Home,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // Navigation items - adjust based on mode
 const getNavigation = (isCloud: boolean, deviceId?: string) => {
-  const basePath = isCloud && deviceId ? `/device/${deviceId}` : "";
+  const basePath = isCloud && deviceId ? `/machine/${deviceId}` : "";
 
   const items = [
     { name: "Dashboard", href: basePath || "/", icon: LayoutGrid },
@@ -37,12 +37,15 @@ const getNavigation = (isCloud: boolean, deviceId?: string) => {
   return items;
 };
 
-export function Layout() {
-  const navigate = useNavigate();
+interface LayoutProps {
+  onExitDemo?: () => void;
+}
+
+export function Layout({ onExitDemo }: LayoutProps) {
   const { deviceId } = useParams();
   const connectionState = useStore((s) => s.connectionState);
   const deviceName = useStore((s) => s.device.deviceName);
-  const { mode, user, signOut, getSelectedDevice } = useAppStore();
+  const { mode, user, getSelectedDevice } = useAppStore();
   const { isMobile } = usePWAInstall();
   const [showInstallBanner, setShowInstallBanner] = useState(() => {
     // Check if user previously dismissed the banner
@@ -64,11 +67,6 @@ export function Layout() {
 
   const navigation = getNavigation(isCloud, deviceId || selectedDevice?.id);
 
-  const handleSignOut = async () => {
-    await signOut();
-    navigate("/login");
-  };
-
   return (
     <div className="min-h-screen bg-theme">
       {/* Header */}
@@ -80,7 +78,7 @@ export function Layout() {
               <Logo size="md" />
 
               {/* Cloud: Device Selector */}
-              {isCloud && <DeviceSelector />}
+              {isCloud && <MachineSelector />}
 
               {/* Local: Machine Name */}
               {!isCloud && deviceName && (
@@ -94,7 +92,14 @@ export function Layout() {
             <div className="flex items-center gap-3">
               {/* Connection Status */}
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-theme-tertiary">
-                {isCloud ? (
+                {isDemo ? (
+                  <>
+                    <Sparkles className="w-4 h-4 text-accent" />
+                    <span className="text-xs font-medium text-theme-secondary">
+                      Demo
+                    </span>
+                  </>
+                ) : isCloud ? (
                   <>
                     <Cloud className="w-4 h-4 text-accent" />
                     <span className="text-xs font-medium text-theme-secondary">
@@ -125,31 +130,10 @@ export function Layout() {
                 )}
               </div>
 
-              {/* Cloud: User menu */}
-              {isCloud && user && (
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => navigate("/devices")}
-                    className="p-2 rounded-lg hover:bg-theme-tertiary text-theme-secondary transition-colors"
-                    title="Manage Devices"
-                  >
-                    <Home className="w-5 h-5" />
-                  </button>
-                  <div className="flex items-center gap-2 pl-2 border-l border-theme">
-                    <span className="text-xs text-theme-muted hidden sm:block max-w-32 truncate">
-                      {user.email}
-                    </span>
-                    <button
-                      onClick={handleSignOut}
-                      className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-theme-tertiary text-theme-secondary text-xs font-medium transition-colors"
-                      title="Sign Out"
-                    >
-                      <LogOut className="w-4 h-4" />
-                      <span className="hidden sm:inline">Logout</span>
-                    </button>
-                  </div>
-                </div>
-              )}
+              {/* User menu - Cloud mode or Demo mode */}
+              {(isCloud && user) || isDemo ? (
+                <UserMenu onExitDemo={onExitDemo} />
+              ) : null}
             </div>
           </div>
         </div>

@@ -1,136 +1,140 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Card } from '@/components/Card';
-import { Button } from '@/components/Button';
-import { Input } from '@/components/Input';
-import { Logo } from '@/components/Logo';
-import { QRScanner } from '@/components/QRScanner';
-import { useAppStore } from '@/lib/mode';
-import { 
-  Coffee, 
-  QrCode, 
-  Wifi, 
-  Check, 
-  ArrowRight,
-  Loader2,
-} from 'lucide-react';
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Card } from "@/components/Card";
+import { Button } from "@/components/Button";
+import { Input } from "@/components/Input";
+import { Logo } from "@/components/Logo";
+import { QRScanner } from "@/components/QRScanner";
+import { useAppStore } from "@/lib/mode";
+import { Coffee, QrCode, Wifi, Check, ArrowRight, Loader2 } from "lucide-react";
 
 export function Onboarding() {
   const navigate = useNavigate();
   const { claimDevice, fetchDevices } = useAppStore();
-  
-  const [step, setStep] = useState<'welcome' | 'scan' | 'manual' | 'success'>('welcome');
-  const [claimCode, setClaimCode] = useState('');
-  const [deviceName, setDeviceName] = useState('');
-  const [claiming, setClaiming] = useState(false);
-  const [error, setError] = useState('');
 
-    const handleClaim = async (code?: string) => {
+  const [step, setStep] = useState<"welcome" | "scan" | "manual" | "success">(
+    "welcome"
+  );
+  const [claimCode, setClaimCode] = useState("");
+  const [deviceName, setDeviceName] = useState("");
+  const [claiming, setClaiming] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleClaim = async (code?: string) => {
     const codeToUse = code || claimCode;
     if (!codeToUse) return;
-    
+
     setClaiming(true);
-    setError('');
-    
+    setError("");
+
     try {
       // Parse QR code URL or manual entry
-      let deviceId = '';
-      let token = '';
-      let manualCode = '';
-      
-      if (codeToUse.includes('?')) {
+      let deviceId = "";
+      let token = "";
+      let manualCode = "";
+
+      if (codeToUse.includes("?")) {
         // URL format
         try {
           const url = new URL(codeToUse);
-          deviceId = url.searchParams.get('id') || '';
-          token = url.searchParams.get('token') || '';
+          deviceId = url.searchParams.get("id") || "";
+          token = url.searchParams.get("token") || "";
         } catch {
           // Try parsing as query string
-          const params = new URLSearchParams(codeToUse.split('?')[1]);
-          deviceId = params.get('id') || '';
-          token = params.get('token') || '';
+          const params = new URLSearchParams(codeToUse.split("?")[1]);
+          deviceId = params.get("id") || "";
+          token = params.get("token") || "";
         }
-      } else if (codeToUse.includes(':')) {
+      } else if (codeToUse.includes(":")) {
         // Legacy format: DEVICE_ID:TOKEN
-        const parts = codeToUse.split(':');
+        const parts = codeToUse.split(":");
         deviceId = parts[0];
-        token = parts[1] || '';
+        token = parts[1] || "";
       } else if (/^[A-Z0-9]{4}-[A-Z0-9]{4}$/i.test(codeToUse.trim())) {
         // Short manual code format: X6ST-AP3G
         manualCode = codeToUse.trim().toUpperCase();
       } else {
-        setError('Invalid code format');
+        setError("Invalid code format");
         setClaiming(false);
         return;
       }
-      
+
       // If we have a manual code, use it directly (backend will resolve it)
       if (manualCode) {
-        const success = await claimDevice(manualCode, '', deviceName || undefined);
+        const success = await claimDevice(
+          manualCode,
+          "",
+          deviceName || undefined
+        );
         if (success) {
-          setStep('success');
+          setStep("success");
           await fetchDevices();
-          setTimeout(() => navigate('/'), 2000);
+          setTimeout(() => navigate("/"), 2000);
         } else {
-          setError('Invalid or expired code');
+          setError("Invalid or expired code");
         }
         setClaiming(false);
         return;
       }
-      
+
       if (!deviceId || !token) {
-        setError('Invalid code format');
+        setError("Invalid code format");
         setClaiming(false);
         return;
       }
-      
-      const success = await claimDevice(deviceId, token, deviceName || undefined);
-      
+
+      const success = await claimDevice(
+        deviceId,
+        token,
+        deviceName || undefined
+      );
+
       if (success) {
-        setStep('success');
+        setStep("success");
         await fetchDevices();
-        setTimeout(() => navigate('/'), 2000);
+        setTimeout(() => navigate("/"), 2000);
       } else {
-        setError('Failed to add device. The code may have expired.');
+        setError("Failed to add device. The code may have expired.");
       }
     } catch {
-      setError('An error occurred');
+      setError("An error occurred");
     }
-    
+
     setClaiming(false);
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-coffee-800 via-coffee-900 to-coffee-950 flex items-center justify-center p-4">
       <div className="w-full max-w-lg">
-        {step === 'welcome' && (
+        {step === "welcome" && (
           <Card className="text-center">
             <div className="py-8">
               <div className="flex justify-center mb-6">
                 <Logo size="lg" />
               </div>
-              
+
               <h1 className="text-3xl font-bold text-theme mb-2">
                 Welcome to BrewOS
               </h1>
               <p className="text-theme-muted mb-8 max-w-sm mx-auto">
-                Control your espresso machine from anywhere. Let's add your first machine.
+                Control your espresso machine from anywhere. Let's add your
+                first machine.
               </p>
 
               <div className="space-y-4">
-                <Button 
+                <Button
                   className="w-full py-4 text-lg"
-                  onClick={() => setStep('scan')}
+                  onClick={() => setStep("scan")}
                 >
                   <QrCode className="w-5 h-5" />
                   Scan QR Code
                 </Button>
-                
+
                 <p className="text-sm text-coffee-400">
-                  or{' '}
-                  <button 
+                  or{" "}
+                  <button
                     className="text-accent hover:underline"
-                    onClick={() => setStep('manual')}
+                    onClick={() => setStep("manual")}
                   >
                     enter code manually
                   </button>
@@ -140,7 +144,7 @@ export function Onboarding() {
           </Card>
         )}
 
-        {step === 'scan' && (
+        {step === "scan" && (
           <Card>
             <div className="text-center mb-4">
               <h2 className="text-2xl font-bold text-theme mb-2">
@@ -153,15 +157,19 @@ export function Onboarding() {
 
             {/* QR Scanner */}
             <div className="mb-4">
-              <QRScanner 
+              <QRScanner
                 onScan={(result) => {
                   setClaimCode(result);
                   // Auto-submit if valid URL
-                  if (result.includes('?') && result.includes('id=') && result.includes('token=')) {
+                  if (
+                    result.includes("?") &&
+                    result.includes("id=") &&
+                    result.includes("token=")
+                  ) {
                     handleClaim(result);
                   }
                 }}
-                onError={(err) => console.log('QR scan error:', err)}
+                onError={(err) => console.log("QR scan error:", err)}
               />
             </div>
 
@@ -173,7 +181,7 @@ export function Onboarding() {
             <div className="border-t border-theme pt-4 space-y-4">
               <Input
                 label="Or paste the pairing URL"
-                placeholder="https://brewos.app/pair?id=BRW-..."
+                placeholder="https://brewos.io/pair?id=BRW-..."
                 value={claimCode}
                 onChange={(e) => setClaimCode(e.target.value)}
               />
@@ -186,18 +194,20 @@ export function Onboarding() {
               />
 
               {error && (
-                <p className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">{error}</p>
+                <p className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">
+                  {error}
+                </p>
               )}
 
               <div className="flex gap-3">
-                <Button 
-                  variant="secondary" 
+                <Button
+                  variant="secondary"
                   className="flex-1"
-                  onClick={() => setStep('welcome')}
+                  onClick={() => setStep("welcome")}
                 >
                   Back
                 </Button>
-                <Button 
+                <Button
                   className="flex-1"
                   onClick={() => handleClaim()}
                   loading={claiming}
@@ -211,14 +221,15 @@ export function Onboarding() {
           </Card>
         )}
 
-        {step === 'manual' && (
+        {step === "manual" && (
           <Card>
             <div className="text-center mb-6">
               <h2 className="text-2xl font-bold text-coffee-900 mb-2">
                 Enter Pairing Code
               </h2>
               <p className="text-coffee-500">
-                Find the code on your BrewOS display under System → Cloud Access.
+                Find the code on your BrewOS display under System → Cloud
+                Access.
               </p>
             </div>
 
@@ -239,18 +250,20 @@ export function Onboarding() {
               />
 
               {error && (
-                <p className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">{error}</p>
+                <p className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">
+                  {error}
+                </p>
               )}
 
               <div className="flex gap-3">
-                <Button 
-                  variant="secondary" 
+                <Button
+                  variant="secondary"
                   className="flex-1"
-                  onClick={() => setStep('welcome')}
+                  onClick={() => setStep("welcome")}
                 >
                   Back
                 </Button>
-                <Button 
+                <Button
                   className="flex-1"
                   onClick={() => handleClaim()}
                   loading={claiming}
@@ -264,7 +277,7 @@ export function Onboarding() {
           </Card>
         )}
 
-        {step === 'success' && (
+        {step === "success" && (
           <Card className="text-center py-12">
             <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Check className="w-8 h-8 text-emerald-600" />
@@ -273,7 +286,7 @@ export function Onboarding() {
               Machine Added!
             </h2>
             <p className="text-coffee-500 mb-4">
-              {deviceName || 'Your machine'} is now connected to your account.
+              {deviceName || "Your machine"} is now connected to your account.
             </p>
             <div className="flex items-center justify-center gap-2 text-sm text-coffee-400">
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -283,9 +296,11 @@ export function Onboarding() {
         )}
 
         {/* How it works */}
-        {(step === 'welcome' || step === 'scan') && (
+        {(step === "welcome" || step === "scan") && (
           <div className="mt-8 text-center">
-            <h3 className="text-sm font-semibold text-cream-300 mb-4">How it works</h3>
+            <h3 className="text-sm font-semibold text-cream-300 mb-4">
+              How it works
+            </h3>
             <div className="grid grid-cols-3 gap-4 text-cream-400 text-xs">
               <div className="flex flex-col items-center gap-2">
                 <div className="w-10 h-10 bg-cream-800/30 rounded-full flex items-center justify-center">
@@ -312,4 +327,3 @@ export function Onboarding() {
     </div>
   );
 }
-

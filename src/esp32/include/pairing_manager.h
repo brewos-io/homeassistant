@@ -14,7 +14,7 @@ public:
     
     /**
      * Initialize the pairing manager
-     * @param cloudUrl The base URL of the cloud service (e.g., "https://brewos.app")
+     * @param cloudUrl The base URL of the cloud service (e.g., "https://brewos.io")
      */
     void begin(const String& cloudUrl = "");
     
@@ -27,7 +27,7 @@ public:
     
     /**
      * Get the current pairing URL for QR code
-     * Format: https://brewos.app/pair?id=DEVICE_ID&token=TOKEN
+     * Format: https://brewos.io/pair?id=DEVICE_ID&token=TOKEN
      * @return The pairing URL
      */
     String getPairingUrl() const;

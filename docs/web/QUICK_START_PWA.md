@@ -20,6 +20,7 @@ Quick setup guide for enabling PWA and push notifications in BrewOS.
 5. **Verify status** shows "Active"
 
 You'll now receive notifications for:
+
 - Machine ready to brew
 - Water tank empty
 - Maintenance reminders
@@ -30,16 +31,18 @@ You'll now receive notifications for:
 ### Cloud Server Setup
 
 1. **Generate VAPID keys:**
+
    ```bash
    cd src/cloud
    npx web-push generate-vapid-keys
    ```
 
 2. **Add to `.env` file:**
+
    ```env
    VAPID_PUBLIC_KEY=your-public-key-here
    VAPID_PRIVATE_KEY=your-private-key-here
-   VAPID_SUBJECT=mailto:admin@brewos.app
+   VAPID_SUBJECT=mailto:admin@brewos.io
    ```
 
 3. **Restart server:**
@@ -50,11 +53,13 @@ You'll now receive notifications for:
 ### ESP32 Configuration
 
 No additional configuration needed! The ESP32 automatically:
+
 - Sends notifications to cloud when configured
 - Respects user notification preferences
 - Handles errors gracefully
 
 **Requirements:**
+
 - Cloud URL configured in ESP32 settings
 - Device claimed by a user
 - WiFi connected
@@ -110,4 +115,3 @@ No additional configuration needed! The ESP32 automatically:
 - [PWA Documentation](./PWA.md) - Full PWA features and details
 - [Push Notifications Documentation](./Push_Notifications.md) - Complete push notification guide
 - [Cloud Push Notifications](../../cloud/Push_Notifications.md) - Server-side implementation
-
