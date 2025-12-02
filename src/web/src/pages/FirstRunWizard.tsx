@@ -132,15 +132,19 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
     setSaving(true);
     try {
       // Send to ESP32 via WebSocket with machine type
-      const sent = sendCommand("set_device_info", {
-        name: machineName,
-        machineBrand: selectedMachine.brand,
-        machineModel: selectedMachine.model,
-        machineType: selectedMachine.type,
-        machineId: selectedMachine.id,
-        defaultBrewTemp: selectedMachine.defaults.brewTemp,
-        defaultSteamTemp: selectedMachine.defaults.steamTemp,
-      }, { successMessage: 'Machine info saved' });
+      const sent = sendCommand(
+        "set_device_info",
+        {
+          name: machineName,
+          machineBrand: selectedMachine.brand,
+          machineModel: selectedMachine.model,
+          machineType: selectedMachine.type,
+          machineId: selectedMachine.id,
+          defaultBrewTemp: selectedMachine.defaults.brewTemp,
+          defaultSteamTemp: selectedMachine.defaults.steamTemp,
+        },
+        { successMessage: "Machine info saved" }
+      );
 
       if (sent) {
         // Also save via REST API for immediate persistence
@@ -158,7 +162,7 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
       }
     } catch (err) {
       console.error("Failed to save machine info:", err);
-      error('Failed to save machine info. Please try again.');
+      error("Failed to save machine info. Please try again.");
     }
     setSaving(false);
   };
