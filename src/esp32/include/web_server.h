@@ -23,7 +23,7 @@ public:
     void loop();
     
     // Send data to all WebSocket clients - Unified Status Broadcast
-    void broadcastFullStatus(const struct ui_state_t& machineState);  // Comprehensive status (periodic)
+    void broadcastFullStatus(const ui_state_t& machineState);  // Comprehensive status (periodic)
     void broadcastDeviceInfo();   // Device info (on connect only)
     void broadcastLog(const String& message, const String& level = "info");  // Log messages
     void broadcastEvent(const String& event, const JsonDocument* data = nullptr);  // Events (shot_start, shot_end, etc.)

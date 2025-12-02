@@ -42,7 +42,7 @@ export function LogViewer({ maxHeight = "max-h-64" }: LogViewerProps) {
           </div>
         ))
       ) : (
-        <p className="text-theme-muted text-center py-4">No logs yet</p>
+        <p className="text-theme-muted text-center py-4">No logs available</p>
       )}
     </div>
   );

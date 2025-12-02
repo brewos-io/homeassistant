@@ -18,7 +18,7 @@ export function ProgressIndicator({ steps, currentStep }: ProgressIndicatorProps
                   ? "bg-emerald-500 text-white"
                   : index === currentStep
                   ? "bg-accent text-white"
-                  : "bg-cream-700/30 text-cream-400"
+                  : "bg-theme-tertiary text-theme-muted"
               }`}
             >
               {index < currentStep ? <Check className="w-5 h-5" /> : step.icon}
@@ -26,7 +26,7 @@ export function ProgressIndicator({ steps, currentStep }: ProgressIndicatorProps
             {index < steps.length - 1 && (
               <div
                 className={`w-8 h-0.5 mx-1 transition-colors ${
-                  index < currentStep ? "bg-emerald-500" : "bg-cream-700/30"
+                  index < currentStep ? "bg-emerald-500" : "bg-theme-tertiary"
                 }`}
               />
             )}

@@ -309,6 +309,138 @@
   .stroke-accent {
     stroke: var(--accent);
   }
+  
+  /* ===== Semantic Status Colors (Theme-aware) ===== */
+  
+  /* Success (emerald) */
+  .bg-success-soft {
+    @apply bg-emerald-50;
+  }
+  .dark .bg-success-soft {
+    @apply bg-emerald-900/20;
+  }
+  .bg-success-tint {
+    @apply bg-emerald-500/10;
+  }
+  .dark .bg-success-tint {
+    @apply bg-emerald-500/20;
+  }
+  .text-success {
+    @apply text-emerald-600;
+  }
+  .dark .text-success {
+    @apply text-emerald-400;
+  }
+  .border-success {
+    @apply border-emerald-300;
+  }
+  .dark .border-success {
+    @apply border-emerald-700;
+  }
+  .border-success-strong {
+    @apply border-emerald-500;
+  }
+  
+  /* Warning (amber) */
+  .bg-warning-soft {
+    @apply bg-amber-50;
+  }
+  .dark .bg-warning-soft {
+    @apply bg-amber-900/20;
+  }
+  .bg-warning-tint {
+    @apply bg-amber-500/10;
+  }
+  .dark .bg-warning-tint {
+    @apply bg-amber-500/20;
+  }
+  .text-warning {
+    @apply text-amber-600;
+  }
+  .dark .text-warning {
+    @apply text-amber-400;
+  }
+  .border-warning {
+    @apply border-amber-300;
+  }
+  .dark .border-warning {
+    @apply border-amber-700;
+  }
+  .border-warning-strong {
+    @apply border-amber-500;
+  }
+  
+  /* Error (red) */
+  .bg-error-soft {
+    @apply bg-red-50;
+  }
+  .dark .bg-error-soft {
+    @apply bg-red-900/20;
+  }
+  .bg-error-tint {
+    @apply bg-red-500/10;
+  }
+  .dark .bg-error-tint {
+    @apply bg-red-500/20;
+  }
+  .text-error {
+    @apply text-red-600;
+  }
+  .dark .text-error {
+    @apply text-red-400;
+  }
+  .border-error {
+    @apply border-red-300;
+  }
+  .dark .border-error {
+    @apply border-red-700;
+  }
+  .border-error-strong {
+    @apply border-red-500;
+  }
+  
+  /* Info (blue) */
+  .bg-info-soft {
+    @apply bg-blue-50;
+  }
+  .dark .bg-info-soft {
+    @apply bg-blue-900/20;
+  }
+  .bg-info-tint {
+    @apply bg-blue-500/10;
+  }
+  .dark .bg-info-tint {
+    @apply bg-blue-500/20;
+  }
+  .text-info {
+    @apply text-blue-600;
+  }
+  .dark .text-info {
+    @apply text-blue-400;
+  }
+  .border-info {
+    @apply border-blue-300;
+  }
+  .dark .border-info {
+    @apply border-blue-700;
+  }
+  .border-info-strong {
+    @apply border-blue-500;
+  }
+  
+  /* Special (violet/purple for demo, etc.) */
+  .bg-special-tint {
+    @apply bg-violet-500/10;
+  }
+  .dark .bg-special-tint {
+    @apply bg-violet-500/20;
+  }
+  .border-special {
+    @apply border-violet-400/30;
+  }
+  .dark .border-special {
+    @apply border-violet-500/30;
+  }
 }
 
 /* Custom scrollbar */

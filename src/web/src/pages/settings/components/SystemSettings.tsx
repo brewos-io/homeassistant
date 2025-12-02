@@ -223,7 +223,7 @@ export function SystemSettings() {
                 />
                 <span
                   className={`font-semibold ${
-                    channel === "stable" ? "text-emerald-600" : "text-theme"
+                    channel === "stable" ? "text-success" : "text-theme"
                   }`}
                 >
                   Stable
@@ -250,7 +250,7 @@ export function SystemSettings() {
                 />
                 <span
                   className={`font-semibold ${
-                    channel === "beta" ? "text-amber-600" : "text-theme"
+                    channel === "beta" ? "text-warning" : "text-theme"
                   }`}
                 >
                   Beta
@@ -271,8 +271,8 @@ export function SystemSettings() {
               <div
                 className={`p-4 rounded-xl border ${
                   updateResult.hasStableUpdate
-                    ? "border-emerald-200 bg-emerald-50"
-                    : "border-theme bg-theme"
+                    ? "border-success bg-success-soft"
+                    : "border-theme bg-theme-secondary"
                 }`}
               >
                 <div className="flex items-start justify-between gap-4">
@@ -291,7 +291,7 @@ export function SystemSettings() {
                       {formatReleaseDate(updateResult.stable.releaseDate)}
                     </p>
                     {updateResult.hasStableUpdate ? (
-                      <p className="text-sm text-emerald-600 flex items-center gap-1">
+                      <p className="text-sm text-success flex items-center gap-1">
                         <Check className="w-4 h-4" />
                         Update available
                       </p>
@@ -331,8 +331,8 @@ export function SystemSettings() {
               <div
                 className={`p-4 rounded-xl border ${
                   updateResult.hasBetaUpdate
-                    ? "border-amber-200 bg-amber-50"
-                    : "border-theme bg-theme"
+                    ? "border-warning bg-warning-soft"
+                    : "border-theme bg-theme-secondary"
                 }`}
               >
                 <div className="flex items-start justify-between gap-4">
@@ -351,7 +351,7 @@ export function SystemSettings() {
                       {formatReleaseDate(updateResult.beta.releaseDate)}
                     </p>
                     {updateResult.hasBetaUpdate ? (
-                      <p className="text-sm text-amber-600 flex items-center gap-1">
+                      <p className="text-sm text-warning flex items-center gap-1">
                         <Check className="w-4 h-4" />
                         New beta available
                       </p>
@@ -362,9 +362,9 @@ export function SystemSettings() {
                     )}
 
                     {/* Beta Warning */}
-                    <div className="mt-3 p-2 bg-amber-100 rounded-lg flex items-start gap-2">
-                      <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                      <p className="text-xs text-amber-700">
+                    <div className="mt-3 p-2 bg-warning-soft rounded-lg flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 text-warning flex-shrink-0 mt-0.5" />
+                      <p className="text-xs text-warning">
                         Beta versions are for testing. They may contain bugs or
                         incomplete features.
                       </p>
@@ -491,7 +491,7 @@ export function SystemSettings() {
           </Button>
         </div>
 
-        <hr className="my-4 border-cream-200" />
+        <hr className="my-4 border-theme" />
 
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1">

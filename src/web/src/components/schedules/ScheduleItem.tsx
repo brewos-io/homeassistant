@@ -46,8 +46,8 @@ export function ScheduleItem({
         <div
           className={`p-2 rounded-lg ${
             schedule.action === "on"
-              ? "bg-emerald-500/20 text-emerald-500"
-              : "bg-orange-500/20 text-orange-500"
+              ? "bg-success-tint text-emerald-500"
+              : "bg-warning-tint text-orange-500"
           }`}
         >
           {schedule.action === "on" ? (

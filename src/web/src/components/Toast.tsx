@@ -110,9 +110,9 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
   };
 
   const bgColors = {
-    success: 'bg-emerald-500/10 border-emerald-500/20',
-    error: 'bg-red-500/10 border-red-500/20',
-    warning: 'bg-amber-500/10 border-amber-500/20',
+    success: 'bg-success-tint border-emerald-500/20',
+    error: 'bg-error-tint border-red-500/20',
+    warning: 'bg-warning-tint border-amber-500/20',
     loading: 'bg-accent/10 border-accent/20',
   };
 

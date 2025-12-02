@@ -205,7 +205,7 @@ export function MachineSettings() {
 
         {/* Machine not found notice */}
         {!selectedMachine && device.machineBrand && device.machineModel && (
-          <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
+          <div className="flex items-start gap-3 p-4 rounded-xl bg-warning-tint border border-warning-strong/20">
             <AlertCircle className="w-5 h-5 text-amber-500 mt-0.5 shrink-0" />
             <div className="text-sm">
               <p className="font-medium text-amber-500">

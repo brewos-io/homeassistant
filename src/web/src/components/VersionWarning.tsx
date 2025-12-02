@@ -50,7 +50,7 @@ export function VersionWarning({ dismissible = true, onDismiss }: VersionWarning
   // Critical errors (incompatible)
   if (!compatible && errors.length > 0) {
     return (
-      <div className="rounded-lg border border-red-500/50 bg-red-500/10 p-4 mb-4">
+      <div className="rounded-lg border border-error-strong/50 bg-error-tint p-4 mb-4">
         <div className="flex items-start gap-3">
           <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
@@ -87,7 +87,7 @@ export function VersionWarning({ dismissible = true, onDismiss }: VersionWarning
   // Non-critical warnings
   if (warnings.length > 0) {
     return (
-      <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-4 mb-4">
+      <div className="rounded-lg border border-warning-strong/50 bg-warning-tint p-4 mb-4">
         <div className="flex items-start gap-3">
           <Info className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">

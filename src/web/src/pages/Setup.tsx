@@ -82,8 +82,8 @@ export function Setup() {
 
         {status === 'success' ? (
           <div className="text-center py-8">
-            <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Check className="w-8 h-8 text-emerald-600" />
+            <div className="w-16 h-16 bg-success-soft rounded-full flex items-center justify-center mx-auto mb-4">
+              <Check className="w-8 h-8 text-success" />
             </div>
             <h2 className="text-xl font-bold text-coffee-900 mb-2">Connected!</h2>
             <p className="text-coffee-500 mb-4">
@@ -157,7 +157,7 @@ export function Setup() {
 
             {/* Error */}
             {status === 'error' && (
-              <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-xl text-sm">
+              <div className="mb-4 p-3 bg-error-soft text-error rounded-xl text-sm">
                 {errorMessage}
               </div>
             )}

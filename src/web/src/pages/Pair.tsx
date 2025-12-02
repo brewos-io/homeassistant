@@ -75,8 +75,8 @@ export function Pair() {
       <Card className="w-full max-w-md">
         {status === "success" ? (
           <div className="text-center py-8">
-            <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Check className="w-8 h-8 text-emerald-600" />
+            <div className="w-16 h-16 bg-success-soft rounded-full flex items-center justify-center mx-auto mb-4">
+              <Check className="w-8 h-8 text-success" />
             </div>
             <h2 className="text-xl font-bold text-coffee-900 mb-2">
               Device Paired!
@@ -85,8 +85,8 @@ export function Pair() {
           </div>
         ) : status === "error" ? (
           <div className="text-center py-8">
-            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <X className="w-8 h-8 text-red-600" />
+            <div className="w-16 h-16 bg-error-soft rounded-full flex items-center justify-center mx-auto mb-4">
+              <X className="w-8 h-8 text-error" />
             </div>
             <h2 className="text-xl font-bold text-coffee-900 mb-2">
               Pairing Failed

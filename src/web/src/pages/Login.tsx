@@ -62,13 +62,7 @@ export function Login() {
         </div>
 
         {error && (
-          <div
-            className={`mb-4 p-3 rounded-lg flex items-center gap-2 ${
-              isDark
-                ? "bg-red-900/30 border border-red-400/30 text-red-300"
-                : "bg-red-50 border border-red-200 text-red-700"
-            }`}
-          >
+          <div className="mb-4 p-3 rounded-lg flex items-center gap-2 bg-error-soft border border-error text-error">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span className="text-sm">{error}</span>
           </div>

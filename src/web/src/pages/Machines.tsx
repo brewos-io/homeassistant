@@ -298,12 +298,12 @@ export function Machines() {
                     <div
                       className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex-shrink-0 flex items-center justify-center ${
                         device.isOnline
-                          ? "bg-emerald-100 dark:bg-emerald-900/30"
+                          ? "bg-success-soft"
                           : "bg-theme-secondary"
                       }`}
                     >
                       {device.isOnline ? (
-                        <Wifi className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-600 dark:text-emerald-400" />
+                        <Wifi className="w-5 h-5 sm:w-6 sm:h-6 text-success" />
                       ) : (
                         <WifiOff className="w-5 h-5 sm:w-6 sm:h-6 text-theme-muted" />
                       )}
@@ -321,7 +321,7 @@ export function Machines() {
                         <span
                           className={
                             device.isOnline
-                              ? "text-emerald-600 dark:text-emerald-400"
+                              ? "text-success"
                               : ""
                           }
                         >
@@ -343,7 +343,7 @@ export function Machines() {
                         e.stopPropagation();
                         setDisconnectingDevice(device);
                       }}
-                      className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 flex items-center justify-center text-red-600 dark:text-red-400 transition-colors flex-shrink-0"
+                      className="w-10 h-10 rounded-xl bg-error-soft hover:bg-red-200 dark:hover:bg-red-900/50 flex items-center justify-center text-error transition-colors flex-shrink-0"
                     >
                       <X className="w-5 h-5" />
                     </button>
@@ -431,12 +431,12 @@ export function Machines() {
             </CardHeader>
 
             <div className="space-y-4">
-              <div className="bg-red-50 dark:bg-red-950/20 rounded-xl p-4">
-                <p className="text-sm text-red-800 dark:text-red-200">
+              <div className="bg-error-soft rounded-xl p-4">
+                <p className="text-sm text-error">
                   Are you sure you want to remove{" "}
                   <strong>{disconnectingDevice.name}</strong> from your account?
                 </p>
-                <p className="text-xs text-red-600 dark:text-red-400 mt-2">
+                <p className="text-xs text-error mt-2 opacity-80">
                   You will no longer be able to control this machine remotely.
                   You can re-add it later by scanning the QR code on your
                   machine.

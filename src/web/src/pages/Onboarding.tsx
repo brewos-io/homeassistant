@@ -194,7 +194,7 @@ export function Onboarding() {
               />
 
               {error && (
-                <p className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">
+                <p className="text-sm text-error bg-error-soft p-3 rounded-lg">
                   {error}
                 </p>
               )}
@@ -250,7 +250,7 @@ export function Onboarding() {
               />
 
               {error && (
-                <p className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">
+                <p className="text-sm text-error bg-error-soft p-3 rounded-lg">
                   {error}
                 </p>
               )}
@@ -279,8 +279,8 @@ export function Onboarding() {
 
         {step === "success" && (
           <Card className="text-center py-12">
-            <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Check className="w-8 h-8 text-emerald-600" />
+            <div className="w-16 h-16 bg-success-soft rounded-full flex items-center justify-center mx-auto mb-4">
+              <Check className="w-8 h-8 text-success" />
             </div>
             <h2 className="text-2xl font-bold text-coffee-900 mb-2">
               Machine Added!

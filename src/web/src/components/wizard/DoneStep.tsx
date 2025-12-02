@@ -7,8 +7,8 @@ interface DoneStepProps {
 export function DoneStep({ machineName }: DoneStepProps) {
   return (
     <div className="text-center py-12">
-      <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6">
-        <Check className="w-10 h-10 text-emerald-600" />
+      <div className="w-20 h-20 bg-success-soft rounded-full flex items-center justify-center mx-auto mb-6">
+        <Check className="w-10 h-10 text-success" />
       </div>
       <h2 className="text-3xl font-bold text-coffee-900 mb-3">You're All Set!</h2>
       <p className="text-coffee-500 max-w-sm mx-auto mb-8">

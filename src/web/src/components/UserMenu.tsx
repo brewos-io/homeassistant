@@ -198,7 +198,7 @@ export function UserMenu({ onExitDemo }: UserMenuProps) {
               className={
                 isDemo
                   ? "w-full flex items-center gap-3 px-4 py-3 dropdown-item hover:bg-theme-secondary text-theme-secondary transition-colors"
-                  : "w-full flex items-center gap-3 px-4 py-3 dropdown-item hover:bg-red-50 dark:hover:bg-red-950/20 text-red-600 transition-colors"
+                  : "w-full flex items-center gap-3 px-4 py-3 dropdown-item hover:bg-error-soft text-error transition-colors"
               }
               role="menuitem"
             >
@@ -206,7 +206,7 @@ export function UserMenu({ onExitDemo }: UserMenuProps) {
                 className={
                   isDemo
                     ? "w-9 h-9 rounded-xl bg-theme-secondary flex items-center justify-center"
-                    : "w-9 h-9 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center"
+                    : "w-9 h-9 rounded-xl bg-error-soft flex items-center justify-center"
                 }
               >
                 <LogOut className="w-5 h-5" />

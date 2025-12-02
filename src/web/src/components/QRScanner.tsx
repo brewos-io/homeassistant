@@ -116,9 +116,9 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
 
       {/* Error state */}
       {error && (
-        <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl text-center">
-          <CameraOff className="w-8 h-8 text-red-400 mx-auto mb-2" />
-          <p className="text-sm text-red-600 mb-3">{error}</p>
+        <div className="mt-4 p-4 bg-error-soft border border-error rounded-xl text-center">
+          <CameraOff className="w-8 h-8 text-error mx-auto mb-2" />
+          <p className="text-sm text-error mb-3">{error}</p>
           <Button 
             variant="secondary" 
             size="sm" 
@@ -132,11 +132,11 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
 
       {/* Permission denied instructions */}
       {hasPermission === false && (
-        <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-          <p className="text-sm text-amber-800 mb-2 font-medium">
+        <div className="mt-4 p-4 bg-warning-soft border border-warning rounded-xl">
+          <p className="text-sm text-warning mb-2 font-medium">
             To scan QR codes, allow camera access:
           </p>
-          <ol className="text-xs text-amber-700 space-y-1 list-decimal list-inside">
+          <ol className="text-xs text-warning space-y-1 list-decimal list-inside">
             <li>Click the camera/lock icon in your browser's address bar</li>
             <li>Allow camera permissions for this site</li>
             <li>Refresh the page or click "Try Again"</li>

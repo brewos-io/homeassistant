@@ -25,7 +25,7 @@ export function MaintenanceCard({
     <div
       className={`p-4 rounded-xl ${
         isOverdue
-          ? "bg-amber-500/10 border border-amber-500/30"
+          ? "bg-warning-tint border border-warning-strong/30"
           : "bg-theme-secondary"
       }`}
     >

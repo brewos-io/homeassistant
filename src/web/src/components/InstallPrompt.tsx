@@ -219,7 +219,7 @@ function IOSInstallModal({ onClose }: { onClose: () => void }) {
 
           {/* Step 3 */}
           <div className="flex items-start gap-4">
-            <div className="w-8 h-8 bg-emerald-500/10 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+            <div className="w-8 h-8 bg-success-tint rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
               <Check className="w-4 h-4 text-emerald-500" />
             </div>
             <div className="flex-1">
