@@ -44,6 +44,7 @@ export function TemperatureSettings() {
   const isHeatExchanger = device.machineType === 'heat_exchanger';
 
   const saveTemps = () => {
+    if (saving) return; // Prevent double-click
     setSaving(true);
     
     // Convert back to Celsius before sending to backend
@@ -55,11 +56,12 @@ export function TemperatureSettings() {
       success = sendCommand('set_temp', { boiler: 'brew', temp: brewTempCelsius });
     }
     if (success && (isDualBoiler || isHeatExchanger || !device.machineType)) {
-      success = sendCommand('set_temp', { boiler: 'steam', temp: steamTempCelsius }, 
+      sendCommand('set_temp', { boiler: 'steam', temp: steamTempCelsius }, 
         { successMessage: 'Temperatures saved' });
     }
     
-    setSaving(false);
+    // Brief visual feedback for fire-and-forget WebSocket command
+    setTimeout(() => setSaving(false), 600);
   };
 
   // Determine what controls to show based on machine type
@@ -120,7 +122,7 @@ export function TemperatureSettings() {
       </div>
 
       <div className="flex justify-end">
-        <Button onClick={saveTemps} loading={saving}>Save Temperatures</Button>
+        <Button onClick={saveTemps} loading={saving} disabled={saving}>Save Temperatures</Button>
       </div>
     </Card>
   );

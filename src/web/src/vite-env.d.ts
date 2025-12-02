@@ -6,5 +6,6 @@ declare const __CLOUD__: boolean;
 // Google Analytics
 interface Window {
   dataLayer: unknown[];
+  gtag: (...args: unknown[]) => void;
 }
 

@@ -94,7 +94,9 @@ export function CloudSettings() {
   };
 
   const saveSettings = () => {
+    if (saving) return; // Prevent double-click
     setSaving(true);
+    
     const success = sendCommand('set_cloud_config', {
       enabled: cloudEnabled,
       serverUrl: cloudUrl,
@@ -107,7 +109,9 @@ export function CloudSettings() {
         serverUrl: cloudUrl,
       });
     }
-    setSaving(false);
+    
+    // Brief visual feedback for fire-and-forget WebSocket command
+    setTimeout(() => setSaving(false), 600);
   };
 
   const fetchCloudStatus = async () => {
@@ -285,7 +289,7 @@ export function CloudSettings() {
                 disabled={!cloudEnabled}
               />
               <div className="flex justify-end">
-                <Button onClick={saveSettings} loading={saving} disabled={!cloudEnabled && !cloudConfig?.enabled}>
+                <Button onClick={saveSettings} loading={saving} disabled={saving || (!cloudEnabled && !cloudConfig?.enabled)}>
                   Save Settings
                 </Button>
               </div>

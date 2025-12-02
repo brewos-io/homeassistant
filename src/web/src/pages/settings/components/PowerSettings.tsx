@@ -44,16 +44,19 @@ export function PowerSettings() {
   const ecoTempMax = convertFromCelsius(90, temperatureUnit);
 
   const savePower = () => {
+    if (savingPower) return; // Prevent double-click
     setSavingPower(true);
     sendCommand(
       "set_power",
       { voltage, maxCurrent },
       { successMessage: "Power settings saved" }
     );
-    setSavingPower(false);
+    // Brief visual feedback for fire-and-forget WebSocket command
+    setTimeout(() => setSavingPower(false), 600);
   };
 
   const saveEco = () => {
+    if (savingEco) return; // Prevent double-click
     setSavingEco(true);
     // Convert display value back to Celsius for backend
     const brewTempCelsius = convertToCelsius(
@@ -65,7 +68,8 @@ export function PowerSettings() {
       { brewTemp: brewTempCelsius, timeout: ecoTimeout },
       { successMessage: "Eco settings saved" }
     );
-    setSavingEco(false);
+    // Brief visual feedback for fire-and-forget WebSocket command
+    setTimeout(() => setSavingEco(false), 600);
   };
 
   return (
@@ -104,7 +108,7 @@ export function PowerSettings() {
         </div>
 
         <div className="flex justify-end">
-          <Button onClick={saveEco} loading={savingEco}>
+          <Button onClick={saveEco} loading={savingEco} disabled={savingEco}>
             Save Eco Settings
           </Button>
         </div>
@@ -145,7 +149,7 @@ export function PowerSettings() {
         </div>
 
         <div className="flex justify-end">
-          <Button onClick={savePower} loading={savingPower}>
+          <Button onClick={savePower} loading={savingPower} disabled={savingPower}>
             Save Power Settings
           </Button>
         </div>

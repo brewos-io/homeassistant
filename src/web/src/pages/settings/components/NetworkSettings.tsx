@@ -27,15 +27,18 @@ export function NetworkSettings() {
   const [savingMqtt, setSavingMqtt] = useState(false);
 
   const testMqtt = () => {
+    if (testingMqtt) return;
     setTestingMqtt(true);
     sendCommand('mqtt_test', mqttConfig);
     setTimeout(() => setTestingMqtt(false), 3000);
   };
 
   const saveMqtt = () => {
+    if (savingMqtt) return; // Prevent double-click
     setSavingMqtt(true);
     sendCommand('mqtt_config', mqttConfig, { successMessage: 'MQTT settings saved' });
-    setSavingMqtt(false);
+    // Brief visual feedback for fire-and-forget WebSocket command
+    setTimeout(() => setSavingMqtt(false), 600);
   };
 
   const forgetWifi = () => {
@@ -160,7 +163,7 @@ export function NetworkSettings() {
           <Button variant="secondary" onClick={testMqtt} loading={testingMqtt}>
             {testingMqtt ? 'Testing...' : 'Test Connection'}
           </Button>
-          <Button onClick={saveMqtt} loading={savingMqtt}>Save MQTT Settings</Button>
+          <Button onClick={saveMqtt} loading={savingMqtt} disabled={savingMqtt}>Save MQTT Settings</Button>
         </div>
       </Card>
     </>
