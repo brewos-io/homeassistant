@@ -1497,7 +1497,8 @@ void WebServer::broadcastFullStatus(const ui_state_t& state) {
     static uint32_t lastShotTimestamp = 0;
     static bool wasOn = false;
     
-    bool isOn = state.machine_state >= UI_STATE_HEATING && state.machine_state <= UI_STATE_ECO;
+    // Machine is "on" when in active states (heating through cooldown)
+    bool isOn = state.machine_state >= UI_STATE_HEATING && state.machine_state <= UI_STATE_COOLDOWN;
     
     // Track when machine turns on
     if (isOn && !wasOn) {
@@ -1529,8 +1530,8 @@ void WebServer::broadcastFullStatus(const ui_state_t& state) {
         case UI_STATE_BREWING: stateStr = "brewing"; break;
         case UI_STATE_STEAMING: stateStr = "steaming"; break;
         case UI_STATE_COOLDOWN: stateStr = "cooldown"; break;
-        case UI_STATE_ECO: stateStr = "eco"; break;
         case UI_STATE_FAULT: stateStr = "fault"; break;
+        case UI_STATE_SAFE: stateStr = "safe"; break;
     }
     machine["state"] = stateStr;
     
@@ -1538,8 +1539,6 @@ void WebServer::broadcastFullStatus(const ui_state_t& state) {
     const char* modeStr = "standby";
     if (state.machine_state >= UI_STATE_HEATING && state.machine_state <= UI_STATE_COOLDOWN) {
         modeStr = "on";
-    } else if (state.machine_state == UI_STATE_ECO) {
-        modeStr = "eco";
     }
     machine["mode"] = modeStr;
     machine["isHeating"] = state.is_heating;

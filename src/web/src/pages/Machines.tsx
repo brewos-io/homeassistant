@@ -318,13 +318,7 @@ export function Machines() {
                         )}
                       </div>
                       <div className="flex items-center gap-2 text-sm text-theme-muted">
-                        <span
-                          className={
-                            device.isOnline
-                              ? "text-success"
-                              : ""
-                          }
-                        >
+                        <span className={device.isOnline ? "text-success" : ""}>
                           {device.isOnline ? "Online" : "Offline"}
                         </span>
                         {device.firmwareVersion && (
