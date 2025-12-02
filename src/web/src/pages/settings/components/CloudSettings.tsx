@@ -26,6 +26,7 @@ interface PairingData {
   token: string;
   url: string;
   expiresIn: number;
+  manualCode?: string; // Short code like "X6ST-AP3G" for manual entry
 }
 
 interface CloudStatus {
@@ -40,6 +41,7 @@ const DEMO_PAIRING: PairingData = {
   token: 'demo-token-abc123',
   url: 'https://cloud.brewos.io/pair?device=DEMO-ECM-001&token=demo-token-abc123',
   expiresIn: 300,
+  manualCode: 'X6ST-AP3G',
 };
 
 const DEMO_CLOUD_STATUS: CloudStatus = {
@@ -117,7 +119,7 @@ export function CloudSettings() {
 
   const copyPairingCode = () => {
     if (pairing) {
-      const code = `${pairing.deviceId}:${pairing.token}`;
+      const code = pairing.manualCode || `${pairing.deviceId}:${pairing.token}`;
       navigator.clipboard.writeText(code);
       setCopiedCode(true);
       setTimeout(() => setCopiedCode(false), 2000);
@@ -260,8 +262,8 @@ export function CloudSettings() {
             <div className="mt-4 pt-4 border-t border-theme">
               <h3 className="text-sm font-medium text-theme mb-2">Manual Pairing Code</h3>
               <div className="flex items-center gap-2">
-                <code className="flex-1 bg-theme-secondary px-3 py-2 rounded-lg text-xs font-mono text-theme-secondary break-all">
-                  {pairing.deviceId}:{pairing.token}
+                <code className="flex-1 bg-theme-secondary px-4 py-3 rounded-lg text-lg font-mono text-theme tracking-wider text-center">
+                  {pairing.manualCode || `${pairing.deviceId}:${pairing.token.substring(0, 8)}...`}
                 </code>
                 <Button variant="secondary" size="sm" onClick={copyPairingCode}>
                   {copiedCode ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}

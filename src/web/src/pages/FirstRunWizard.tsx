@@ -73,7 +73,8 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
 
   const copyPairingCode = () => {
     if (pairing) {
-      navigator.clipboard.writeText(`${pairing.deviceId}:${pairing.token}`);
+      const code = pairing.manualCode || `${pairing.deviceId}:${pairing.token}`;
+      navigator.clipboard.writeText(code);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }

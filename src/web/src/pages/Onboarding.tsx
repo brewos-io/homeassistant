@@ -25,7 +25,7 @@ export function Onboarding() {
   const [claiming, setClaiming] = useState(false);
   const [error, setError] = useState('');
 
-  const handleClaim = async (code?: string) => {
+    const handleClaim = async (code?: string) => {
     const codeToUse = code || claimCode;
     if (!codeToUse) return;
     
@@ -36,6 +36,7 @@ export function Onboarding() {
       // Parse QR code URL or manual entry
       let deviceId = '';
       let token = '';
+      let manualCode = '';
       
       if (codeToUse.includes('?')) {
         // URL format
@@ -50,12 +51,29 @@ export function Onboarding() {
           token = params.get('token') || '';
         }
       } else if (codeToUse.includes(':')) {
-        // Manual format: DEVICE_ID:TOKEN
+        // Legacy format: DEVICE_ID:TOKEN
         const parts = codeToUse.split(':');
         deviceId = parts[0];
         token = parts[1] || '';
+      } else if (/^[A-Z0-9]{4}-[A-Z0-9]{4}$/i.test(codeToUse.trim())) {
+        // Short manual code format: X6ST-AP3G
+        manualCode = codeToUse.trim().toUpperCase();
       } else {
-        setError('Invalid code format. Scan QR or enter DEVICE_ID:TOKEN');
+        setError('Invalid code format');
+        setClaiming(false);
+        return;
+      }
+      
+      // If we have a manual code, use it directly (backend will resolve it)
+      if (manualCode) {
+        const success = await claimDevice(manualCode, '', deviceName || undefined);
+        if (success) {
+          setStep('success');
+          await fetchDevices();
+          setTimeout(() => navigate('/'), 2000);
+        } else {
+          setError('Invalid or expired code');
+        }
         setClaiming(false);
         return;
       }
@@ -207,10 +225,10 @@ export function Onboarding() {
             <div className="space-y-4">
               <Input
                 label="Pairing Code"
-                placeholder="BRW-XXXXXXXX:token..."
+                placeholder="X6ST-AP3G"
                 value={claimCode}
-                onChange={(e) => setClaimCode(e.target.value)}
-                hint="Format: DEVICE_ID:TOKEN or full URL"
+                onChange={(e) => setClaimCode(e.target.value.toUpperCase())}
+                hint="Enter the 8-character code from your machine display"
               />
 
               <Input

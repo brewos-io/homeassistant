@@ -63,17 +63,39 @@ export function Devices() {
       // Parse QR code URL or manual entry
       let deviceId = '';
       let token = '';
+      let manualCode = '';
       
       if (claimCode.includes('?')) {
         // URL format
         const url = new URL(claimCode);
         deviceId = url.searchParams.get('id') || '';
         token = url.searchParams.get('token') || '';
-      } else {
-        // Manual format: DEVICE_ID:TOKEN
+      } else if (claimCode.includes(':')) {
+        // Legacy format: DEVICE_ID:TOKEN
         const parts = claimCode.split(':');
         deviceId = parts[0];
         token = parts[1] || '';
+      } else if (/^[A-Z0-9]{4}-[A-Z0-9]{4}$/i.test(claimCode.trim())) {
+        // Short manual code format: X6ST-AP3G
+        manualCode = claimCode.trim().toUpperCase();
+      } else {
+        setClaimError('Invalid code format');
+        setClaiming(false);
+        return;
+      }
+      
+      // If we have a manual code, use it directly (backend will resolve it)
+      if (manualCode) {
+        const success = await claimDevice(manualCode, '', deviceName || undefined);
+        if (success) {
+          setShowAddModal(false);
+          setClaimCode('');
+          setDeviceName('');
+        } else {
+          setClaimError('Invalid or expired code');
+        }
+        setClaiming(false);
+        return;
       }
       
       if (!deviceId || !token) {
@@ -271,9 +293,9 @@ export function Devices() {
 
               <Input
                 label="Pairing Code"
-                placeholder="Paste URL or enter DEVICE_ID:TOKEN"
+                placeholder="X6ST-AP3G"
                 value={claimCode}
-                onChange={(e) => setClaimCode(e.target.value)}
+                onChange={(e) => setClaimCode(e.target.value.toUpperCase())}
               />
 
               <Input

@@ -74,8 +74,8 @@ function PairingQRCode({ pairing, copied, onCopy }: PairingQRCodeProps) {
 
       <div className="w-full max-w-xs">
         <div className="flex items-center gap-2">
-          <code className="flex-1 bg-white px-3 py-2 rounded-lg text-xs font-mono text-coffee-600 text-center">
-            {pairing.deviceId}:{pairing.token.substring(0, 8)}...
+          <code className="flex-1 bg-white px-4 py-3 rounded-lg text-lg font-mono text-coffee-700 text-center tracking-wider">
+            {pairing.manualCode || `${pairing.deviceId.substring(0, 8)}`}
           </code>
           <Button variant="secondary" size="sm" onClick={onCopy}>
             {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
