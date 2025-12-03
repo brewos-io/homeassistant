@@ -1175,7 +1175,7 @@ void WebServer::handleWsMessage(AsyncWebSocketClient* client, uint8_t* data, siz
             uint8_t modeCmd = 0;
             
             // Check for optional heating strategy parameter
-            if (doc.containsKey("strategy") && mode == "on") {
+            if (!doc["strategy"].isNull() && mode == "on") {
                 uint8_t strategy = doc["strategy"].as<uint8_t>();
                 if (strategy <= 3) {  // Valid strategy range: 0-3
                     // Set heating strategy first
