@@ -311,11 +311,22 @@ export const useAppStore = create<AppState>()(
               startTokenRefreshMonitor(get());
             } else {
               // Session was cleared (invalid token) - user needs to re-login
-              set({ authLoading: false, initialized: true });
+              set({
+                user: null,
+                session: null,
+                authLoading: false,
+                initialized: true,
+              });
             }
           }
         } else {
-          set({ authLoading: false, initialized: true });
+          // No session exists
+          set({
+            user: null,
+            session: null,
+            authLoading: false,
+            initialized: true,
+          });
         }
       },
 
