@@ -494,3 +494,96 @@ make
 - **Heat Exchanger** (`control_heat_exchanger.c`) - Three modes: Temperature PID, Pressure PID, or Pressurestat (monitor only)
 
 Build all types with `cmake .. -DBUILD_ALL_MACHINES=ON` or a single type with `-DMACHINE_TYPE=<TYPE>`.
+
+---
+
+## Future Roadmap
+
+Features planned for future releases, organized by priority and complexity.
+
+### Brewing Enhancements
+
+| Feature                    | Priority | Complexity | Description                                                                 |
+| -------------------------- | -------- | ---------- | --------------------------------------------------------------------------- |
+| **Shot Profiling**         | High     | High       | Pressure/flow profiles during extraction (pre-infusion ramp, peak, decline) |
+| **Pressure Profiling**     | High     | High       | Variable pressure curves: flat, declining, bloom, custom profiles           |
+| **Flow Profiling**         | High     | High       | Target flow rate curves during extraction                                   |
+| **Gear Pump Support**      | High     | Medium     | Variable speed pump control for flow/pressure profiling                     |
+| **Flow Meter Integration** | High     | Medium     | Gicar-style flow meters for precise volumetric dosing                       |
+| **Recipe Management**      | Medium   | Medium     | Save/recall shot recipes (temp, pressure profile, dose, yield)              |
+| **Shot Replication**       | Medium   | High       | Replay successful shots with same parameters                                |
+| **Auto-Purge**             | Low      | Low        | Automatic group head flush before/after shots                               |
+
+### Hardware Support
+
+| Feature                        | Priority | Complexity | Description                                                             |
+| ------------------------------ | -------- | ---------- | ----------------------------------------------------------------------- |
+| **Gear Pump Control**          | High     | Medium     | PWM/analog control for variable-speed gear pumps (Fluid-o-Tech, Procon) |
+| **Dimmer/Triac Control**       | Medium   | Medium     | Vibratory pump speed control via phase-angle dimming                    |
+| **Flow Meter Driver**          | High     | Low        | Pulse counting for Hall-effect flow meters                              |
+| **Grinder Integration**        | Medium   | Medium     | Start/stop grinder, single-dose workflow                                |
+| **Thermoblock Support**        | Low      | High       | Flow heater control for on-demand machines                              |
+| **Additional Scale Protocols** | Low      | Low        | Hiroia Jimmy, Brewista, generic HX711 scales                            |
+| **Rotary Pump Control**        | Medium   | Medium     | Bypass valve or VFD control for rotary pumps                            |
+
+### Smart Features
+
+| Feature                | Priority | Complexity | Description                                                          |
+| ---------------------- | -------- | ---------- | -------------------------------------------------------------------- |
+| **PID Auto-Tune**      | Medium   | High       | Automatic PID parameter optimization (Ziegler-Nichols, relay method) |
+| **Shot Analytics**     | Medium   | Medium     | Extraction analysis, channeling detection, shot scoring              |
+| **User Profiles**      | Medium   | Medium     | Per-user temperature/recipe preferences                              |
+| **Voice Control**      | Low      | Medium     | Alexa/Google Home/HomeKit integration                                |
+| **Predictive Heating** | Low      | High       | ML-based pre-heating based on usage patterns                         |
+| **Data Export**        | Medium   | Low        | CSV/JSON export of shot history for external analysis                |
+
+### Advanced Temperature Control
+
+| Feature                       | Priority | Complexity | Description                                          |
+| ----------------------------- | -------- | ---------- | ---------------------------------------------------- |
+| **Temperature Profiling**     | Medium   | Medium     | Variable brew temp during extraction                 |
+| **Group Head PID**            | Medium   | Medium     | Active group head temperature control (heated group) |
+| **Temperature Surfing**       | Low      | Low        | HX flush timing recommendations                      |
+| **Thermal Stability Scoring** | Low      | Medium     | Rate temperature stability before brewing            |
+
+### Connectivity & Integration
+
+| Feature                | Priority | Complexity | Description                               |
+| ---------------------- | -------- | ---------- | ----------------------------------------- |
+| **Apple HomeKit**      | Medium   | Medium     | Native HomeKit integration via HAP        |
+| **Matter Support**     | Low      | High       | Matter/Thread smart home protocol         |
+| **Bluetooth Remote**   | Low      | Low        | Simple BLE remote for basic control       |
+| **Multi-Machine Sync** | Low      | High       | Coordinate multiple machines (café setup) |
+
+### Maintenance & Diagnostics
+
+| Feature                    | Priority | Complexity | Description                                  |
+| -------------------------- | -------- | ---------- | -------------------------------------------- |
+| **Predictive Maintenance** | Medium   | High       | Component wear tracking, service predictions |
+| **Diagnostic Mode**        | Medium   | Medium     | Comprehensive self-test and reporting        |
+| **Remote Diagnostics**     | Low      | Medium     | Cloud-based troubleshooting support          |
+| **Component Hour Meters**  | Low      | Low        | Track runtime for pump, heaters, solenoids   |
+
+---
+
+### Implementation Notes
+
+**Gear Pump Support:**
+
+- Requires PWM output (GPIO + MOSFET driver) or 0-10V analog output
+- Flow meter feedback for closed-loop control
+- Soft start/stop ramps to prevent pressure spikes
+- Compatible pumps: Fluid-o-Tech MG200-series, Procon
+
+**Shot Profiling:**
+
+- Requires either gear pump OR pressure transducer feedback with vibratory pump
+- Profile storage in flash (10-20 profiles)
+- Real-time profile interpolation in control loop
+- WebSocket streaming for live profile visualization
+
+**Flow Meter Integration:**
+
+- Hall-effect sensors: pulse counting via GPIO interrupt
+- Typical: 0.5-2.0 mL/pulse calibration
+- Integration with brew-by-volume (alternative to brew-by-weight)
