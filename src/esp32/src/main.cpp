@@ -200,6 +200,14 @@ void setup() {
         machineState.target_weight = weight;
     });
     
+    ui.onWifiSetup([]() {
+        LOG_I("UI: WiFi setup requested - resetting to DHCP and starting AP mode");
+        // Reset static IP to DHCP before starting AP mode
+        wifiManager.setStaticIP(false);
+        // Start AP mode for network configuration
+        wifiManager.startAP();
+    });
+    
     // Initialize Pico UART
     picoUart.begin();
     

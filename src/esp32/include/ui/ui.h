@@ -123,6 +123,7 @@ typedef void (*ui_set_temp_callback_t)(bool is_steam, float temp);
 typedef void (*ui_set_strategy_callback_t)(heating_strategy_t strategy);
 typedef void (*ui_tare_scale_callback_t)(void);
 typedef void (*ui_set_target_weight_callback_t)(float weight);
+typedef void (*ui_wifi_setup_callback_t)(void);
 
 // =============================================================================
 // UI Manager Class
@@ -175,6 +176,11 @@ public:
     void clearAlarm();
     
     /**
+     * Trigger WiFi setup mode (resets to DHCP and starts AP)
+     */
+    void triggerWifiSetup();
+    
+    /**
      * Handle encoder rotation
      * @param direction: positive = CW, negative = CCW
      */
@@ -202,6 +208,7 @@ public:
     void onSetStrategy(ui_set_strategy_callback_t cb) { _onSetStrategy = cb; }
     void onTareScale(ui_tare_scale_callback_t cb) { _onTareScale = cb; }
     void onSetTargetWeight(ui_set_target_weight_callback_t cb) { _onSetTargetWeight = cb; }
+    void onWifiSetup(ui_wifi_setup_callback_t cb) { _onWifiSetup = cb; }
 
 private:
     screen_id_t _currentScreen;
@@ -215,6 +222,7 @@ private:
     ui_set_strategy_callback_t _onSetStrategy;
     ui_tare_scale_callback_t _onTareScale;
     ui_set_target_weight_callback_t _onSetTargetWeight;
+    ui_wifi_setup_callback_t _onWifiSetup;
     
     // Screen objects
     lv_obj_t* _screens[SCREEN_COUNT];

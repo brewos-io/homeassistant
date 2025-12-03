@@ -41,7 +41,8 @@ UI::UI()
     , _onSetTemp(nullptr)
     , _onSetStrategy(nullptr)
     , _onTareScale(nullptr)
-    , _onSetTargetWeight(nullptr) {
+    , _onSetTargetWeight(nullptr)
+    , _onWifiSetup(nullptr) {
     
     // Initialize state
     memset(&_state, 0, sizeof(_state));
@@ -213,6 +214,15 @@ void UI::showAlarm(uint8_t code, const char* message) {
 void UI::clearAlarm() {
     screen_alarm_clear();
     showScreen(_previousScreen);
+}
+
+void UI::triggerWifiSetup() {
+    // Call the callback to reset static IP to DHCP and start AP mode
+    if (_onWifiSetup) {
+        _onWifiSetup();
+    }
+    // Show the setup screen
+    showScreen(SCREEN_SETUP);
 }
 
 void UI::handleEncoder(int direction) {
@@ -428,8 +438,8 @@ void UI::createSettingsScreen() {
     screen_settings_set_select_callback([](settings_item_t item) {
         switch (item) {
             case SETTINGS_WIFI:
-                // Enter WiFi setup mode
-                ui.showScreen(SCREEN_SETUP);
+                // Enter WiFi setup mode - callback will reset to DHCP and start AP
+                ui.triggerWifiSetup();
                 break;
             case SETTINGS_SCALE:
                 // Connect to scale
