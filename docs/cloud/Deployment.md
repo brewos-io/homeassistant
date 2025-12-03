@@ -2,6 +2,36 @@
 
 This guide covers deploying the BrewOS cloud service.
 
+## Quick Start: Automated Setup
+
+For a fresh Ubuntu/Debian server, use the automated setup script:
+
+```bash
+# SSH into your server, then run:
+curl -sSL https://raw.githubusercontent.com/mizrachiran/brewos/main/scripts/setup-server.sh | \
+  bash -s -- \
+    --domain cloud.example.com \
+    --google-client-id "your-google-client-id.apps.googleusercontent.com" \
+    --email "admin@example.com"
+```
+
+This script automatically:
+- Updates the system and installs dependencies
+- Configures firewall (UFW) and fail2ban
+- Installs Docker and Caddy (reverse proxy with auto-HTTPS)
+- Clones the repository and builds the application
+- Creates Docker volumes for data persistence
+- Starts the service with health checks
+
+For staging servers, add `--staging`:
+```bash
+./scripts/setup-server.sh --domain staging.example.com --google-client-id "..." --email "..." --staging
+```
+
+## Manual Setup
+
+If you prefer manual setup, follow the sections below.
+
 ## Prerequisites
 
 1. Build the web UI:
@@ -171,3 +201,79 @@ The SQLite database is stored in `DATA_DIR/brewos.db`. Ensure this directory is:
 - Mounted as a volume in Docker
 - Backed up regularly
 - On persistent storage if using cloud platforms
+
+## Backup and Restore
+
+### Creating Backups
+
+```bash
+# Run on the server
+./scripts/backup-server.sh
+
+# Or specify output location
+./scripts/backup-server.sh --output /path/to/backup.tar.gz
+```
+
+Backups include:
+- Database (`brewos.db`)
+- Configuration files (`.env`, `Caddyfile`)
+- Backup metadata (timestamp, version)
+
+Backups are stored in `/root/backups/` by default. The script automatically keeps only the last 7 backups.
+
+### Restoring from Backup
+
+```bash
+./scripts/restore-server.sh /path/to/brewos_backup.tar.gz
+```
+
+### Automated Backups
+
+Add a cron job for daily backups:
+
+```bash
+# Edit crontab
+crontab -e
+
+# Add daily backup at 3am
+0 3 * * * /root/brewos/scripts/backup-server.sh >> /var/log/brewos-backup.log 2>&1
+```
+
+## Server Management Scripts
+
+| Script | Description |
+|--------|-------------|
+| `scripts/setup-server.sh` | Initial server setup (fresh install) |
+| `scripts/update-server.sh` | Update to latest version (created by setup script) |
+| `scripts/backup-server.sh` | Create a backup |
+| `scripts/restore-server.sh` | Restore from backup |
+
+## Troubleshooting
+
+### View Logs
+
+```bash
+cd /root/brewos/src/cloud
+docker compose logs -f
+```
+
+### Restart Service
+
+```bash
+cd /root/brewos/src/cloud
+docker compose restart
+```
+
+### Check Health
+
+```bash
+curl http://localhost:3001/api/health
+```
+
+### Database Issues
+
+If the database becomes corrupted:
+
+1. Stop the service: `docker compose down`
+2. Restore from backup: `./scripts/restore-server.sh /root/backups/latest.tar.gz`
+3. Start the service: `docker compose up -d`
