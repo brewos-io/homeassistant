@@ -57,18 +57,23 @@ function App() {
     initialized,
     user,
     devices,
+    devicesLoading,
     initialize,
     getSelectedDevice,
   } = useAppStore();
+  
+  // Track if we've completed the initial device fetch (for returning users)
+  const [initialDevicesFetched, setInitialDevicesFetched] = useState(false);
 
   const initTheme = useThemeStore((s) => s.initTheme);
 
   // Safety timeout to prevent forever loading
   useEffect(() => {
     const timeoutId = setTimeout(() => {
-      if (loading) {
+      if (loading || (mode === "cloud" && user && !initialDevicesFetched)) {
         console.error('[App] Initialization timeout - forcing load complete');
         setLoading(false);
+        setInitialDevicesFetched(true); // Prevent infinite loading on device fetch timeout
         // If we're still not initialized after timeout, set error for cloud mode
         if (!initialized && !inDemoMode) {
           setInitError('Connection timeout. Please check your network and try again.');
@@ -77,7 +82,7 @@ function App() {
     }, INIT_TIMEOUT_MS);
 
     return () => clearTimeout(timeoutId);
-  }, [loading, initialized, inDemoMode]);
+  }, [loading, initialized, inDemoMode, mode, user, initialDevicesFetched]);
 
   // Initialize demo mode
   useEffect(() => {
@@ -188,6 +193,16 @@ function App() {
       getConnection()?.disconnect();
     };
   }, [initialized, mode, apMode, inDemoMode]);
+  
+  // Track when initial device fetch completes (for cloud mode with existing user)
+  useEffect(() => {
+    if (mode !== "cloud" || !user || initialDevicesFetched) return;
+    
+    // Once devicesLoading becomes false after initialization, mark as fetched
+    if (initialized && !devicesLoading) {
+      setInitialDevicesFetched(true);
+    }
+  }, [mode, user, initialized, devicesLoading, initialDevicesFetched]);
 
   // Handle setup completion
   const handleSetupComplete = () => {
@@ -202,7 +217,9 @@ function App() {
   };
 
   // Show loading state
-  if (loading || (!inDemoMode && !initialized)) {
+  // For cloud mode with existing user, also wait for initial device fetch
+  const isWaitingForDevices = mode === "cloud" && user && !initialDevicesFetched;
+  if (loading || (!inDemoMode && !initialized) || isWaitingForDevices) {
     return <Loading message={initError || undefined} />;
   }
 
