@@ -85,11 +85,6 @@ export function PowerChart({
     );
   }
 
-  const formatTime = (timestamp: number) => {
-    const date = new Date(timestamp * 1000);
-    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  };
-
   const formatDateTime = (timestamp: number) => {
     const date = new Date(timestamp * 1000);
     const now = new Date();
@@ -113,7 +108,7 @@ export function PowerChart({
 
   const handleBarHover = (
     bucket: (typeof chartData.buckets)[0],
-    index: number,
+    _index: number,
     event: React.MouseEvent
   ) => {
     if (!containerRef) return;
