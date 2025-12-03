@@ -4,24 +4,26 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'  # Triggers on v1.0.0, v0.1.0, etc.
+      - "v*" # Triggers on v1.0.0, v0.1.0, etc.
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version tag (e.g., v0.1.0)'
+        description: "Version tag (e.g., v0.1.0)"
         required: true
 
 permissions:
-  contents: write  # Required to create releases
+  contents: write # Required to create releases
 
 jobs:
   build:
     name: Build All Firmware
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required for git-cliff to see full history
 
       # ===== Pico Build =====
       - name: Install ARM GCC Toolchain
@@ -48,7 +50,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install PlatformIO
         run: pip install platformio
@@ -62,15 +64,15 @@ jobs:
       - name: Prepare Release Files
         run: |
           mkdir -p release
-          
+
           # Copy Pico firmware
           cp src/pico/build/brewos_dual_boiler.uf2 release/
           cp src/pico/build/brewos_single_boiler.uf2 release/
           cp src/pico/build/brewos_heat_exchanger.uf2 release/
-          
+
           # Copy ESP32 firmware
           cp src/esp32/.pio/build/esp32s3/firmware.bin release/brewos_esp32.bin
-          
+
           # Create checksums
           cd release
           sha256sum *.uf2 *.bin > SHA256SUMS.txt
@@ -84,14 +86,34 @@ jobs:
             echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
           fi
 
+      - name: Check for Previous Tags
+        id: check_tags
+        run: |
+          # Count tags (excluding current)
+          TAG_COUNT=$(git tag | grep -v "^${{ steps.version.outputs.version }}$" | wc -l)
+          echo "tag_count=$TAG_COUNT" >> $GITHUB_OUTPUT
+          if [ "$TAG_COUNT" -eq "0" ]; then
+            echo "cliff_args=--unreleased --strip header" >> $GITHUB_OUTPUT
+          else
+            echo "cliff_args=--latest --strip header" >> $GITHUB_OUTPUT
+          fi
+          echo "Found $TAG_COUNT previous tags"
+
       - name: Generate Changelog
         id: changelog
         uses: orhun/git-cliff-action@v3
         with:
           config: cliff.toml
-          args: --latest --strip header
+          args: ${{ steps.check_tags.outputs.cliff_args }}
         env:
           OUTPUT: CHANGELOG.md
+
+      - name: Show Changelog
+        run: |
+          echo "Generated changelog:"
+          echo "---"
+          echo "${{ steps.changelog.outputs.content }}"
+          echo "---"
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
@@ -108,31 +130,30 @@ jobs:
             release/SHA256SUMS.txt
           body: |
             ## What's Changed
-            
+
             ${{ steps.changelog.outputs.content }}
-            
+
             ---
-            
+
             ## Downloads
-            
+
             | File | Description |
             |------|-------------|
             | `brewos_dual_boiler.uf2` | Pico firmware for dual boiler machines (ECM Synchronika, Profitec Pro 700) |
             | `brewos_single_boiler.uf2` | Pico firmware for single boiler machines (Rancilio Silvia, Gaggia Classic) |
             | `brewos_heat_exchanger.uf2` | Pico firmware for heat exchanger machines |
             | `brewos_esp32.bin` | ESP32 firmware for web interface |
-            
+
             ## Installation
-            
+
             **Pico:** Hold BOOTSEL, connect USB, copy `.uf2` file to the drive.
-            
+
             **ESP32:** Use `esptool.py` or PlatformIO to flash `.bin` file.
-            
+
             See [SETUP.md](https://github.com/mizrachiran/brewos/blob/main/SETUP.md) for detailed instructions.
-            
+
             ## Checksums
-            
+
             Verify your download with `sha256sum -c SHA256SUMS.txt`
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
