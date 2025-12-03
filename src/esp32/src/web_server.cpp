@@ -925,6 +925,11 @@ void WebServer::handleGetStatus(AsyncWebServerRequest* request) {
     doc["wifi"]["ip"] = wifi.ip;
     doc["wifi"]["rssi"] = wifi.rssi;
     doc["wifi"]["configured"] = wifi.configured;
+    doc["wifi"]["staticIp"] = wifi.staticIp;
+    doc["wifi"]["gateway"] = wifi.gateway;
+    doc["wifi"]["subnet"] = wifi.subnet;
+    doc["wifi"]["dns1"] = wifi.dns1;
+    doc["wifi"]["dns2"] = wifi.dns2;
     
     // Pico status
     doc["pico"]["connected"] = _picoUart.isConnected();
@@ -1537,6 +1542,27 @@ void WebServer::handleWsMessage(AsyncWebSocketClient* client, uint8_t* data, siz
             broadcastLog("WiFi credentials cleared. Device will restart.", "warning");
             delay(1000);
             ESP.restart();
+        }
+        else if (cmd == "wifi_config") {
+            // Static IP configuration
+            bool staticIp = doc["staticIp"] | false;
+            String ip = doc["ip"] | "";
+            String gateway = doc["gateway"] | "";
+            String subnet = doc["subnet"] | "255.255.255.0";
+            String dns1 = doc["dns1"] | "";
+            String dns2 = doc["dns2"] | "";
+            
+            _wifiManager.setStaticIP(staticIp, ip, gateway, subnet, dns1, dns2);
+            
+            if (staticIp) {
+                broadcastLog("Static IP configured: " + ip + ". Reconnecting...", "info");
+            } else {
+                broadcastLog("DHCP mode enabled. Reconnecting...", "info");
+            }
+            
+            // Reconnect to apply new settings
+            delay(500);
+            _wifiManager.connectToWiFi();
         }
         // System commands
         else if (cmd == "restart") {

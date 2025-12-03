@@ -13,8 +13,9 @@ WiFiManager::WiFiManager()
 void WiFiManager::begin() {
     LOG_I("WiFi Manager starting...");
     
-    // Load stored credentials
+    // Load stored credentials and static IP config
     loadCredentials();
+    loadStaticIPConfig();
     
     // Try to connect if we have credentials
     if (hasStoredCredentials()) {
@@ -109,8 +110,20 @@ bool WiFiManager::connectToWiFi() {
     // Stop AP if running
     WiFi.softAPdisconnect(true);
     
-    // Set mode and connect
+    // Set mode
     WiFi.mode(WIFI_STA);
+    
+    // Apply static IP configuration if enabled
+    if (_staticIP.enabled) {
+        LOG_I("Using static IP: %s", _staticIP.ip.toString().c_str());
+        if (!WiFi.config(_staticIP.ip, _staticIP.gateway, _staticIP.subnet, _staticIP.dns1, _staticIP.dns2)) {
+            LOG_E("Failed to configure static IP");
+        }
+    } else {
+        // Ensure DHCP mode
+        WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);
+    }
+    
     WiFi.begin(_storedSSID.c_str(), _storedPassword.c_str());
     
     _mode = WiFiManagerMode::STA_CONNECTING;
@@ -143,6 +156,13 @@ WiFiStatus WiFiManager::getStatus() {
     status.mode = _mode;
     status.configured = hasStoredCredentials();
     
+    // Static IP info
+    status.staticIp = _staticIP.enabled;
+    status.gateway = _staticIP.enabled ? _staticIP.gateway.toString() : "";
+    status.subnet = _staticIP.enabled ? _staticIP.subnet.toString() : "";
+    status.dns1 = _staticIP.enabled ? _staticIP.dns1.toString() : "";
+    status.dns2 = _staticIP.enabled ? _staticIP.dns2.toString() : "";
+    
     switch (_mode) {
         case WiFiManagerMode::AP_MODE:
             status.ssid = WIFI_AP_SSID;
@@ -154,6 +174,13 @@ WiFiStatus WiFiManager::getStatus() {
             status.ssid = WiFi.SSID();
             status.ip = WiFi.localIP().toString();
             status.rssi = WiFi.RSSI();
+            // Update gateway/DNS from actual values when connected via DHCP
+            if (!_staticIP.enabled) {
+                status.gateway = WiFi.gatewayIP().toString();
+                status.subnet = WiFi.subnetMask().toString();
+                status.dns1 = WiFi.dnsIP(0).toString();
+                status.dns2 = WiFi.dnsIP(1).toString();
+            }
             break;
             
         case WiFiManagerMode::STA_CONNECTING:
@@ -195,6 +222,76 @@ void WiFiManager::saveCredentials(const String& ssid, const String& password) {
     _prefs.begin("wifi", false);  // Read-write
     _prefs.putString("ssid", ssid);
     _prefs.putString("password", password);
+    _prefs.end();
+}
+
+// =============================================================================
+// Static IP Configuration
+// =============================================================================
+
+void WiFiManager::setStaticIP(bool enabled, const String& ip, const String& gateway, 
+                               const String& subnet, const String& dns1, const String& dns2) {
+    _staticIP.enabled = enabled;
+    
+    if (enabled) {
+        _staticIP.ip.fromString(ip);
+        _staticIP.gateway.fromString(gateway);
+        _staticIP.subnet.fromString(subnet.length() > 0 ? subnet : "255.255.255.0");
+        if (dns1.length() > 0) {
+            _staticIP.dns1.fromString(dns1);
+        } else {
+            _staticIP.dns1 = _staticIP.gateway; // Default DNS to gateway
+        }
+        if (dns2.length() > 0) {
+            _staticIP.dns2.fromString(dns2);
+        } else {
+            _staticIP.dns2 = IPAddress(8, 8, 8, 8); // Google DNS as fallback
+        }
+        
+        LOG_I("Static IP configured: IP=%s, GW=%s, DNS=%s", 
+              ip.c_str(), gateway.c_str(), dns1.c_str());
+    } else {
+        LOG_I("DHCP mode enabled");
+    }
+    
+    saveStaticIPConfig();
+}
+
+void WiFiManager::loadStaticIPConfig() {
+    _prefs.begin("wifi", true);  // Read-only
+    _staticIP.enabled = _prefs.getBool("static_en", false);
+    
+    if (_staticIP.enabled) {
+        String ip = _prefs.getString("static_ip", "");
+        String gw = _prefs.getString("static_gw", "");
+        String sn = _prefs.getString("static_sn", "255.255.255.0");
+        String dns1 = _prefs.getString("static_dns1", "");
+        String dns2 = _prefs.getString("static_dns2", "");
+        
+        if (ip.length() > 0) _staticIP.ip.fromString(ip);
+        if (gw.length() > 0) _staticIP.gateway.fromString(gw);
+        if (sn.length() > 0) _staticIP.subnet.fromString(sn);
+        if (dns1.length() > 0) _staticIP.dns1.fromString(dns1);
+        if (dns2.length() > 0) _staticIP.dns2.fromString(dns2);
+        
+        LOG_I("Loaded static IP config: %s", ip.c_str());
+    }
+    
+    _prefs.end();
+}
+
+void WiFiManager::saveStaticIPConfig() {
+    _prefs.begin("wifi", false);  // Read-write
+    _prefs.putBool("static_en", _staticIP.enabled);
+    
+    if (_staticIP.enabled) {
+        _prefs.putString("static_ip", _staticIP.ip.toString());
+        _prefs.putString("static_gw", _staticIP.gateway.toString());
+        _prefs.putString("static_sn", _staticIP.subnet.toString());
+        _prefs.putString("static_dns1", _staticIP.dns1.toString());
+        _prefs.putString("static_dns2", _staticIP.dns2.toString());
+    }
+    
     _prefs.end();
 }
 

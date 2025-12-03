@@ -14,6 +14,16 @@ enum class WiFiManagerMode {
     STA_CONNECTING  // Trying to connect
 };
 
+// Static IP configuration
+struct StaticIPConfig {
+    bool enabled;
+    IPAddress ip;
+    IPAddress gateway;
+    IPAddress subnet;
+    IPAddress dns1;
+    IPAddress dns2;
+};
+
 // WiFi status for web UI
 struct WiFiStatus {
     WiFiManagerMode mode;
@@ -21,6 +31,12 @@ struct WiFiStatus {
     String ip;
     int8_t rssi;
     bool configured;
+    // Static IP info
+    bool staticIp;
+    String gateway;
+    String subnet;
+    String dns1;
+    String dns2;
 };
 
 // Time/NTP status
@@ -45,6 +61,11 @@ public:
     bool hasStoredCredentials();
     bool setCredentials(const String& ssid, const String& password);
     void clearCredentials();
+    
+    // Static IP configuration
+    void setStaticIP(bool enabled, const String& ip = "", const String& gateway = "", 
+                     const String& subnet = "255.255.255.0", const String& dns1 = "", const String& dns2 = "");
+    StaticIPConfig getStaticIPConfig() const { return _staticIP; }
     
     // Connect to stored WiFi
     bool connectToWiFi();
@@ -79,6 +100,9 @@ private:
     String _storedSSID;
     String _storedPassword;
     
+    // Static IP configuration
+    StaticIPConfig _staticIP = {false, IPAddress(), IPAddress(), IPAddress(255,255,255,0), IPAddress(), IPAddress()};
+    
     unsigned long _lastConnectAttempt;
     unsigned long _connectStartTime;
     
@@ -94,6 +118,8 @@ private:
     
     void loadCredentials();
     void saveCredentials(const String& ssid, const String& password);
+    void loadStaticIPConfig();
+    void saveStaticIPConfig();
 };
 
 #endif // WIFI_MANAGER_H
