@@ -5,9 +5,14 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "build:esp32": "tsc -b && vite build --mode esp32 --outDir ../esp32/data",
+    "build:cloud": "tsc -b && vite build",
+    "build:esp32": "tsc -b && vite build --mode esp32",
     "lint": "eslint .",
     "preview": "vite preview"
+  },
+  "buildModes": {
+    "cloud": "Default build for cloud.brewos.io (__CLOUD__=true). Enables demo mode for website visitors.",
+    "esp32": "Build for ESP32 local deployment (__ESP32__=true). Demo mode disabled, outputs to ../esp32/data"
   },
   "dependencies": {
     "@react-oauth/google": "^0.12.1",

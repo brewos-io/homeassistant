@@ -2,6 +2,20 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 
+/**
+ * Build Modes:
+ * 
+ * - Default (cloud): npm run build
+ *   Sets __CLOUD__=true, __ESP32__=false
+ *   For cloud.brewos.io deployment
+ *   Demo mode enabled for website visitors
+ * 
+ * - ESP32: npm run build:esp32 (or --mode esp32)
+ *   Sets __ESP32__=true, __CLOUD__=false
+ *   For ESP32 local deployment
+ *   Demo mode disabled (real hardware)
+ *   Outputs to ../esp32/data with aggressive minification
+ */
 export default defineConfig(({ mode }) => {
   const isEsp32 = mode === 'esp32'
   
@@ -12,6 +26,7 @@ export default defineConfig(({ mode }) => {
         '@': path.resolve(__dirname, './src'),
       },
     },
+    // Compile-time constants - checked in src/lib/pwa.ts
     define: {
       __ESP32__: isEsp32,
       __CLOUD__: !isEsp32,

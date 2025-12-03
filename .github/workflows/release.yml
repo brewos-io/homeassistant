@@ -46,7 +46,26 @@ jobs:
           cmake -DBUILD_ALL_MACHINES=ON -DCMAKE_BUILD_TYPE=Release ..
           make -j$(nproc)
 
-      # ===== ESP32 Build =====
+      # ===== Web UI Build for ESP32 =====
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: src/web/package-lock.json
+
+      - name: Build Web UI for ESP32
+        run: |
+          cd src/web
+          npm ci
+          # Build with ESP32 mode (__ESP32__=true, __CLOUD__=false)
+          # This disables demo mode and cloud-only features
+          npm run build:esp32
+          echo "=== ESP32 Web UI Built ==="
+          ls -lah ../esp32/data/
+          du -sh ../esp32/data/
+
+      # ===== ESP32 Firmware Build =====
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
@@ -60,18 +79,24 @@ jobs:
           cd src/esp32
           pio run -e esp32s3
 
+      - name: Build LittleFS Image
+        run: |
+          cd src/esp32
+          pio run -e esp32s3 -t buildfs
+
       # ===== Prepare Release Assets =====
       - name: Prepare Release Files
         run: |
           mkdir -p release
 
-          # Copy Pico firmware
+          # Copy Pico firmware (all machine types)
           cp src/pico/build/brewos_dual_boiler.uf2 release/
           cp src/pico/build/brewos_single_boiler.uf2 release/
           cp src/pico/build/brewos_heat_exchanger.uf2 release/
 
-          # Copy ESP32 firmware
+          # Copy ESP32 firmware and filesystem
           cp src/esp32/.pio/build/esp32s3/firmware.bin release/brewos_esp32.bin
+          cp src/esp32/.pio/build/esp32s3/littlefs.bin release/brewos_esp32_littlefs.bin
 
           # Create checksums
           cd release
@@ -127,6 +152,7 @@ jobs:
             release/brewos_single_boiler.uf2
             release/brewos_heat_exchanger.uf2
             release/brewos_esp32.bin
+            release/brewos_esp32_littlefs.bin
             release/SHA256SUMS.txt
           body: |
             ## What's Changed
@@ -142,7 +168,8 @@ jobs:
             | `brewos_dual_boiler.uf2` | Pico firmware for dual boiler machines (ECM Synchronika, Profitec Pro 700) |
             | `brewos_single_boiler.uf2` | Pico firmware for single boiler machines (Rancilio Silvia, Gaggia Classic) |
             | `brewos_heat_exchanger.uf2` | Pico firmware for heat exchanger machines |
-            | `brewos_esp32.bin` | ESP32 firmware for web interface |
+            | `brewos_esp32.bin` | ESP32 firmware (main application) |
+            | `brewos_esp32_littlefs.bin` | ESP32 filesystem image (web UI) |
 
             ## Installation
 
