@@ -279,7 +279,11 @@ export const useAppStore = create<AppState>()(
         const session = getStoredSession();
         console.log("[Auth] initialize() checking session:", {
           hasSession: !!session,
+          hasUser: !!session?.user,
+          userEmail: session?.user?.email,
           isExpired: session ? isTokenExpired(session) : null,
+          expiresAt: session?.expiresAt ? new Date(session.expiresAt).toISOString() : null,
+          now: new Date().toISOString(),
         });
 
         if (session && !isTokenExpired(session)) {
@@ -384,6 +388,7 @@ export const useAppStore = create<AppState>()(
       },
 
       signOut: () => {
+        console.log("[Auth] signOut() called, stack trace:", new Error().stack);
         authLogout();
         stopTokenRefreshMonitor();
         set({

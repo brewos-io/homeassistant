@@ -49,12 +49,17 @@ let refreshPromise: Promise<AuthSession | null> | null = null;
 export function getStoredSession(): AuthSession | null {
   try {
     const stored = localStorage.getItem(AUTH_STORAGE_KEY);
+    const parsed = stored ? JSON.parse(stored) as AuthSession : null;
     console.log('[Auth] getStoredSession:', {
       hasStored: !!stored,
       storageKey: AUTH_STORAGE_KEY,
+      hasUser: !!parsed?.user,
+      userEmail: parsed?.user?.email,
+      expiresAt: parsed?.expiresAt ? new Date(parsed.expiresAt).toISOString() : null,
+      isExpired: parsed?.expiresAt ? parsed.expiresAt < Date.now() : null,
     });
     if (!stored) return null;
-    return JSON.parse(stored) as AuthSession;
+    return parsed;
   } catch (e) {
     console.error('[Auth] getStoredSession parse error:', e);
     return null;
@@ -77,6 +82,7 @@ export function storeSession(session: AuthSession): void {
  * Clear stored session
  */
 export function clearSession(): void {
+  console.log("[Auth] clearSession() called, stack trace:", new Error().stack);
   localStorage.removeItem(AUTH_STORAGE_KEY);
 }
 
