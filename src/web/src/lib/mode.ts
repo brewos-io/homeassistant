@@ -399,9 +399,11 @@ export const useAppStore = create<AppState>()(
       },
 
       fetchDevices: async () => {
+        console.log('[Devices] fetchDevices called');
         const token = await get().getAccessToken();
         if (!token) {
           // No token available - ensure devicesLoading is reset
+          console.log('[Devices] No token available, skipping fetch');
           set({ devicesLoading: false });
           return;
         }
@@ -409,6 +411,7 @@ export const useAppStore = create<AppState>()(
         set({ devicesLoading: true });
 
         try {
+          console.log('[Devices] Fetching devices from /api/devices');
           const response = await fetch("/api/devices", {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -418,6 +421,10 @@ export const useAppStore = create<AppState>()(
           if (response.ok) {
             const data = await response.json();
             const devices = data.devices as CloudDevice[];
+            console.log('[Devices] Fetched successfully:', {
+              count: devices.length,
+              deviceIds: devices.map(d => d.id),
+            });
 
             set({ devices });
 
@@ -426,6 +433,7 @@ export const useAppStore = create<AppState>()(
               set({ selectedDeviceId: devices[0].id });
             }
           } else if (response.status === 401) {
+            console.warn('[Devices] 401 response, attempting token refresh');
             // Token rejected - try refreshing once before signing out
             const session = getStoredSession();
 
@@ -459,14 +467,17 @@ export const useAppStore = create<AppState>()(
 
             // Refresh failed or retry still 401 - check if session was cleared
             if (!getStoredSession()) {
+              console.warn('[Devices] Session cleared after 401, signing out');
               get().signOut();
+            } else {
+              console.warn('[Devices] Session preserved after 401, will retry later');
             }
-            // Session preserved - will retry later
           }
         } catch (error) {
-          console.error("Failed to fetch devices:", error);
+          console.error("[Devices] Failed to fetch devices:", error);
         }
 
+        console.log('[Devices] fetchDevices complete, devicesLoading: false');
         set({ devicesLoading: false });
       },
 

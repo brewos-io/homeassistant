@@ -256,6 +256,12 @@ export async function getValidAccessToken(): Promise<string | null> {
 export async function logout(): Promise<void> {
   const session = getStoredSession();
 
+  // IMPORTANT: Clear local session FIRST before making network request
+  // This prevents race conditions where user navigates away before
+  // the network request completes, leaving the session in localStorage
+  clearSession();
+
+  // Then notify server (best effort, don't await if it fails)
   if (session) {
     try {
       await fetch("/api/auth/logout", {
@@ -266,11 +272,9 @@ export async function logout(): Promise<void> {
         },
       });
     } catch {
-      // Ignore errors - we'll clear local session anyway
+      // Ignore errors - local session already cleared
     }
   }
-
-  clearSession();
 }
 
 /**
@@ -279,6 +283,10 @@ export async function logout(): Promise<void> {
 export async function logoutAll(): Promise<void> {
   const session = getStoredSession();
 
+  // IMPORTANT: Clear local session FIRST before making network request
+  clearSession();
+
+  // Then notify server (best effort)
   if (session) {
     try {
       await fetch("/api/auth/logout-all", {
@@ -289,11 +297,9 @@ export async function logoutAll(): Promise<void> {
         },
       });
     } catch {
-      // Ignore errors
+      // Ignore errors - local session already cleared
     }
   }
-
-  clearSession();
 }
 
 /**
