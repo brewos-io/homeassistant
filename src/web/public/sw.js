@@ -1,100 +1,182 @@
 // Service Worker for BrewOS PWA
-const CACHE_NAME = 'brewos-v1';
-const STATIC_CACHE_NAME = 'brewos-static-v1';
+// Version: v2 - Optimized for iOS cold start performance
+const CACHE_VERSION = 'v2';
+const STATIC_CACHE_NAME = `brewos-static-${CACHE_VERSION}`;
+const RUNTIME_CACHE_NAME = `brewos-runtime-${CACHE_VERSION}`;
 
-// Files to cache on install
-const STATIC_ASSETS = [
+// Core app shell - cached on install
+const APP_SHELL = [
   '/',
   '/index.html',
   '/favicon.svg',
   '/logo-icon.svg',
   '/logo.png',
+  '/manifest.json',
 ];
 
-// Install event - cache static assets
+// Patterns for different caching strategies
+const CACHE_FIRST_PATTERNS = [
+  /\.(?:js|css|woff2?|ttf|eot|ico|svg|png|jpg|jpeg|webp)$/,
+  /^https:\/\/fonts\.(?:googleapis|gstatic)\.com/,
+];
+
+const NETWORK_FIRST_PATTERNS = [
+  /\/api\//,
+  /\/ws/,
+];
+
+// Install event - cache app shell
 self.addEventListener('install', (event) => {
-  console.log('[SW] Installing service worker...');
+  console.log('[SW] Installing v2...');
   event.waitUntil(
-    caches.open(STATIC_CACHE_NAME).then((cache) => {
-      console.log('[SW] Caching static assets');
-      return cache.addAll(STATIC_ASSETS);
-    })
+    caches.open(STATIC_CACHE_NAME)
+      .then((cache) => {
+        console.log('[SW] Caching app shell');
+        return cache.addAll(APP_SHELL);
+      })
+      .then(() => self.skipWaiting())
   );
-  self.skipWaiting();
 });
 
 // Activate event - clean up old caches
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activating service worker...');
+  console.log('[SW] Activating v2...');
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames
-          .filter((name) => name !== CACHE_NAME && name !== STATIC_CACHE_NAME)
-          .map((name) => {
-            console.log('[SW] Deleting old cache:', name);
-            return caches.delete(name);
-          })
-      );
-    })
+    caches.keys()
+      .then((cacheNames) => {
+        return Promise.all(
+          cacheNames
+            .filter((name) => !name.includes(CACHE_VERSION))
+            .map((name) => {
+              console.log('[SW] Deleting old cache:', name);
+              return caches.delete(name);
+            })
+        );
+      })
+      .then(() => self.clients.claim())
   );
-  return self.clients.claim();
 });
 
-// Fetch event - network first, fallback to cache
+// Fetch event - smart caching strategy
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Skip non-GET requests
-  if (request.method !== 'GET') {
+  // Skip non-GET requests and WebSocket
+  if (request.method !== 'GET' || url.protocol === 'ws:' || url.protocol === 'wss:') {
     return;
   }
 
-  // Skip cross-origin requests (except for API calls we want to cache)
-  if (url.origin !== self.location.origin && !url.pathname.startsWith('/api/')) {
+  // Skip chrome-extension and other non-http(s) protocols
+  if (!url.protocol.startsWith('http')) {
     return;
   }
 
-  event.respondWith(
-    fetch(request)
-      .then((response) => {
-        // Clone the response
-        const responseToCache = response.clone();
+  // Network-first for API calls (but with fast timeout)
+  if (NETWORK_FIRST_PATTERNS.some(pattern => pattern.test(url.href))) {
+    event.respondWith(networkFirstWithTimeout(request, 3000));
+    return;
+  }
 
-        // Cache successful responses
-        if (response.status === 200) {
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(request, responseToCache);
-          });
-        }
+  // Cache-first for static assets (JS, CSS, fonts, images)
+  if (CACHE_FIRST_PATTERNS.some(pattern => pattern.test(url.href))) {
+    event.respondWith(cacheFirst(request));
+    return;
+  }
 
-        return response;
-      })
-      .catch(() => {
-        // Network failed, try cache
-        return caches.match(request).then((cachedResponse) => {
-          if (cachedResponse) {
-            return cachedResponse;
-          }
+  // Navigation requests - serve cached index.html immediately, revalidate in background
+  if (request.mode === 'navigate') {
+    event.respondWith(staleWhileRevalidate(request));
+    return;
+  }
 
-          // If it's a navigation request and we have index.html cached, return that
-          if (request.mode === 'navigate') {
-            return caches.match('/index.html');
-          }
-
-          // Return a basic offline response
-          return new Response('Offline', {
-            status: 503,
-            statusText: 'Service Unavailable',
-            headers: new Headers({ 'Content-Type': 'text/plain' }),
-          });
-        });
-      })
-  );
+  // Default: stale-while-revalidate
+  event.respondWith(staleWhileRevalidate(request));
 });
 
-// Push event - handle push notifications
+// Cache-first strategy - fast for static assets
+async function cacheFirst(request) {
+  const cached = await caches.match(request);
+  if (cached) {
+    return cached;
+  }
+
+  try {
+    const response = await fetch(request);
+    if (response.ok) {
+      const cache = await caches.open(RUNTIME_CACHE_NAME);
+      cache.put(request, response.clone());
+    }
+    return response;
+  } catch (error) {
+    // Return offline fallback if available
+    return caches.match('/index.html');
+  }
+}
+
+// Stale-while-revalidate - instant response, update in background
+async function staleWhileRevalidate(request) {
+  const cached = await caches.match(request);
+  
+  const fetchPromise = fetch(request)
+    .then((response) => {
+      if (response.ok) {
+        const cache = caches.open(RUNTIME_CACHE_NAME);
+        cache.then(c => c.put(request, response.clone()));
+      }
+      return response;
+    })
+    .catch(() => null);
+
+  // Return cached immediately if available
+  if (cached) {
+    // Update in background
+    fetchPromise.catch(() => {});
+    return cached;
+  }
+
+  // Wait for network if no cache
+  const response = await fetchPromise;
+  if (response) {
+    return response;
+  }
+
+  // Fallback to index.html for navigation
+  return caches.match('/index.html');
+}
+
+// Network-first with timeout - for API calls
+async function networkFirstWithTimeout(request, timeout) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    const response = await fetch(request, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (response.ok) {
+      const cache = await caches.open(RUNTIME_CACHE_NAME);
+      cache.put(request, response.clone());
+    }
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    
+    // Try cache
+    const cached = await caches.match(request);
+    if (cached) {
+      return cached;
+    }
+
+    // Return error response for API calls
+    return new Response(JSON.stringify({ error: 'offline' }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+}
+
+// Push notification handling
 self.addEventListener('push', (event) => {
   console.log('[SW] Push notification received');
 
@@ -121,7 +203,6 @@ self.addEventListener('push', (event) => {
         data: data.data || {},
       };
     } catch (e) {
-      // If not JSON, try text
       notificationData.body = event.data.text();
     }
   }
@@ -140,30 +221,20 @@ self.addEventListener('push', (event) => {
   );
 });
 
-// Notification click event
+// Notification click
 self.addEventListener('notificationclick', (event) => {
-  console.log('[SW] Notification clicked:', event.notification.tag);
-
   event.notification.close();
 
-  const notificationData = event.notification.data || {};
-  const urlToOpen = notificationData.url || '/';
+  const urlToOpen = event.notification.data?.url || '/';
 
   event.waitUntil(
-    clients
-      .matchAll({
-        type: 'window',
-        includeUncontrolled: true,
-      })
+    clients.matchAll({ type: 'window', includeUncontrolled: true })
       .then((clientList) => {
-        // If a window is already open, focus it
         for (const client of clientList) {
-          if (client.url === urlToOpen && 'focus' in client) {
+          if (client.url.includes(self.location.origin) && 'focus' in client) {
             return client.focus();
           }
         }
-
-        // Otherwise, open a new window
         if (clients.openWindow) {
           return clients.openWindow(urlToOpen);
         }
@@ -171,18 +242,18 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
-// Background sync (for offline actions)
-self.addEventListener('sync', (event) => {
-  console.log('[SW] Background sync:', event.tag);
-  // Future: implement offline action queue
-});
-
-// Message event - handle messages from the app
+// Message handling
 self.addEventListener('message', (event) => {
-  console.log('[SW] Message received:', event.data);
-
-  if (event.data && event.data.type === 'SKIP_WAITING') {
+  if (event.data?.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
+  
+  // Clear caches on demand
+  if (event.data?.type === 'CLEAR_CACHE') {
+    event.waitUntil(
+      caches.keys().then(names => 
+        Promise.all(names.map(name => caches.delete(name)))
+      )
+    );
+  }
 });
-

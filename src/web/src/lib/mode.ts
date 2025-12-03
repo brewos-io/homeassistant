@@ -157,26 +157,38 @@ export const useAppStore = create<AppState>()(
       devicesLoading: false,
 
       initialize: async () => {
-        // Fetch mode and backend info from server
-        const { mode, apMode, backendInfo } = await fetchModeFromServer();
-        set({ mode, apMode: apMode ?? false });
+        const currentMode = get().mode;
         
-        // Update backend info store (for feature detection)
-        if (backendInfo) {
-          // Directly set info instead of fetching again
-          const { compatible, warnings, errors } = checkCompatibility(backendInfo);
-          useBackendInfo.setState({
-            info: backendInfo,
-            loading: false,
-            error: null,
-            compatible,
-            warnings,
-            errors,
-          });
-        } else {
-          // Fallback: fetch backend info separately
-          useBackendInfo.getState().fetchInfo();
+        // For local mode, initialize immediately with cached state
+        // This allows instant UI display on iOS PWA cold start
+        if (currentMode === "local" && !get().initialized) {
+          set({ initialized: true, authLoading: false });
         }
+        
+        // Fetch fresh mode from server (non-blocking for local mode)
+        const fetchPromise = fetchModeFromServer().then(({ mode, apMode, backendInfo }) => {
+          set({ mode, apMode: apMode ?? false });
+          
+          // Update backend info store
+          if (backendInfo) {
+            const { compatible, warnings, errors } = checkCompatibility(backendInfo);
+            useBackendInfo.setState({
+              info: backendInfo,
+              loading: false,
+              error: null,
+              compatible,
+              warnings,
+              errors,
+            });
+          } else {
+            useBackendInfo.getState().fetchInfo();
+          }
+          
+          return mode;
+        });
+
+        // For cloud mode, wait for mode detection
+        const mode = currentMode === "local" ? currentMode : await fetchPromise;
 
         if (mode === "local") {
           set({ initialized: true, authLoading: false });
