@@ -64,14 +64,14 @@ export function Pair() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-cream-100 flex items-center justify-center">
+      <div className="full-page bg-cream-100 flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-accent" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-coffee-800 to-coffee-900 flex items-center justify-center p-4">
+    <div className="full-page-scroll bg-gradient-to-br from-coffee-800 to-coffee-900 flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
         {status === "success" ? (
           <div className="text-center py-8">

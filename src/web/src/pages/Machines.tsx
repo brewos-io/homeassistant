@@ -211,14 +211,14 @@ export function Machines() {
 
   if (authLoading && !isDemo) {
     return (
-      <div className="min-h-screen bg-theme flex items-center justify-center">
+      <div className="full-page bg-theme flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-accent" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-theme">
+    <div className="full-page-scroll bg-theme">
       {/* Header */}
       <header className="bg-theme-card border-b border-theme sticky top-0 z-50">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">

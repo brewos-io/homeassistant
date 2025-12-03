@@ -21,7 +21,7 @@ export function Loading({
   return (
     <div
       className={cn(
-        "min-h-screen bg-theme flex items-center justify-center",
+        "full-page bg-theme flex items-center justify-center",
         className
       )}
     >

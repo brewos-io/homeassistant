@@ -68,7 +68,7 @@ export function Layout({ onExitDemo }: LayoutProps) {
   const navigation = getNavigation(isCloud, deviceId || selectedDevice?.id);
 
   return (
-    <div className="min-h-screen bg-theme">
+    <div className="full-page-scroll bg-theme">
       {/* Header */}
       <header className="sticky top-0 z-50 header-glass border-b border-theme">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

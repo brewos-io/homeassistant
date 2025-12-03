@@ -28,7 +28,7 @@ export function Login() {
 
   if (!isGoogleAuthConfigured) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-coffee-800 to-coffee-900 flex items-center justify-center p-4">
+      <div className="full-page bg-gradient-to-br from-coffee-800 to-coffee-900 flex items-center justify-center p-4">
         <Card className="w-full max-w-md text-center">
           <div className="flex justify-center mb-4">
             <Logo size="lg" forceDark />
@@ -49,7 +49,7 @@ export function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-coffee-800 to-coffee-900 flex items-center justify-center p-4">
+    <div className="full-page bg-gradient-to-br from-coffee-800 to-coffee-900 flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">

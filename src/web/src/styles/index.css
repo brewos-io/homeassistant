@@ -2,6 +2,35 @@
 @tailwind components;
 @tailwind utilities;
 
+/* iOS Safari viewport fix - prevent overscroll bounce and white gaps */
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
+
+#root {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Full-screen pages (login, etc.) - prevent scroll entirely */
+.full-page {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  /* Use dvh with vh fallback for older browsers */
+  height: 100vh;
+  height: 100dvh;
+}
+
+/* Full-screen pages that may need scrolling on small screens */
+.full-page-scroll {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
 /* Theme CSS Variables - Default (Classic Coffee) */
 :root {
   --bg: #faf8f5;
