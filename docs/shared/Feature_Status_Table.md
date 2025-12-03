@@ -237,16 +237,16 @@
 
 ### Volumetric Machine Features (Planned)
 
-| Feature                          | Status | Description                                                            |
-| -------------------------------- | ------ | ---------------------------------------------------------------------- |
-| `VOLUMETRIC_FLOW_METER`          | ❌     | Hall-effect flow meter integration (pulse counting)                    |
-| `VOLUMETRIC_DOSE_PROGRAMMING`    | ❌     | Programmable dose volumes (e.g., single: 30ml, double: 60ml)           |
-| `VOLUMETRIC_AUTO_STOP`           | ❌     | Automatic brew stop when target volume reached                         |
-| `VOLUMETRIC_CALIBRATION`         | ❌     | Flow meter calibration (mL/pulse adjustment)                           |
-| `VOLUMETRIC_PREINFUSION_VOLUME`  | ❌     | Volume-based pre-infusion (instead of time-based)                      |
-| `VOLUMETRIC_MULTI_DOSE`          | ❌     | Multiple programmable dose buttons (1-4 doses)                         |
-| `VOLUMETRIC_CONTINUOUS`          | ❌     | Continuous flow mode (manual stop)                                     |
-| `VOLUMETRIC_LEARNING`            | ❌     | Learn mode: brew manually, save measured volume as preset              |
+| Feature                         | Status | Description                                                  |
+| ------------------------------- | ------ | ------------------------------------------------------------ |
+| `VOLUMETRIC_FLOW_METER`         | ❌     | Hall-effect flow meter integration (pulse counting)          |
+| `VOLUMETRIC_DOSE_PROGRAMMING`   | ❌     | Programmable dose volumes (e.g., single: 30ml, double: 60ml) |
+| `VOLUMETRIC_AUTO_STOP`          | ❌     | Automatic brew stop when target volume reached               |
+| `VOLUMETRIC_CALIBRATION`        | ❌     | Flow meter calibration (mL/pulse adjustment)                 |
+| `VOLUMETRIC_PREINFUSION_VOLUME` | ❌     | Volume-based pre-infusion (instead of time-based)            |
+| `VOLUMETRIC_MULTI_DOSE`         | ❌     | Multiple programmable dose buttons (1-4 doses)               |
+| `VOLUMETRIC_CONTINUOUS`         | ❌     | Continuous flow mode (manual stop)                           |
+| `VOLUMETRIC_LEARNING`           | ❌     | Learn mode: brew manually, save measured volume as preset    |
 
 > **Note:** Volumetric support can be combined with any boiler configuration (dual boiler, single boiler, HX). The volumetric feature adds flow-based dosing on top of the existing temperature control architecture.
 
@@ -301,14 +301,14 @@ make
 
 | Feature            | Dual Boiler | Single Boiler | Heat Exchanger | Volumetric (Add-on) |
 | ------------------ | :---------: | :-----------: | :------------: | :-----------------: |
-| Brew NTC           |      ✓      |       ✓       |       ✗        |     Per base type   |
-| Steam NTC          |      ✓      |       ✗       |       ✓        |     Per base type   |
-| Group TC           |  Optional   |   Optional    |  **Required**  |     Per base type   |
-| Flow Meter         |   Optional  |    Optional   |    Optional    |    **Required**     |
-| SSRs               |      2      |       1       |       1        |     Per base type   |
-| Heating strategies |    All 5    |   BREW_ONLY   |   BREW_ONLY    |     Per base type   |
-| Ready detection    |  brew_temp  |   brew_temp   |   group_temp   |     Per base type   |
-| Dose control       |    Time     |     Time      |      Time      |      **Volume**     |
+| Brew NTC           |      ✓      |       ✓       |       ✗        |    Per base type    |
+| Steam NTC          |      ✓      |       ✗       |       ✓        |    Per base type    |
+| Group TC           |  Optional   |   Optional    |  **Required**  |    Per base type    |
+| Flow Meter         |  Optional   |   Optional    |    Optional    |    **Required**     |
+| SSRs               |      2      |       1       |       1        |    Per base type    |
+| Heating strategies |    All 5    |   BREW_ONLY   |   BREW_ONLY    |    Per base type    |
+| Ready detection    |  brew_temp  |   brew_temp   |   group_temp   |    Per base type    |
+| Dose control       |    Time     |     Time      |      Time      |     **Volume**      |
 
 > **Note:** Volumetric is implemented as an add-on feature that can be combined with any boiler type. A "Volumetric Dual Boiler" would have all dual boiler features plus flow meter-based volume dosing.
 
@@ -543,16 +543,16 @@ Features planned for future releases, organized by priority and complexity.
 
 ### Brewing Enhancements
 
-| Feature                    | Priority | Complexity | Description                                                                 |
-| -------------------------- | -------- | ---------- | --------------------------------------------------------------------------- |
-| **Shot Profiling**         | High     | High       | Pressure/flow profiles during extraction (pre-infusion ramp, peak, decline) |
-| **Pressure Profiling**     | High     | High       | Variable pressure curves: flat, declining, bloom, custom profiles           |
-| **Flow Profiling**         | High     | High       | Target flow rate curves during extraction                                   |
-| **Gear Pump Support**      | High     | Medium     | Variable speed pump control for flow/pressure profiling                     |
+| Feature                    | Priority | Complexity | Description                                                                    |
+| -------------------------- | -------- | ---------- | ------------------------------------------------------------------------------ |
+| **Shot Profiling**         | High     | High       | Pressure/flow profiles during extraction (pre-infusion ramp, peak, decline)    |
+| **Pressure Profiling**     | High     | High       | Variable pressure curves: flat, declining, bloom, custom profiles              |
+| **Flow Profiling**         | High     | High       | Target flow rate curves during extraction                                      |
+| **Gear Pump Support**      | High     | Medium     | Variable speed pump control for flow/pressure profiling                        |
 | **Flow Meter Integration** | High     | Medium     | Gicar-style flow meters for volumetric dosing (see Volumetric Machine Support) |
-| **Recipe Management**      | Medium   | Medium     | Save/recall shot recipes (temp, pressure profile, dose, yield)              |
-| **Shot Replication**       | Medium   | High       | Replay successful shots with same parameters                                |
-| **Auto-Purge**             | Low      | Low        | Automatic group head flush before/after shots                               |
+| **Recipe Management**      | Medium   | Medium     | Save/recall shot recipes (temp, pressure profile, dose, yield)                 |
+| **Shot Replication**       | Medium   | High       | Replay successful shots with same parameters                                   |
+| **Auto-Purge**             | Low      | Low        | Automatic group head flush before/after shots                                  |
 
 ### Hardware Support
 
