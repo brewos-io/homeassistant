@@ -224,6 +224,7 @@
 | **Dual Boiler**           | ✅     | `control_dual_boiler.c`    | Independent brew/steam PIDs, all heating strategies              |
 | **Single Boiler**         | ✅     | `control_single_boiler.c`  | Mode switching (brew ↔ steam setpoint), auto-return timeout      |
 | **Heat Exchanger**        | ✅     | `control_heat_exchanger.c` | Three control modes: Temperature PID, Pressure PID, Pressurestat |
+| **Volumetric**            | ❌     | N/A                        | Future: flow meter-based volume dosing                           |
 | **Thermoblock**           | ❌     | N/A                        | Future: requires flow heater control                             |
 
 ### Heat Exchanger Control Modes
@@ -234,6 +235,21 @@
 | `HX_CONTROL_PRESSURE`     | ✅     | PID based on pressure transducer                     |
 | `HX_CONTROL_PRESSURESTAT` | ✅     | Monitor only - external pressurestat controls heater |
 
+### Volumetric Machine Features (Planned)
+
+| Feature                          | Status | Description                                                            |
+| -------------------------------- | ------ | ---------------------------------------------------------------------- |
+| `VOLUMETRIC_FLOW_METER`          | ❌     | Hall-effect flow meter integration (pulse counting)                    |
+| `VOLUMETRIC_DOSE_PROGRAMMING`    | ❌     | Programmable dose volumes (e.g., single: 30ml, double: 60ml)           |
+| `VOLUMETRIC_AUTO_STOP`           | ❌     | Automatic brew stop when target volume reached                         |
+| `VOLUMETRIC_CALIBRATION`         | ❌     | Flow meter calibration (mL/pulse adjustment)                           |
+| `VOLUMETRIC_PREINFUSION_VOLUME`  | ❌     | Volume-based pre-infusion (instead of time-based)                      |
+| `VOLUMETRIC_MULTI_DOSE`          | ❌     | Multiple programmable dose buttons (1-4 doses)                         |
+| `VOLUMETRIC_CONTINUOUS`          | ❌     | Continuous flow mode (manual stop)                                     |
+| `VOLUMETRIC_LEARNING`            | ❌     | Learn mode: brew manually, save measured volume as preset              |
+
+> **Note:** Volumetric support can be combined with any boiler configuration (dual boiler, single boiler, HX). The volumetric feature adds flow-based dosing on top of the existing temperature control architecture.
+
 ### Control Architecture (Compile-Time File Selection)
 
 Each machine type has its own control implementation:
@@ -243,7 +259,8 @@ src/pico/src/
 ├── control_common.c          # Shared: PID, outputs, public API
 ├── control_dual_boiler.c     # Dual boiler control logic
 ├── control_single_boiler.c   # Single boiler with mode switching
-└── control_heat_exchanger.c  # HX steam-only control
+├── control_heat_exchanger.c  # HX steam-only control
+└── volumetric.c              # (Planned) Flow meter dosing logic
 ```
 
 ### Build Commands
@@ -253,6 +270,11 @@ src/pico/src/
 cmake .. -DMACHINE_TYPE=DUAL_BOILER
 make
 # Output: ecm_pico_dual_boiler.uf2
+
+# Build with volumetric support (add-on feature)
+cmake .. -DMACHINE_TYPE=DUAL_BOILER -DENABLE_VOLUMETRIC=ON
+make
+# Output: ecm_pico_dual_boiler_volumetric.uf2
 
 # Build ALL machine types at once
 cmake .. -DBUILD_ALL_MACHINES=ON
@@ -273,17 +295,22 @@ make
 | **Status Payload**     | `main.c`             | ✅ Reports appropriate temps per machine type               |
 | **Protocol**           | `protocol.c`         | ✅ Reports machine_type in boot payload                     |
 | **Main Init**          | `main.c`             | ✅ Logs machine config at boot                              |
+| **Volumetric Dosing**  | `volumetric.c`       | ❌ (Planned) Flow meter integration, volume-based brew stop |
 
 **Key Differences by Machine Type:**
 
-| Feature            | Dual Boiler | Single Boiler | Heat Exchanger |
-| ------------------ | :---------: | :-----------: | :------------: |
-| Brew NTC           |      ✓      |       ✓       |       ✗        |
-| Steam NTC          |      ✓      |       ✗       |       ✓        |
-| Group TC           |  Optional   |   Optional    |  **Required**  |
-| SSRs               |      2      |       1       |       1        |
-| Heating strategies |    All 5    |   BREW_ONLY   |   BREW_ONLY    |
-| Ready detection    |  brew_temp  |   brew_temp   |   group_temp   |
+| Feature            | Dual Boiler | Single Boiler | Heat Exchanger | Volumetric (Add-on) |
+| ------------------ | :---------: | :-----------: | :------------: | :-----------------: |
+| Brew NTC           |      ✓      |       ✓       |       ✗        |     Per base type   |
+| Steam NTC          |      ✓      |       ✗       |       ✓        |     Per base type   |
+| Group TC           |  Optional   |   Optional    |  **Required**  |     Per base type   |
+| Flow Meter         |   Optional  |    Optional   |    Optional    |    **Required**     |
+| SSRs               |      2      |       1       |       1        |     Per base type   |
+| Heating strategies |    All 5    |   BREW_ONLY   |   BREW_ONLY    |     Per base type   |
+| Ready detection    |  brew_temp  |   brew_temp   |   group_temp   |     Per base type   |
+| Dose control       |    Time     |     Time      |      Time      |      **Volume**     |
+
+> **Note:** Volumetric is implemented as an add-on feature that can be combined with any boiler type. A "Volumetric Dual Boiler" would have all dual boiler features plus flow meter-based volume dosing.
 
 > **Note:** See [Machine_Configurations.md](Machine_Configurations.md) for detailed machine configuration documentation.
 
@@ -426,12 +453,20 @@ make
    - Unit tests for critical functions
    - Automated testing
 
-2. **Thermoblock Support** ❌
+2. **Volumetric Machine Support** ❌
+
+   - Flow meter driver (Hall-effect pulse counting)
+   - Volume-based dosing and auto-stop
+   - Programmable dose presets (single, double, custom)
+   - Flow meter calibration interface
+   - Volume-based pre-infusion option
+
+3. **Thermoblock Support** ❌
 
    - Flow heater control (no boiler)
    - Flow-based temperature control
 
-3. **Advanced Features** ❌
+4. **Advanced Features** ❌
    - Additional heating strategies
    - Advanced PID tuning algorithms
    - Predictive temperature control
@@ -473,10 +508,10 @@ make
 
 ## Statistics
 
-- **Total Features:** ~165
-- **Completed:** ~150 (91%)
+- **Total Features:** ~175
+- **Completed:** ~150 (86%)
 - **Partial:** ~8 (5%)
-- **Not Implemented:** ~7 (4%)
+- **Not Implemented:** ~17 (9%)
 
 ---
 
@@ -496,8 +531,9 @@ make
 - **Dual Boiler** (`control_dual_boiler.c`) - Independent brew/steam PIDs, all heating strategies
 - **Single Boiler** (`control_single_boiler.c`) - Mode switching with configurable timeouts
 - **Heat Exchanger** (`control_heat_exchanger.c`) - Three modes: Temperature PID, Pressure PID, or Pressurestat (monitor only)
+- **Volumetric** (Planned) - Flow meter-based volume dosing, can be combined with any boiler type
 
-Build all types with `cmake .. -DBUILD_ALL_MACHINES=ON` or a single type with `-DMACHINE_TYPE=<TYPE>`.
+Build all types with `cmake .. -DBUILD_ALL_MACHINES=ON` or a single type with `-DMACHINE_TYPE=<TYPE>`. Volumetric support will be enabled with `-DENABLE_VOLUMETRIC=ON`.
 
 ---
 
@@ -513,7 +549,7 @@ Features planned for future releases, organized by priority and complexity.
 | **Pressure Profiling**     | High     | High       | Variable pressure curves: flat, declining, bloom, custom profiles           |
 | **Flow Profiling**         | High     | High       | Target flow rate curves during extraction                                   |
 | **Gear Pump Support**      | High     | Medium     | Variable speed pump control for flow/pressure profiling                     |
-| **Flow Meter Integration** | High     | Medium     | Gicar-style flow meters for precise volumetric dosing                       |
+| **Flow Meter Integration** | High     | Medium     | Gicar-style flow meters for volumetric dosing (see Volumetric Machine Support) |
 | **Recipe Management**      | Medium   | Medium     | Save/recall shot recipes (temp, pressure profile, dose, yield)              |
 | **Shot Replication**       | Medium   | High       | Replay successful shots with same parameters                                |
 | **Auto-Purge**             | Low      | Low        | Automatic group head flush before/after shots                               |
@@ -524,7 +560,7 @@ Features planned for future releases, organized by priority and complexity.
 | ------------------------------ | -------- | ---------- | ----------------------------------------------------------------------- |
 | **Gear Pump Control**          | High     | Medium     | PWM/analog control for variable-speed gear pumps (Fluid-o-Tech, Procon) |
 | **Dimmer/Triac Control**       | Medium   | Medium     | Vibratory pump speed control via phase-angle dimming                    |
-| **Flow Meter Driver**          | High     | Low        | Pulse counting for Hall-effect flow meters                              |
+| **Flow Meter Driver**          | High     | Low        | Pulse counting for Hall-effect flow meters (required for volumetric)    |
 | **Grinder Integration**        | Medium   | Medium     | Start/stop grinder, single-dose workflow                                |
 | **Thermoblock Support**        | Low      | High       | Flow heater control for on-demand machines                              |
 | **Additional Scale Protocols** | Low      | Low        | Hiroia Jimmy, Brewista, generic HX711 scales                            |
@@ -591,3 +627,14 @@ Features planned for future releases, organized by priority and complexity.
 - Hall-effect sensors: pulse counting via GPIO interrupt
 - Typical: 0.5-2.0 mL/pulse calibration
 - Integration with brew-by-volume (alternative to brew-by-weight)
+
+**Volumetric Machine Support:**
+
+- Builds on Flow Meter Integration as a core dependency
+- Volume-based brew control: auto-stop when target volume reached
+- Programmable dose presets: single (~30ml), double (~60ml), custom volumes
+- Learning mode: brew manually, machine records volume as new preset
+- Volume-based pre-infusion: specify ml instead of seconds
+- Calibration UI: adjust mL/pulse factor per flow meter
+- Compatible with any boiler type (dual, single, HX) as an add-on feature
+- Typical flow meters: Gicar, Digmesa, generic Hall-effect (200-2000 pulses/L)
