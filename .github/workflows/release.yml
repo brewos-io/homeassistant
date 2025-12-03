@@ -146,9 +146,17 @@ jobs:
 
             ## Installation
 
-            **Pico:** Hold BOOTSEL, connect USB, copy `.uf2` file to the drive.
+            ### OTA Update (Recommended)
 
-            **ESP32:** Use `esptool.py` or PlatformIO to flash `.bin` file.
+            1. Open BrewOS web interface → **Settings** → **System**
+            2. Click **Check for Updates** or **Install** if update is available
+            3. Wait for the device to restart
+
+            ### Manual Flash (First-time setup)
+
+            **ESP32:** Flash `brewos_esp32.bin` using PlatformIO or `esptool.py`
+
+            **Pico:** Hold BOOTSEL button, connect USB, copy the `.uf2` file to the drive
 
             See [SETUP.md](https://github.com/mizrachiran/brewos/blob/main/SETUP.md) for detailed instructions.
 
