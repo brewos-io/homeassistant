@@ -12,6 +12,11 @@ on:
         description: "Version tag (e.g., v0.1.0)"
         required: true
 
+# Only allow one release at a time - don't cancel in-progress releases
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 permissions:
   contents: write # Required to create releases
 

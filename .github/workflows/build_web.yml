@@ -10,6 +10,11 @@ on:
       - 'src/cloud/**'
   workflow_dispatch:
 
+# Cancel in-progress runs for the same PR
+concurrency:
+  group: build-web-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-web:
     name: Build Web UI

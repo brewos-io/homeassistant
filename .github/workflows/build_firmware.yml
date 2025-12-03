@@ -12,6 +12,11 @@ on:
       - 'src/shared/**'
   workflow_dispatch:
 
+# Cancel in-progress runs for the same PR
+concurrency:
+  group: build-firmware-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # ==========================================================================
   # Pico Unit Tests (runs first, blocks build on failure)

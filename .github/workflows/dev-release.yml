@@ -6,10 +6,15 @@ on:
   push:
     branches: [main]
     paths:
-      - 'src/esp32/**'
-      - 'src/pico/**'
-      - 'src/web/**'
-      - 'src/shared/**'
+      - "src/esp32/**"
+      - "src/pico/**"
+      - "src/web/**"
+      - "src/shared/**"
+
+# Only allow one dev release at a time - cancel older runs
+concurrency:
+  group: dev-release
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -18,7 +23,7 @@ jobs:
   build-dev:
     name: Build Dev Firmware
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -92,16 +97,16 @@ jobs:
       - name: Prepare Release Files
         run: |
           mkdir -p release
-          
+
           # Copy Pico firmware
           cp src/pico/build/brewos_dual_boiler.uf2 release/
           cp src/pico/build/brewos_single_boiler.uf2 release/
           cp src/pico/build/brewos_heat_exchanger.uf2 release/
-          
+
           # Copy ESP32 firmware
           cp src/esp32/.pio/build/esp32s3/firmware.bin release/brewos_esp32.bin
           cp src/esp32/.pio/build/esp32s3/littlefs.bin release/brewos_esp32_littlefs.bin
-          
+
           # Create checksums
           cd release
           sha256sum *.uf2 *.bin > SHA256SUMS.txt
@@ -135,26 +140,25 @@ jobs:
             release/SHA256SUMS.txt
           body: |
             ## Development Build
-            
+
             ⚠️ **This is an automated dev build from the `main` branch.**
-            
+
             **Commit:** ${{ github.sha }}
             **Built:** ${{ github.event.head_commit.timestamp }}
-            
+
             ### How to Use
-            
+
             1. Go to your ESP32's local web UI (e.g., `http://brewos.local`)
             2. Navigate to **Settings → System → Firmware Update**
             3. Select **Dev** channel
             4. Download and flash the firmware
-            
+
             ### Changes
-            
+
             ${{ github.event.head_commit.message }}
-            
+
             ---
-            
+
             🔄 This release is automatically replaced on every push to `main`.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
