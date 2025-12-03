@@ -6,6 +6,7 @@ import { Brewing } from "@/pages/Brewing";
 import { Stats } from "@/pages/Stats";
 import { Settings } from "@/pages/settings";
 import { Schedules } from "@/pages/Schedules";
+import { Diagnostics } from "@/pages/Diagnostics";
 import { Setup } from "@/pages/Setup";
 import { Login } from "@/pages/Login";
 import { Machines } from "@/pages/Machines";
@@ -229,6 +230,7 @@ function App() {
             <Route path="stats" element={<Stats />} />
             <Route path="schedules" element={<Schedules />} />
             <Route path="settings" element={<Settings />} />
+            <Route path="diagnostics" element={<Diagnostics />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>
@@ -258,6 +260,7 @@ function App() {
             <Route path="stats" element={<Stats />} />
             <Route path="schedules" element={<Schedules />} />
             <Route path="settings" element={<Settings />} />
+            <Route path="diagnostics" element={<Diagnostics />} />
             <Route path="setup" element={<Setup />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
@@ -321,6 +324,7 @@ function App() {
           <Route path="stats" element={<Stats />} />
           <Route path="schedules" element={<Schedules />} />
           <Route path="settings" element={<Settings />} />
+          <Route path="diagnostics" element={<Diagnostics />} />
         </Route>
 
         {/* Root: redirect to selected machine or machines list */}

@@ -863,6 +863,45 @@ void WebServer::setupRoutes() {
         request->send(200, "application/json", response);
     });
     
+    // ==========================================================================
+    // Diagnostics API endpoints
+    // ==========================================================================
+    
+    // Run all diagnostic tests
+    _server.on("/api/diagnostics/run", HTTP_POST, [this](AsyncWebServerRequest* request) {
+        // Send command to Pico to run all diagnostics
+        uint8_t payload[1] = { 0x00 };  // DIAG_TEST_ALL
+        if (_picoUart.sendCommand(MSG_CMD_DIAGNOSTICS, payload, 1)) {
+            broadcastLog("Running hardware diagnostics...", "info");
+            request->send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Diagnostics started\"}");
+        } else {
+            request->send(500, "application/json", "{\"error\":\"Failed to send diagnostic command\"}");
+        }
+    });
+    
+    // Run a single diagnostic test
+    _server.on("/api/diagnostics/test", HTTP_POST,
+        [](AsyncWebServerRequest* request) {},
+        nullptr,
+        [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            JsonDocument doc;
+            if (deserializeJson(doc, data, len)) {
+                request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+                return;
+            }
+            
+            uint8_t testId = doc["testId"] | 0;
+            uint8_t payload[1] = { testId };
+            
+            if (_picoUart.sendCommand(MSG_CMD_DIAGNOSTICS, payload, 1)) {
+                broadcastLog("Running diagnostic test " + String(testId), "info");
+                request->send(200, "application/json", "{\"status\":\"ok\"}");
+            } else {
+                request->send(500, "application/json", "{\"error\":\"Failed to send command\"}");
+            }
+        }
+    );
+    
     // SPA fallback - serve index.html for client-side routes
     // (any route that doesn't match API or static files)
     _server.onNotFound([](AsyncWebServerRequest* request) {
@@ -1541,6 +1580,26 @@ void WebServer::handleWsMessage(AsyncWebSocketClient* client, uint8_t* data, siz
                 broadcastLog("Maintenance recorded: " + type, "info");
             }
         }
+        // Diagnostics commands
+        else if (cmd == "run_diagnostics") {
+            // Run all diagnostic tests
+            uint8_t payload[1] = { 0x00 };  // DIAG_TEST_ALL
+            if (_picoUart.sendCommand(MSG_CMD_DIAGNOSTICS, payload, 1)) {
+                broadcastLog("Running hardware diagnostics...", "info");
+            } else {
+                broadcastLog("Failed to start diagnostics", "error");
+            }
+        }
+        else if (cmd == "run_diagnostic_test") {
+            // Run a single diagnostic test
+            uint8_t testId = doc["testId"] | 0;
+            uint8_t payload[1] = { testId };
+            if (_picoUart.sendCommand(MSG_CMD_DIAGNOSTICS, payload, 1)) {
+                broadcastLog("Running diagnostic test " + String(testId), "info");
+            } else {
+                broadcastLog("Failed to start diagnostic test", "error");
+            }
+        }
     }
 }
 
@@ -1574,6 +1633,10 @@ void WebServer::broadcastPicoMessage(uint8_t type, const uint8_t* payload, size_
     
     String json;
     serializeJson(doc, json);
+    _ws.textAll(json);
+}
+
+void WebServer::broadcastRaw(const String& json) {
     _ws.textAll(json);
 }
 

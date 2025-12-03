@@ -152,6 +152,30 @@ typedef struct __attribute__((packed)) {
 } statistics_payload_t;  // 28 bytes - DEPRECATED
 
 // -----------------------------------------------------------------------------
+// Diagnostics Payload (MSG_DIAGNOSTICS = 0x0A)
+// -----------------------------------------------------------------------------
+// Single diagnostic test result
+typedef struct __attribute__((packed)) {
+    uint8_t test_id;               // Test identifier (DIAG_TEST_*)
+    uint8_t status;                // Result status (DIAG_STATUS_*)
+    int16_t raw_value;             // Raw sensor reading (if applicable)
+    int16_t expected_min;          // Expected minimum value
+    int16_t expected_max;          // Expected maximum value
+    char message[24];              // Result message (null-terminated)
+} diag_result_payload_t;  // 32 bytes
+
+// Diagnostic report header (followed by individual results)
+typedef struct __attribute__((packed)) {
+    uint8_t test_count;            // Number of tests in this report
+    uint8_t pass_count;            // Tests passed
+    uint8_t fail_count;            // Tests failed
+    uint8_t warn_count;            // Tests with warnings
+    uint8_t skip_count;            // Tests skipped
+    uint8_t is_complete;           // 1 if all results sent, 0 if more coming
+    uint16_t duration_ms;          // Total test duration
+} diag_header_payload_t;  // 8 bytes
+
+// -----------------------------------------------------------------------------
 // ACK Payload (MSG_ACK = 0x04)
 // -----------------------------------------------------------------------------
 typedef struct __attribute__((packed)) {
@@ -181,6 +205,9 @@ bool protocol_send_env_config(const env_config_payload_t* env_config);
 bool protocol_send_statistics(const statistics_payload_t* stats);
 bool protocol_send_ack(uint8_t for_type, uint8_t seq, uint8_t result);
 bool protocol_send_debug(const char* message);
+// Diagnostics
+bool protocol_send_diag_header(const diag_header_payload_t* header);
+bool protocol_send_diag_result(const diag_result_payload_t* result);
 
 // Error tracking
 uint32_t protocol_get_crc_errors(void);

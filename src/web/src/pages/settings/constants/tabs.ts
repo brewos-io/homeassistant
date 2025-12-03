@@ -7,17 +7,17 @@ import {
   Palette,
   Server,
   Info,
-} from 'lucide-react';
+} from "lucide-react";
 
-export type SettingsTab = 
-  | 'machine' 
-  | 'network' 
-  | 'scale' 
-  | 'cloud' 
-  | 'regional' 
-  | 'appearance' 
-  | 'system' 
-  | 'about';
+export type SettingsTab =
+  | "machine"
+  | "network"
+  | "scale"
+  | "cloud"
+  | "regional"
+  | "appearance"
+  | "system"
+  | "about";
 
 export interface TabConfig {
   id: SettingsTab;
@@ -27,23 +27,22 @@ export interface TabConfig {
 
 export const getSettingsTabs = (isCloud: boolean): TabConfig[] => {
   const tabs: TabConfig[] = [
-    { id: 'machine', label: 'Machine', icon: Coffee },
-    { id: 'network', label: 'Network', icon: Wifi },
-    { id: 'scale', label: 'Scale', icon: ScaleIcon },
+    { id: "machine", label: "Machine", icon: Coffee },
+    { id: "network", label: "Network", icon: Wifi },
+    { id: "scale", label: "Scale", icon: ScaleIcon },
   ];
-  
+
   // Only show Cloud tab in local mode
   if (!isCloud) {
-    tabs.push({ id: 'cloud', label: 'Cloud', icon: Cloud });
+    tabs.push({ id: "cloud", label: "Cloud", icon: Cloud });
   }
-  
+
   tabs.push(
-    { id: 'regional', label: 'Regional', icon: Globe },
-    { id: 'appearance', label: 'Theme', icon: Palette },
-    { id: 'system', label: 'System', icon: Server },
-    { id: 'about', label: 'About', icon: Info },
+    { id: "regional", label: "Regional", icon: Globe },
+    { id: "appearance", label: "Theme", icon: Palette },
+    { id: "system", label: "System", icon: Server },
+    { id: "about", label: "About", icon: Info }
   );
-  
+
   return tabs;
 };
-

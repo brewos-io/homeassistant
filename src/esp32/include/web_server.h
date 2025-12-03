@@ -31,6 +31,9 @@ public:
     // Legacy/debug - raw pico message forwarding
     void broadcastPicoMessage(uint8_t type, const uint8_t* payload, size_t len);
     
+    // Broadcast raw JSON string to all WebSocket clients
+    void broadcastRaw(const String& json);
+    
     // Get client count
     size_t getClientCount();
 

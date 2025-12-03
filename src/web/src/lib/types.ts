@@ -39,7 +39,9 @@ export type MessageType =
   | 'error'
   | 'scan_result'
   | 'scan_complete'
-  | 'device_info';
+  | 'device_info'
+  | 'diagnostics_header'
+  | 'diagnostics_result';
 
 export interface WebSocketMessage {
   type: MessageType;
@@ -333,6 +335,107 @@ export interface ExtendedStatsResponse {
   brewHistory: BrewRecord[];
   powerHistory: PowerSample[];
   dailyHistory: DailySummary[];
+}
+
+// =============================================================================
+// DIAGNOSTICS TYPES - Hardware self-test and diagnostics
+// =============================================================================
+
+/**
+ * Diagnostic test IDs - matches protocol_defs.h DIAG_TEST_*
+ */
+export type DiagnosticTestId =
+  | 0x00  // ALL - run all tests
+  | 0x01  // BREW_NTC
+  | 0x02  // STEAM_NTC
+  | 0x03  // GROUP_TC
+  | 0x04  // PRESSURE
+  | 0x05  // WATER_LEVEL
+  | 0x06  // SSR_BREW
+  | 0x07  // SSR_STEAM
+  | 0x08  // RELAY_PUMP
+  | 0x09  // RELAY_SOLENOID
+  | 0x0A  // PZEM
+  | 0x0B  // ESP32_COMM
+  | 0x0C  // BUZZER
+  | 0x0D; // LED
+
+/**
+ * Diagnostic result status - matches protocol_defs.h DIAG_STATUS_*
+ */
+export type DiagnosticStatus = 'pass' | 'fail' | 'warn' | 'skip' | 'running';
+
+/**
+ * Map status code to DiagnosticStatus
+ */
+export function diagStatusFromCode(code: number): DiagnosticStatus {
+  switch (code) {
+    case 0x00: return 'pass';
+    case 0x01: return 'fail';
+    case 0x02: return 'warn';
+    case 0x03: return 'skip';
+    case 0x04: return 'running';
+    default: return 'fail';
+  }
+}
+
+/**
+ * Individual diagnostic test result
+ */
+export interface DiagnosticResult {
+  testId: DiagnosticTestId;
+  name: string;           // Human-readable test name
+  status: DiagnosticStatus;
+  rawValue: number;       // Raw sensor value
+  expectedMin: number;    // Expected minimum
+  expectedMax: number;    // Expected maximum
+  message: string;        // Result message
+}
+
+/**
+ * Diagnostic report header/summary
+ */
+export interface DiagnosticHeader {
+  testCount: number;
+  passCount: number;
+  failCount: number;
+  warnCount: number;
+  skipCount: number;
+  isComplete: boolean;
+  durationMs: number;
+}
+
+/**
+ * Complete diagnostic report
+ */
+export interface DiagnosticReport {
+  header: DiagnosticHeader;
+  results: DiagnosticResult[];
+  isRunning: boolean;
+  timestamp: number;
+}
+
+/**
+ * Get human-readable name for a diagnostic test
+ */
+export function getDiagnosticTestName(testId: number): string {
+  const names: Record<number, string> = {
+    0x00: 'All Tests',
+    0x01: 'Brew Boiler NTC',
+    0x02: 'Steam Boiler NTC',
+    0x03: 'Group Thermocouple',
+    0x04: 'Pressure Sensor',
+    0x05: 'Water Level Sensors',
+    0x06: 'Brew SSR Output',
+    0x07: 'Steam SSR Output',
+    0x08: 'Pump Relay',
+    0x09: 'Brew Solenoid Relay',
+    0x0A: 'PZEM Power Meter',
+    0x0B: 'ESP32 Communication',
+    0x0C: 'Buzzer',
+    0x0D: 'Status LED',
+  };
+  return names[testId] || `Unknown Test (${testId})`;
 }
 
 // Alerts & Logs

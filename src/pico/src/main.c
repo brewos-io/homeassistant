@@ -30,6 +30,7 @@
 #include "cleaning.h"
 #include "bootloader.h"
 #include "pzem.h"
+#include "diagnostics.h"
 #include "flash_safe.h"
 
 // -----------------------------------------------------------------------------
@@ -456,6 +457,90 @@ void handle_packet(const packet_t* packet) {
             snprintf(error_msg, sizeof(error_msg), "Bootloader failed: %s", 
                      bootloader_get_status_message(result));
             protocol_send_debug(error_msg);
+            break;
+        }
+        
+        case MSG_CMD_DIAGNOSTICS: {
+            // Run diagnostic tests
+            uint8_t test_id = DIAG_TEST_ALL;
+            if (packet->length >= 1) {
+                test_id = packet->payload[0];
+            }
+            
+            DEBUG_PRINT("Running diagnostics (test_id=%d)\n", test_id);
+            protocol_send_ack(MSG_CMD_DIAGNOSTICS, packet->seq, ACK_SUCCESS);
+            
+            if (test_id == DIAG_TEST_ALL) {
+                // Run all tests
+                diag_report_t report;
+                diagnostics_run_all(&report);
+                
+                // Send header first
+                diag_header_payload_t header = {
+                    .test_count = report.test_count,
+                    .pass_count = report.pass_count,
+                    .fail_count = report.fail_count,
+                    .warn_count = report.warn_count,
+                    .skip_count = report.skip_count,
+                    .is_complete = 0,  // More results coming
+                    .duration_ms = (uint16_t)(report.duration_ms > 65535 ? 65535 : report.duration_ms)
+                };
+                protocol_send_diag_header(&header);
+                
+                // Send each result
+                for (int i = 0; i < report.test_count && i < 16; i++) {
+                    diag_result_t* r = &report.results[i];
+                    diag_result_payload_t result_payload = {
+                        .test_id = r->test_id,
+                        .status = r->status,
+                        .raw_value = r->raw_value,
+                        .expected_min = r->expected_min,
+                        .expected_max = r->expected_max
+                    };
+                    strncpy(result_payload.message, r->message, sizeof(result_payload.message) - 1);
+                    result_payload.message[sizeof(result_payload.message) - 1] = '\0';
+                    protocol_send_diag_result(&result_payload);
+                    
+                    // Small delay between packets
+                    sleep_ms(10);
+                }
+                
+                // Send final header with is_complete=1
+                header.is_complete = 1;
+                protocol_send_diag_header(&header);
+            } else {
+                // Run single test
+                diag_result_t single_result;
+                diagnostics_run_test(test_id, &single_result);
+                
+                // Send header
+                diag_header_payload_t header = {
+                    .test_count = 1,
+                    .pass_count = (single_result.status == DIAG_STATUS_PASS) ? 1 : 0,
+                    .fail_count = (single_result.status == DIAG_STATUS_FAIL) ? 1 : 0,
+                    .warn_count = (single_result.status == DIAG_STATUS_WARN) ? 1 : 0,
+                    .skip_count = (single_result.status == DIAG_STATUS_SKIP) ? 1 : 0,
+                    .is_complete = 0,
+                    .duration_ms = 0
+                };
+                protocol_send_diag_header(&header);
+                
+                // Send result
+                diag_result_payload_t result_payload = {
+                    .test_id = single_result.test_id,
+                    .status = single_result.status,
+                    .raw_value = single_result.raw_value,
+                    .expected_min = single_result.expected_min,
+                    .expected_max = single_result.expected_max
+                };
+                strncpy(result_payload.message, single_result.message, sizeof(result_payload.message) - 1);
+                result_payload.message[sizeof(result_payload.message) - 1] = '\0';
+                protocol_send_diag_result(&result_payload);
+                
+                // Send final header
+                header.is_complete = 1;
+                protocol_send_diag_header(&header);
+            }
             break;
         }
         

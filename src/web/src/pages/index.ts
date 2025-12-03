@@ -3,6 +3,7 @@ export { Brewing } from './Brewing';
 export { Stats } from './Stats';
 export { Settings } from './settings';
 export { Schedules } from './Schedules';
+export { Diagnostics } from './Diagnostics';
 export { Setup } from './Setup';
 export { Login } from './Login';
 export { Machines } from './Machines';

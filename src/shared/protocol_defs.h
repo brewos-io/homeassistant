@@ -56,6 +56,32 @@ extern "C" {
 #define MSG_DEBUG_RESP          0x07    // Debug response
 #define MSG_ENV_CONFIG          0x08    // Environmental config (voltage, current limits)
 #define MSG_STATISTICS          0x09    // Statistics response
+#define MSG_DIAGNOSTICS         0x0A    // Diagnostics response
+
+// =============================================================================
+// Diagnostic Test IDs
+// =============================================================================
+#define DIAG_TEST_ALL           0x00    // Run all tests
+#define DIAG_TEST_BREW_NTC      0x01    // Brew boiler NTC sensor
+#define DIAG_TEST_STEAM_NTC     0x02    // Steam boiler NTC sensor
+#define DIAG_TEST_GROUP_TC      0x03    // Group thermocouple (MAX31855)
+#define DIAG_TEST_PRESSURE      0x04    // Pressure transducer
+#define DIAG_TEST_WATER_LEVEL   0x05    // Water level sensors
+#define DIAG_TEST_SSR_BREW      0x06    // Brew SSR output
+#define DIAG_TEST_SSR_STEAM     0x07    // Steam SSR output
+#define DIAG_TEST_RELAY_PUMP    0x08    // Pump relay
+#define DIAG_TEST_RELAY_SOLENOID 0x09   // Brew solenoid relay
+#define DIAG_TEST_PZEM          0x0A    // PZEM power meter
+#define DIAG_TEST_ESP32_COMM    0x0B    // ESP32 communication
+#define DIAG_TEST_BUZZER        0x0C    // Buzzer
+#define DIAG_TEST_LED           0x0D    // Status LED
+
+// Diagnostic result status
+#define DIAG_STATUS_PASS        0x00    // Test passed
+#define DIAG_STATUS_FAIL        0x01    // Test failed
+#define DIAG_STATUS_WARN        0x02    // Test passed with warnings
+#define DIAG_STATUS_SKIP        0x03    // Test skipped (not applicable)
+#define DIAG_STATUS_RUNNING     0x04    // Test in progress
 
 // =============================================================================
 // ACK Result Codes
@@ -86,6 +112,7 @@ extern "C" {
 #define MSG_CMD_DEBUG           0x1D    // Debug command
 #define MSG_CMD_SET_ECO         0x1E    // Set eco mode configuration
 #define MSG_CMD_BOOTLOADER      0x1F    // Enter bootloader mode
+#define MSG_CMD_DIAGNOSTICS     0x20    // Run diagnostic test(s)
 
 // =============================================================================
 // Alarm Codes

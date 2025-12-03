@@ -265,6 +265,58 @@ void setup() {
                 LOG_D("Debug response from Pico");
                 break;
                 
+            case MSG_DIAGNOSTICS: {
+                // Diagnostic results from Pico
+                // First check if this is a header (8 bytes) or result (32 bytes)
+                if (packet.length == 8) {
+                    // Diagnostic header
+                    LOG_I("Diag header: tests=%d, pass=%d, fail=%d, warn=%d, skip=%d, complete=%d",
+                          packet.payload[0], packet.payload[1], packet.payload[2],
+                          packet.payload[3], packet.payload[4], packet.payload[5]);
+                    
+                    // Broadcast to WebSocket clients
+                    JsonDocument doc;
+                    doc["type"] = "diagnostics_header";
+                    doc["testCount"] = packet.payload[0];
+                    doc["passCount"] = packet.payload[1];
+                    doc["failCount"] = packet.payload[2];
+                    doc["warnCount"] = packet.payload[3];
+                    doc["skipCount"] = packet.payload[4];
+                    doc["isComplete"] = packet.payload[5] != 0;
+                    doc["durationMs"] = packet.payload[6] | (packet.payload[7] << 8);
+                    String json;
+                    serializeJson(doc, json);
+                    webServer.broadcastRaw(json);
+                    
+                    if (packet.payload[5]) {  // is_complete
+                        webServer.broadcastLog("Diagnostics complete", "info");
+                    }
+                } else if (packet.length >= 32) {
+                    // Diagnostic result
+                    LOG_I("Diag result: test=%d, status=%d", packet.payload[0], packet.payload[1]);
+                    
+                    // Broadcast to WebSocket clients
+                    JsonDocument doc;
+                    doc["type"] = "diagnostics_result";
+                    doc["testId"] = packet.payload[0];
+                    doc["status"] = packet.payload[1];
+                    doc["rawValue"] = (int16_t)(packet.payload[2] | (packet.payload[3] << 8));
+                    doc["expectedMin"] = (int16_t)(packet.payload[4] | (packet.payload[5] << 8));
+                    doc["expectedMax"] = (int16_t)(packet.payload[6] | (packet.payload[7] << 8));
+                    
+                    // Extract message (remaining bytes, null-terminated)
+                    char msg[25];
+                    memcpy(msg, &packet.payload[8], 24);
+                    msg[24] = '\0';
+                    doc["message"] = msg;
+                    
+                    String json;
+                    serializeJson(doc, json);
+                    webServer.broadcastRaw(json);
+                }
+                break;
+            }
+                
             default:
                 LOG_D("Unknown packet type: 0x%02X", packet.type);
         }

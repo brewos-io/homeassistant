@@ -194,6 +194,14 @@ bool protocol_send_debug(const char* message) {
     return send_packet(MSG_DEBUG, (const uint8_t*)message, len);
 }
 
+bool protocol_send_diag_header(const diag_header_payload_t* header) {
+    return send_packet(MSG_DIAGNOSTICS, (const uint8_t*)header, sizeof(diag_header_payload_t));
+}
+
+bool protocol_send_diag_result(const diag_result_payload_t* result) {
+    return send_packet(MSG_DIAGNOSTICS, (const uint8_t*)result, sizeof(diag_result_payload_t));
+}
+
 // -----------------------------------------------------------------------------
 // Receive Processing
 // -----------------------------------------------------------------------------

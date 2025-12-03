@@ -1,0 +1,605 @@
+/**
+ * ECM Pico Firmware - Hardware Diagnostics
+ * 
+ * Self-test and diagnostic functions for validating hardware wiring
+ * and component functionality.
+ */
+
+#include "pico/stdlib.h"
+#include "diagnostics.h"
+#include "config.h"
+#include "hardware.h"
+#include "sensors.h"
+#include "pcb_config.h"
+#include "machine_config.h"
+#include "pzem.h"
+#include "safety.h"
+#include "protocol_defs.h"
+#include <string.h>
+#include <stdio.h>
+#include <math.h>
+
+// =============================================================================
+// Private State
+// =============================================================================
+
+static bool g_running = false;
+static uint32_t g_start_time = 0;
+
+// =============================================================================
+// Helper Functions
+// =============================================================================
+
+/**
+ * Initialize a result structure with default values
+ */
+static void init_result(diag_result_t* result, uint8_t test_id) {
+    memset(result, 0, sizeof(diag_result_t));
+    result->test_id = test_id;
+    result->status = DIAG_STATUS_RUNNING;
+    result->raw_value = 0;
+    result->expected_min = 0;
+    result->expected_max = 0;
+    result->message[0] = '\0';
+}
+
+/**
+ * Set result status and message
+ */
+static void set_result(diag_result_t* result, uint8_t status, const char* msg) {
+    result->status = status;
+    strncpy(result->message, msg, sizeof(result->message) - 1);
+    result->message[sizeof(result->message) - 1] = '\0';
+}
+
+// =============================================================================
+// Initialization
+// =============================================================================
+
+void diagnostics_init(void) {
+    g_running = false;
+    DEBUG_PRINT("Diagnostics module initialized\n");
+}
+
+bool diagnostics_is_running(void) {
+    return g_running;
+}
+
+void diagnostics_abort(void) {
+    g_running = false;
+    DEBUG_PRINT("Diagnostics aborted\n");
+}
+
+// =============================================================================
+// Run All Tests
+// =============================================================================
+
+bool diagnostics_run_all(diag_report_t* report) {
+    if (!report) return false;
+    
+    g_running = true;
+    g_start_time = to_ms_since_boot(get_absolute_time());
+    
+    // Initialize report
+    memset(report, 0, sizeof(diag_report_t));
+    report->test_count = 0;
+    report->pass_count = 0;
+    report->fail_count = 0;
+    report->warn_count = 0;
+    report->skip_count = 0;
+    
+    // Array of tests to run
+    struct {
+        uint8_t test_id;
+        uint8_t (*test_func)(diag_result_t*);
+    } tests[] = {
+        { DIAG_TEST_BREW_NTC, diag_test_brew_ntc },
+        { DIAG_TEST_STEAM_NTC, diag_test_steam_ntc },
+        { DIAG_TEST_GROUP_TC, diag_test_group_tc },
+        { DIAG_TEST_PRESSURE, diag_test_pressure },
+        { DIAG_TEST_WATER_LEVEL, diag_test_water_level },
+        { DIAG_TEST_SSR_BREW, diag_test_ssr_brew },
+        { DIAG_TEST_SSR_STEAM, diag_test_ssr_steam },
+        { DIAG_TEST_RELAY_PUMP, diag_test_relay_pump },
+        { DIAG_TEST_RELAY_SOLENOID, diag_test_relay_solenoid },
+        { DIAG_TEST_PZEM, diag_test_pzem },
+        { DIAG_TEST_ESP32_COMM, diag_test_esp32_comm },
+        { DIAG_TEST_BUZZER, diag_test_buzzer },
+        { DIAG_TEST_LED, diag_test_led },
+    };
+    
+    const int num_tests = sizeof(tests) / sizeof(tests[0]);
+    
+    for (int i = 0; i < num_tests && i < 16 && g_running; i++) {
+        diag_result_t* result = &report->results[i];
+        tests[i].test_func(result);
+        report->test_count++;
+        
+        switch (result->status) {
+            case DIAG_STATUS_PASS:
+                report->pass_count++;
+                break;
+            case DIAG_STATUS_FAIL:
+                report->fail_count++;
+                break;
+            case DIAG_STATUS_WARN:
+                report->warn_count++;
+                break;
+            case DIAG_STATUS_SKIP:
+                report->skip_count++;
+                break;
+        }
+        
+        // Feed watchdog between tests
+        watchdog_update();
+    }
+    
+    report->duration_ms = to_ms_since_boot(get_absolute_time()) - g_start_time;
+    g_running = false;
+    
+    DEBUG_PRINT("Diagnostics complete: %d pass, %d fail, %d warn, %d skip (%.1fs)\n",
+                report->pass_count, report->fail_count, report->warn_count,
+                report->skip_count, report->duration_ms / 1000.0f);
+    
+    return report->fail_count == 0;
+}
+
+// =============================================================================
+// Run Single Test
+// =============================================================================
+
+uint8_t diagnostics_run_test(uint8_t test_id, diag_result_t* result) {
+    if (!result) return DIAG_STATUS_FAIL;
+    
+    g_running = true;
+    
+    switch (test_id) {
+        case DIAG_TEST_BREW_NTC:
+            diag_test_brew_ntc(result);
+            break;
+        case DIAG_TEST_STEAM_NTC:
+            diag_test_steam_ntc(result);
+            break;
+        case DIAG_TEST_GROUP_TC:
+            diag_test_group_tc(result);
+            break;
+        case DIAG_TEST_PRESSURE:
+            diag_test_pressure(result);
+            break;
+        case DIAG_TEST_WATER_LEVEL:
+            diag_test_water_level(result);
+            break;
+        case DIAG_TEST_SSR_BREW:
+            diag_test_ssr_brew(result);
+            break;
+        case DIAG_TEST_SSR_STEAM:
+            diag_test_ssr_steam(result);
+            break;
+        case DIAG_TEST_RELAY_PUMP:
+            diag_test_relay_pump(result);
+            break;
+        case DIAG_TEST_RELAY_SOLENOID:
+            diag_test_relay_solenoid(result);
+            break;
+        case DIAG_TEST_PZEM:
+            diag_test_pzem(result);
+            break;
+        case DIAG_TEST_ESP32_COMM:
+            diag_test_esp32_comm(result);
+            break;
+        case DIAG_TEST_BUZZER:
+            diag_test_buzzer(result);
+            break;
+        case DIAG_TEST_LED:
+            diag_test_led(result);
+            break;
+        default:
+            init_result(result, test_id);
+            set_result(result, DIAG_STATUS_FAIL, "Unknown test");
+            break;
+    }
+    
+    g_running = false;
+    return result->status;
+}
+
+// =============================================================================
+// Individual Test Implementations
+// =============================================================================
+
+uint8_t diag_test_brew_ntc(diag_result_t* result) {
+    init_result(result, DIAG_TEST_BREW_NTC);
+    
+    // Check if machine has brew NTC
+    if (!machine_has_brew_ntc()) {
+        set_result(result, DIAG_STATUS_SKIP, "No brew NTC (HX machine)");
+        return result->status;
+    }
+    
+    const pcb_config_t* pcb = pcb_config_get();
+    if (!pcb || pcb->pins.adc_brew_ntc < 0) {
+        set_result(result, DIAG_STATUS_SKIP, "Not configured");
+        return result->status;
+    }
+    
+    // Read ADC
+    uint8_t adc_channel = pcb->pins.adc_brew_ntc - 26;
+    uint16_t adc_value = hw_read_adc(adc_channel);
+    result->raw_value = (int16_t)adc_value;
+    
+    // Expected range for NTC at room temperature (10-40°C)
+    // ADC value ~1500-2500 for 10k NTC with 10k pullup at 25°C
+    result->expected_min = 500;
+    result->expected_max = 3500;
+    
+    if (adc_value < 100) {
+        set_result(result, DIAG_STATUS_FAIL, "Short circuit");
+    } else if (adc_value > 4000) {
+        set_result(result, DIAG_STATUS_FAIL, "Open circuit");
+    } else if (adc_value < result->expected_min || adc_value > result->expected_max) {
+        set_result(result, DIAG_STATUS_WARN, "Value out of expected range");
+    } else {
+        set_result(result, DIAG_STATUS_PASS, "OK");
+    }
+    
+    DEBUG_PRINT("Brew NTC: ADC=%d, status=%d\n", adc_value, result->status);
+    return result->status;
+}
+
+uint8_t diag_test_steam_ntc(diag_result_t* result) {
+    init_result(result, DIAG_TEST_STEAM_NTC);
+    
+    // Check if machine has steam NTC
+    if (!machine_has_steam_ntc()) {
+        set_result(result, DIAG_STATUS_SKIP, "No steam NTC (single boiler)");
+        return result->status;
+    }
+    
+    const pcb_config_t* pcb = pcb_config_get();
+    if (!pcb || pcb->pins.adc_steam_ntc < 0) {
+        set_result(result, DIAG_STATUS_SKIP, "Not configured");
+        return result->status;
+    }
+    
+    // Read ADC
+    uint8_t adc_channel = pcb->pins.adc_steam_ntc - 26;
+    uint16_t adc_value = hw_read_adc(adc_channel);
+    result->raw_value = (int16_t)adc_value;
+    
+    result->expected_min = 500;
+    result->expected_max = 3500;
+    
+    if (adc_value < 100) {
+        set_result(result, DIAG_STATUS_FAIL, "Short circuit");
+    } else if (adc_value > 4000) {
+        set_result(result, DIAG_STATUS_FAIL, "Open circuit");
+    } else if (adc_value < result->expected_min || adc_value > result->expected_max) {
+        set_result(result, DIAG_STATUS_WARN, "Value out of expected range");
+    } else {
+        set_result(result, DIAG_STATUS_PASS, "OK");
+    }
+    
+    DEBUG_PRINT("Steam NTC: ADC=%d, status=%d\n", adc_value, result->status);
+    return result->status;
+}
+
+uint8_t diag_test_group_tc(diag_result_t* result) {
+    init_result(result, DIAG_TEST_GROUP_TC);
+    
+    // Check if machine has group thermocouple
+    if (!machine_has_group_thermocouple()) {
+        set_result(result, DIAG_STATUS_SKIP, "No group thermocouple");
+        return result->status;
+    }
+    
+    const pcb_config_t* pcb = pcb_config_get();
+    if (!pcb || pcb->pins.spi_cs_thermocouple < 0) {
+        set_result(result, DIAG_STATUS_SKIP, "Not configured");
+        return result->status;
+    }
+    
+    // Read MAX31855
+    uint32_t max31855_data;
+    if (!hw_spi_read_max31855(&max31855_data)) {
+        set_result(result, DIAG_STATUS_FAIL, "SPI read failed");
+        return result->status;
+    }
+    
+    // Check for faults
+    if (hw_max31855_is_fault(max31855_data)) {
+        uint8_t fault_code = hw_max31855_get_fault(max31855_data);
+        if (fault_code & 0x01) {
+            set_result(result, DIAG_STATUS_FAIL, "Open circuit");
+        } else if (fault_code & 0x02) {
+            set_result(result, DIAG_STATUS_FAIL, "Short to GND");
+        } else if (fault_code & 0x04) {
+            set_result(result, DIAG_STATUS_FAIL, "Short to VCC");
+        } else {
+            set_result(result, DIAG_STATUS_FAIL, "Unknown fault");
+        }
+        return result->status;
+    }
+    
+    // Get temperature
+    float temp_c;
+    if (!hw_max31855_to_temp(max31855_data, &temp_c)) {
+        set_result(result, DIAG_STATUS_FAIL, "Conversion failed");
+        return result->status;
+    }
+    
+    result->raw_value = (int16_t)(temp_c * 10);
+    result->expected_min = 100;   // 10.0°C
+    result->expected_max = 400;   // 40.0°C (room temp range)
+    
+    if (temp_c < 10.0f || temp_c > 50.0f) {
+        set_result(result, DIAG_STATUS_WARN, "Temp out of expected range");
+    } else {
+        set_result(result, DIAG_STATUS_PASS, "OK");
+    }
+    
+    DEBUG_PRINT("Group TC: %.1fC, status=%d\n", temp_c, result->status);
+    return result->status;
+}
+
+uint8_t diag_test_pressure(diag_result_t* result) {
+    init_result(result, DIAG_TEST_PRESSURE);
+    
+    const pcb_config_t* pcb = pcb_config_get();
+    if (!pcb || pcb->pins.adc_pressure < 0) {
+        set_result(result, DIAG_STATUS_SKIP, "Not configured");
+        return result->status;
+    }
+    
+    // Read ADC voltage
+    uint8_t adc_channel = pcb->pins.adc_pressure - 26;
+    float voltage = hw_read_adc_voltage(adc_channel);
+    result->raw_value = (int16_t)(voltage * 100);  // mV * 10
+    
+    // Expected: 0.3V - 0.5V at 0 bar (after voltage divider)
+    // This corresponds to 0.5V - 0.8V transducer output at rest
+    result->expected_min = 25;   // 0.25V
+    result->expected_max = 60;   // 0.60V
+    
+    if (voltage < 0.1f) {
+        set_result(result, DIAG_STATUS_FAIL, "No signal (disconnected?)");
+    } else if (voltage > 2.0f) {
+        set_result(result, DIAG_STATUS_FAIL, "Voltage too high");
+    } else if (voltage < 0.2f || voltage > 0.7f) {
+        set_result(result, DIAG_STATUS_WARN, "Unexpected resting voltage");
+    } else {
+        set_result(result, DIAG_STATUS_PASS, "OK");
+    }
+    
+    DEBUG_PRINT("Pressure: %.2fV, status=%d\n", voltage, result->status);
+    return result->status;
+}
+
+uint8_t diag_test_water_level(diag_result_t* result) {
+    init_result(result, DIAG_TEST_WATER_LEVEL);
+    
+    const pcb_config_t* pcb = pcb_config_get();
+    if (!pcb) {
+        set_result(result, DIAG_STATUS_SKIP, "PCB not configured");
+        return result->status;
+    }
+    
+    bool has_any_sensor = false;
+    bool all_ok = true;
+    char msg[32] = "";
+    
+    // Check reservoir sensor
+    if (PIN_VALID(pcb->pins.input_reservoir)) {
+        has_any_sensor = true;
+        bool state = hw_read_gpio(pcb->pins.input_reservoir);
+        if (!state) {
+            snprintf(msg, sizeof(msg), "Reservoir: empty");
+            all_ok = false;
+        }
+    }
+    
+    // Check tank level sensor
+    if (PIN_VALID(pcb->pins.input_tank_level)) {
+        has_any_sensor = true;
+        bool state = hw_read_gpio(pcb->pins.input_tank_level);
+        if (!state) {
+            snprintf(msg, sizeof(msg), "Tank: low");
+            all_ok = false;
+        }
+    }
+    
+    // Check steam level sensor
+    if (PIN_VALID(pcb->pins.input_steam_level)) {
+        has_any_sensor = true;
+        bool state = hw_read_gpio(pcb->pins.input_steam_level);
+        if (!state) {
+            snprintf(msg, sizeof(msg), "Steam: low");
+            all_ok = false;
+        }
+    }
+    
+    if (!has_any_sensor) {
+        set_result(result, DIAG_STATUS_SKIP, "No sensors configured");
+    } else if (!all_ok) {
+        set_result(result, DIAG_STATUS_WARN, msg[0] ? msg : "Level low");
+    } else {
+        set_result(result, DIAG_STATUS_PASS, "All levels OK");
+    }
+    
+    DEBUG_PRINT("Water level: status=%d, %s\n", result->status, result->message);
+    return result->status;
+}
+
+uint8_t diag_test_ssr_brew(diag_result_t* result) {
+    init_result(result, DIAG_TEST_SSR_BREW);
+    
+    const pcb_config_t* pcb = pcb_config_get();
+    if (!pcb || pcb->pins.ssr_brew < 0) {
+        set_result(result, DIAG_STATUS_SKIP, "Not configured");
+        return result->status;
+    }
+    
+    // Brief PWM pulse to verify signal path (10% for 100ms)
+    // This won't heat anything but verifies the output works
+    hw_pwm_init(pcb->pins.ssr_brew, PWM_FREQUENCY_SSR);
+    hw_pwm_set_duty(pcb->pins.ssr_brew, 10);
+    sleep_ms(100);
+    hw_pwm_set_duty(pcb->pins.ssr_brew, 0);
+    
+    // Note: We can't verify the SSR actually switched without additional feedback
+    // This test just verifies the GPIO/PWM is functional
+    set_result(result, DIAG_STATUS_PASS, "PWM signal OK");
+    
+    DEBUG_PRINT("Brew SSR: test pulse sent\n");
+    return result->status;
+}
+
+uint8_t diag_test_ssr_steam(diag_result_t* result) {
+    init_result(result, DIAG_TEST_SSR_STEAM);
+    
+    const pcb_config_t* pcb = pcb_config_get();
+    if (!pcb || pcb->pins.ssr_steam < 0) {
+        set_result(result, DIAG_STATUS_SKIP, "Not configured");
+        return result->status;
+    }
+    
+    // Brief PWM pulse to verify signal path
+    hw_pwm_init(pcb->pins.ssr_steam, PWM_FREQUENCY_SSR);
+    hw_pwm_set_duty(pcb->pins.ssr_steam, 10);
+    sleep_ms(100);
+    hw_pwm_set_duty(pcb->pins.ssr_steam, 0);
+    
+    set_result(result, DIAG_STATUS_PASS, "PWM signal OK");
+    
+    DEBUG_PRINT("Steam SSR: test pulse sent\n");
+    return result->status;
+}
+
+uint8_t diag_test_relay_pump(diag_result_t* result) {
+    init_result(result, DIAG_TEST_RELAY_PUMP);
+    
+    const pcb_config_t* pcb = pcb_config_get();
+    if (!pcb || pcb->pins.relay_pump < 0) {
+        set_result(result, DIAG_STATUS_SKIP, "Not configured");
+        return result->status;
+    }
+    
+    // Brief activation to verify relay driver (50ms click)
+    // Warning: This may briefly energize the pump!
+    hw_set_gpio(pcb->pins.relay_pump, true);
+    sleep_ms(50);
+    hw_set_gpio(pcb->pins.relay_pump, false);
+    
+    set_result(result, DIAG_STATUS_PASS, "Relay activated");
+    
+    DEBUG_PRINT("Pump relay: test click\n");
+    return result->status;
+}
+
+uint8_t diag_test_relay_solenoid(diag_result_t* result) {
+    init_result(result, DIAG_TEST_RELAY_SOLENOID);
+    
+    const pcb_config_t* pcb = pcb_config_get();
+    if (!pcb || pcb->pins.relay_brew_solenoid < 0) {
+        set_result(result, DIAG_STATUS_SKIP, "Not configured");
+        return result->status;
+    }
+    
+    // Brief activation to verify relay driver (50ms click)
+    hw_set_gpio(pcb->pins.relay_brew_solenoid, true);
+    sleep_ms(50);
+    hw_set_gpio(pcb->pins.relay_brew_solenoid, false);
+    
+    set_result(result, DIAG_STATUS_PASS, "Relay activated");
+    
+    DEBUG_PRINT("Solenoid relay: test click\n");
+    return result->status;
+}
+
+uint8_t diag_test_pzem(diag_result_t* result) {
+    init_result(result, DIAG_TEST_PZEM);
+    
+    if (!pzem_is_available()) {
+        set_result(result, DIAG_STATUS_SKIP, "PZEM not available");
+        return result->status;
+    }
+    
+    // Try to read from PZEM
+    pzem_data_t pzem_data;
+    if (!pzem_read(&pzem_data)) {
+        set_result(result, DIAG_STATUS_FAIL, "Read failed");
+        return result->status;
+    }
+    
+    result->raw_value = (int16_t)(pzem_data.voltage * 10);
+    
+    // Check for reasonable voltage (85-265V)
+    if (pzem_data.voltage < 85.0f || pzem_data.voltage > 265.0f) {
+        set_result(result, DIAG_STATUS_WARN, "Unexpected voltage");
+    } else {
+        set_result(result, DIAG_STATUS_PASS, "OK");
+    }
+    
+    DEBUG_PRINT("PZEM: %.1fV, %.2fA\n", pzem_data.voltage, pzem_data.current);
+    return result->status;
+}
+
+uint8_t diag_test_esp32_comm(diag_result_t* result) {
+    init_result(result, DIAG_TEST_ESP32_COMM);
+    
+    // Check if ESP32 is connected (based on recent heartbeat)
+    if (safety_esp32_connected()) {
+        set_result(result, DIAG_STATUS_PASS, "Connected");
+    } else {
+        set_result(result, DIAG_STATUS_FAIL, "No heartbeat");
+    }
+    
+    DEBUG_PRINT("ESP32 comm: status=%d\n", result->status);
+    return result->status;
+}
+
+uint8_t diag_test_buzzer(diag_result_t* result) {
+    init_result(result, DIAG_TEST_BUZZER);
+    
+    const pcb_config_t* pcb = pcb_config_get();
+    if (!pcb || pcb->pins.buzzer < 0) {
+        set_result(result, DIAG_STATUS_SKIP, "Not configured");
+        return result->status;
+    }
+    
+    // Brief chirp (100ms)
+    hw_set_gpio(pcb->pins.buzzer, true);
+    sleep_ms(100);
+    hw_set_gpio(pcb->pins.buzzer, false);
+    
+    set_result(result, DIAG_STATUS_PASS, "Chirp played");
+    
+    DEBUG_PRINT("Buzzer: test chirp\n");
+    return result->status;
+}
+
+uint8_t diag_test_led(diag_result_t* result) {
+    init_result(result, DIAG_TEST_LED);
+    
+    const pcb_config_t* pcb = pcb_config_get();
+    if (!pcb || pcb->pins.led_status < 0) {
+        set_result(result, DIAG_STATUS_SKIP, "Not configured");
+        return result->status;
+    }
+    
+    // Flash LED 3 times
+    for (int i = 0; i < 3; i++) {
+        hw_set_gpio(pcb->pins.led_status, true);
+        sleep_ms(100);
+        hw_set_gpio(pcb->pins.led_status, false);
+        sleep_ms(100);
+    }
+    
+    // Leave LED in normal state (on)
+    hw_set_gpio(pcb->pins.led_status, true);
+    
+    set_result(result, DIAG_STATUS_PASS, "LED flashed");
+    
+    DEBUG_PRINT("LED: test flash\n");
+    return result->status;
+}
+

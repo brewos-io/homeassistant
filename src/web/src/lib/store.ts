@@ -25,7 +25,11 @@ import type {
   WebSocketMessage,
   UserPreferences,
   IConnection,
+  DiagnosticReport,
+  DiagnosticResult,
+  DiagnosticHeader,
 } from "./types";
+import { diagStatusFromCode, getDiagnosticTestName } from "./types";
 
 interface BrewOSState {
   // Connection
@@ -64,6 +68,9 @@ interface BrewOSState {
   alerts: Alert[];
   logs: LogEntry[];
 
+  // Diagnostics
+  diagnostics: DiagnosticReport;
+
   // User preferences (localStorage)
   preferences: UserPreferences;
 
@@ -79,6 +86,10 @@ interface BrewOSState {
     key: K,
     value: UserPreferences[K]
   ) => void;
+  
+  // Diagnostics actions
+  setDiagnosticsRunning: (running: boolean) => void;
+  resetDiagnostics: () => void;
 }
 
 // Default state
@@ -245,6 +256,21 @@ const defaultDevice: DeviceInfo = {
   firmwareVersion: "",
 };
 
+const defaultDiagnostics: DiagnosticReport = {
+  header: {
+    testCount: 0,
+    passCount: 0,
+    failCount: 0,
+    warnCount: 0,
+    skipCount: 0,
+    isComplete: false,
+    durationMs: 0,
+  },
+  results: [],
+  isRunning: false,
+  timestamp: 0,
+};
+
 // Load preferences from localStorage
 const loadPreferences = (): UserPreferences => {
   const defaults: UserPreferences = {
@@ -295,6 +321,7 @@ export const useStore = create<BrewOSState>()(
     stats: defaultStats,
     alerts: [],
     logs: [],
+    diagnostics: defaultDiagnostics,
     preferences: loadPreferences(),
 
     // Actions
@@ -673,6 +700,48 @@ export const useStore = create<BrewOSState>()(
             },
           }));
           break;
+
+        case "diagnostics_header": {
+          const header: DiagnosticHeader = {
+            testCount: (data.testCount as number) ?? 0,
+            passCount: (data.passCount as number) ?? 0,
+            failCount: (data.failCount as number) ?? 0,
+            warnCount: (data.warnCount as number) ?? 0,
+            skipCount: (data.skipCount as number) ?? 0,
+            isComplete: (data.isComplete as boolean) ?? false,
+            durationMs: (data.durationMs as number) ?? 0,
+          };
+          set((state) => ({
+            diagnostics: {
+              ...state.diagnostics,
+              header,
+              isRunning: !header.isComplete,
+              timestamp: header.isComplete ? Date.now() : state.diagnostics.timestamp,
+              // Clear results on new test run (when first header arrives)
+              results: state.diagnostics.isRunning ? state.diagnostics.results : [],
+            },
+          }));
+          break;
+        }
+
+        case "diagnostics_result": {
+          const result: DiagnosticResult = {
+            testId: (data.testId as number) ?? 0,
+            name: getDiagnosticTestName((data.testId as number) ?? 0),
+            status: diagStatusFromCode((data.status as number) ?? 1),
+            rawValue: (data.rawValue as number) ?? 0,
+            expectedMin: (data.expectedMin as number) ?? 0,
+            expectedMax: (data.expectedMax as number) ?? 0,
+            message: (data.message as string) ?? "",
+          };
+          set((state) => ({
+            diagnostics: {
+              ...state.diagnostics,
+              results: [...state.diagnostics.results, result],
+            },
+          }));
+          break;
+        }
       }
     },
 
@@ -700,6 +769,22 @@ export const useStore = create<BrewOSState>()(
         savePreferences(newPrefs);
         return { preferences: newPrefs };
       });
+    },
+
+    setDiagnosticsRunning: (running) => {
+      set((state) => ({
+        diagnostics: {
+          ...state.diagnostics,
+          isRunning: running,
+          // Clear results when starting new test
+          results: running ? [] : state.diagnostics.results,
+          timestamp: running ? 0 : state.diagnostics.timestamp,
+        },
+      }));
+    },
+
+    resetDiagnostics: () => {
+      set({ diagnostics: defaultDiagnostics });
     },
   }))
 );

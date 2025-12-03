@@ -1,11 +1,23 @@
 import { useState, useEffect, useMemo } from "react";
 import { useStore } from "@/lib/store";
+import { useNavigate } from "react-router-dom";
 import { getActiveConnection } from "@/lib/connection";
 import { Card, CardHeader, CardTitle } from "@/components/Card";
 import { Input } from "@/components/Input";
 import { Button } from "@/components/Button";
 import { useToast } from "@/components/Toast";
-import { Coffee, Save, ChevronDown, AlertCircle } from "lucide-react";
+import {
+  Coffee,
+  Save,
+  ChevronDown,
+  AlertCircle,
+  Activity,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  Loader2,
+  ChevronRight,
+} from "lucide-react";
 import {
   SUPPORTED_MACHINES,
   getMachinesGroupedByBrand,
@@ -16,9 +28,11 @@ import { cn } from "@/lib/utils";
 import { formatTemperatureWithUnit } from "@/lib/temperature";
 
 export function MachineSettings() {
+  const navigate = useNavigate();
   const device = useStore((s) => s.device);
   const temperatureUnit = useStore((s) => s.preferences.temperatureUnit);
   const connectionState = useStore((s) => s.connectionState);
+  const diagnostics = useStore((s) => s.diagnostics);
   const { success, error } = useToast();
 
   // Device identity
@@ -232,7 +246,113 @@ export function MachineSettings() {
             Save Machine Info
           </Button>
         </div>
+
+        {/* Diagnostics Link */}
+        <DiagnosticsRow
+          diagnostics={diagnostics}
+          onClick={() => navigate("/diagnostics")}
+        />
       </div>
     </Card>
+  );
+}
+
+// Compact diagnostic status row
+function DiagnosticsRow({
+  diagnostics,
+  onClick,
+}: {
+  diagnostics: {
+    header: {
+      testCount: number;
+      passCount: number;
+      failCount: number;
+      warnCount: number;
+    };
+    isRunning: boolean;
+    timestamp: number;
+  };
+  onClick: () => void;
+}) {
+  const { header, isRunning, timestamp } = diagnostics;
+  const hasResults = header.testCount > 0;
+
+  const getStatus = () => {
+    if (isRunning) {
+      return {
+        icon: <Loader2 className="w-4 h-4 animate-spin" />,
+        color: "text-blue-500",
+        text: "Running...",
+      };
+    }
+    if (!hasResults) {
+      return {
+        icon: <Activity className="w-4 h-4" />,
+        color: "text-theme-muted",
+        text: "Not tested",
+      };
+    }
+    if (header.failCount > 0) {
+      return {
+        icon: <XCircle className="w-4 h-4" />,
+        color: "text-red-500",
+        text: `${header.failCount} issue${
+          header.failCount > 1 ? "s" : ""
+        } found`,
+      };
+    }
+    if (header.warnCount > 0) {
+      return {
+        icon: <AlertTriangle className="w-4 h-4" />,
+        color: "text-amber-500",
+        text: `${header.warnCount} warning${header.warnCount > 1 ? "s" : ""}`,
+      };
+    }
+    return {
+      icon: <CheckCircle2 className="w-4 h-4" />,
+      color: "text-emerald-500",
+      text: "All passed",
+    };
+  };
+
+  const getTimeAgo = () => {
+    if (!timestamp) return "";
+    const diffMs = Date.now() - timestamp;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return "just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return new Date(timestamp).toLocaleDateString();
+  };
+
+  const status = getStatus();
+  const timeAgo = getTimeAgo();
+
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "w-full mt-2 pt-4 border-t border-theme",
+        "flex items-center justify-between gap-3",
+        "text-left group transition-colors",
+        "hover:opacity-80"
+      )}
+    >
+      <div className="flex items-center gap-3">
+        <div className={status.color}>{status.icon}</div>
+        <div>
+          <p className="text-sm font-medium text-theme">Hardware Diagnostics</p>
+          <p className="text-xs text-theme-muted">
+            {status.text}
+            {timeAgo && hasResults && ` · ${timeAgo}`}
+          </p>
+        </div>
+      </div>
+      <ChevronRight className="w-4 h-4 text-theme-muted group-hover:text-theme transition-colors" />
+    </button>
   );
 }
