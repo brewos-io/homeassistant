@@ -6,7 +6,7 @@
 
 import { formatDate as formatDateUtil } from "./date";
 
-export type UpdateChannel = "stable" | "beta";
+export type UpdateChannel = "stable" | "beta" | "dev";
 
 export interface VersionInfo {
   version: string;
@@ -20,9 +20,11 @@ export interface VersionInfo {
 export interface UpdateCheckResult {
   stable: VersionInfo | null;
   beta: VersionInfo | null;
+  dev: VersionInfo | null;
   currentVersion: string;
   hasStableUpdate: boolean;
   hasBetaUpdate: boolean;
+  hasDevUpdate: boolean;
 }
 
 // GitHub repository for fetching releases
@@ -147,14 +149,19 @@ async function fetchGitHubReleases(): Promise<VersionInfo[]> {
 
     const releases = await response.json();
 
-    return releases.map((release: any) => ({
-      version: release.tag_name.replace(/^v/, ""),
-      channel: release.prerelease ? "beta" : "stable",
-      releaseDate: release.published_at,
-      releaseNotes: release.body,
-      downloadUrl: release.html_url,
-      isPrerelease: release.prerelease,
-    }));
+    return releases.map((release: any) => {
+      const tagName = release.tag_name;
+      const isDev = tagName === "dev-latest";
+      
+      return {
+        version: isDev ? "dev-latest" : tagName.replace(/^v/, ""),
+        channel: isDev ? "dev" : (release.prerelease ? "beta" : "stable"),
+        releaseDate: release.published_at,
+        releaseNotes: release.body,
+        downloadUrl: release.html_url,
+        isPrerelease: release.prerelease || isDev,
+      };
+    });
   } catch (error) {
     console.error("Failed to fetch GitHub releases:", error);
     return [];
@@ -210,17 +217,20 @@ export async function checkForUpdates(
 
   // Find latest stable version
   const stableReleases = releases
-    .filter((r) => !r.isPrerelease)
+    .filter((r) => r.channel === "stable")
     .sort((a, b) => compareVersions(b.version, a.version));
 
   const latestStable = stableReleases[0] || null;
 
-  // Find latest beta version (including RCs)
+  // Find latest beta version (including RCs, excluding dev)
   const betaReleases = releases
-    .filter((r) => r.isPrerelease)
+    .filter((r) => r.channel === "beta")
     .sort((a, b) => compareVersions(b.version, a.version));
 
   const latestBeta = betaReleases[0] || null;
+
+  // Find dev release (dev-latest tag)
+  const latestDev = releases.find((r) => r.channel === "dev") || null;
 
   // Check if updates are available
   const hasStableUpdate = latestStable
@@ -232,12 +242,17 @@ export async function checkForUpdates(
     ? compareVersions(latestBeta.version, currentVersion) > 0
     : false;
 
+  // Dev is always considered "available" since it's the latest from main
+  const hasDevUpdate = latestDev !== null;
+
   return {
     stable: latestStable,
     beta: latestBeta,
+    dev: latestDev,
     currentVersion,
     hasStableUpdate,
     hasBetaUpdate,
+    hasDevUpdate,
   };
 }
 
@@ -246,7 +261,7 @@ export async function checkForUpdates(
  */
 export function getUpdateChannel(): UpdateChannel {
   const stored = localStorage.getItem("brewos-update-channel");
-  if (stored === "beta" || stored === "stable") {
+  if (stored === "beta" || stored === "stable" || stored === "dev") {
     return stored;
   }
   return "stable"; // Default to stable

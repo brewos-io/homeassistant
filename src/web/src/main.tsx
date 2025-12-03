@@ -8,6 +8,9 @@ import { GOOGLE_CLIENT_ID } from "./lib/auth";
 import { registerServiceWorker } from "./lib/push-notifications";
 import { ToastProvider } from "./components/Toast";
 
+// Initialize dev mode detection early (checks ?dev=true in URL)
+import "./lib/dev-mode";
+
 // Google Analytics - only in production
 const GA_MEASUREMENT_ID = "G-KY0H392KGB";
 

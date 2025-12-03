@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { isDemoMode } from "@/lib/demo-mode";
+import { useDevMode } from "@/lib/dev-mode";
 
 interface PairingData {
   deviceId: string;
@@ -33,6 +34,38 @@ interface CloudStatus {
   enabled: boolean;
   connected: boolean;
   serverUrl: string;
+}
+
+// Cloud environment presets
+type CloudEnvironment = "production" | "staging" | "custom";
+
+const CLOUD_ENVIRONMENTS: Record<
+  CloudEnvironment,
+  { label: string; url: string; description: string; devOnly?: boolean }
+> = {
+  production: {
+    label: "Production",
+    url: "wss://cloud.brewos.io",
+    description: "BrewOS Cloud service",
+  },
+  staging: {
+    label: "Staging",
+    url: "wss://staging.brewos.io",
+    description: "Test latest changes before release",
+    devOnly: true,
+  },
+  custom: {
+    label: "Custom",
+    url: "",
+    description: "Enter a custom server URL",
+  },
+};
+
+// Detect which environment a URL matches
+function detectEnvironment(url: string): CloudEnvironment {
+  if (url === CLOUD_ENVIRONMENTS.production.url) return "production";
+  if (url === CLOUD_ENVIRONMENTS.staging.url) return "staging";
+  return "custom";
 }
 
 // Demo mode mock data
@@ -52,6 +85,7 @@ const DEMO_CLOUD_STATUS: CloudStatus = {
 
 export function CloudSettings() {
   const isDemo = isDemoMode();
+  const devMode = useDevMode();
   const { sendCommand } = useCommand();
   const [cloudConfig, setCloudConfig] = useState<CloudStatus | null>(
     isDemo ? DEMO_CLOUD_STATUS : null
@@ -70,7 +104,18 @@ export function CloudSettings() {
   const [cloudUrl, setCloudUrl] = useState(
     cloudConfig?.serverUrl || "wss://cloud.brewos.io"
   );
+  const [selectedEnv, setSelectedEnv] = useState<CloudEnvironment>(() =>
+    detectEnvironment(cloudConfig?.serverUrl || "wss://cloud.brewos.io")
+  );
   const [saving, setSaving] = useState(false);
+
+  // Handle environment preset selection
+  const handleEnvChange = (env: CloudEnvironment) => {
+    setSelectedEnv(env);
+    if (env !== "custom") {
+      setCloudUrl(CLOUD_ENVIRONMENTS[env].url);
+    }
+  };
 
   const fetchPairingQR = async () => {
     // Demo mode: use mock data
@@ -178,6 +223,7 @@ export function CloudSettings() {
       setCloudConfig(DEMO_CLOUD_STATUS);
       setCloudEnabled(true);
       setCloudUrl(DEMO_CLOUD_STATUS.serverUrl);
+      setSelectedEnv(detectEnvironment(DEMO_CLOUD_STATUS.serverUrl));
       return;
     }
 
@@ -187,7 +233,9 @@ export function CloudSettings() {
         const data = await response.json();
         setCloudConfig(data);
         setCloudEnabled(data.enabled);
-        setCloudUrl(data.serverUrl || "wss://cloud.brewos.io");
+        const url = data.serverUrl || "wss://cloud.brewos.io";
+        setCloudUrl(url);
+        setSelectedEnv(detectEnvironment(url));
       }
     } catch {
       // Device might not support cloud status endpoint yet
@@ -405,13 +453,60 @@ export function CloudSettings() {
                   Allow remote access via BrewOS Cloud
                 </p>
               </div>
-              <Input
-                label="Cloud Server URL"
-                value={cloudUrl}
-                onChange={(e) => setCloudUrl(e.target.value)}
-                placeholder="wss://cloud.brewos.io"
-                disabled={!cloudEnabled}
-              />
+
+              {/* Environment Selector */}
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-theme-muted mb-1.5">
+                  Environment{" "}
+                  {devMode && <span className="text-purple-400">(Dev)</span>}
+                </label>
+                <div className="flex gap-2">
+                  {(Object.keys(CLOUD_ENVIRONMENTS) as CloudEnvironment[])
+                    .filter(
+                      (env) => !CLOUD_ENVIRONMENTS[env].devOnly || devMode
+                    )
+                    .map((env) => (
+                      <button
+                        key={env}
+                        onClick={() => handleEnvChange(env)}
+                        disabled={!cloudEnabled}
+                        className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-medium transition-all border-2 ${
+                          selectedEnv === env
+                            ? env === "staging"
+                              ? "border-purple-500 bg-purple-500/15 text-purple-600 dark:text-purple-400"
+                              : "border-amber-500 bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                            : "border-transparent bg-theme-secondary text-theme-muted hover:bg-theme-tertiary hover:text-theme"
+                        } ${
+                          !cloudEnabled ? "opacity-50 cursor-not-allowed" : ""
+                        }`}
+                      >
+                        {CLOUD_ENVIRONMENTS[env].label}
+                      </button>
+                    ))}
+                </div>
+                <p className="text-xs text-theme-muted mt-1">
+                  {CLOUD_ENVIRONMENTS[selectedEnv].description}
+                </p>
+              </div>
+
+              {/* Custom URL input - only shown when Custom is selected */}
+              {selectedEnv === "custom" && (
+                <Input
+                  label="Custom Server URL"
+                  value={cloudUrl}
+                  onChange={(e) => setCloudUrl(e.target.value)}
+                  placeholder="wss://your-server.com"
+                  disabled={!cloudEnabled}
+                />
+              )}
+
+              {/* Show current URL for non-custom environments */}
+              {selectedEnv !== "custom" && (
+                <div className="text-xs text-theme-muted bg-theme-secondary rounded-lg px-3 py-2">
+                  <span className="font-medium">Server:</span> {cloudUrl}
+                </div>
+              )}
+
               <div className="flex-1" />
               <div className="flex justify-end">
                 <Button

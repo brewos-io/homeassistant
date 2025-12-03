@@ -30,12 +30,14 @@ import {
   type UpdateChannel,
   type UpdateCheckResult,
 } from "@/lib/updates";
+import { useDevMode } from "@/lib/dev-mode";
 
 export function SystemSettings() {
   const esp32 = useStore((s) => s.esp32);
   const pico = useStore((s) => s.pico);
   const clearLogs = useStore((s) => s.clearLogs);
   const { sendCommandWithConfirm } = useCommand();
+  const devMode = useDevMode();
 
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updateResult, setUpdateResult] = useState<UpdateCheckResult | null>(
@@ -67,9 +69,13 @@ export function SystemSettings() {
     }
   };
 
+  const [showDevWarning, setShowDevWarning] = useState(false);
+
   const handleChannelChange = (newChannel: UpdateChannel) => {
     if (newChannel === "beta" && channel === "stable") {
       setShowBetaWarning(true);
+    } else if (newChannel === "dev" && channel !== "dev") {
+      setShowDevWarning(true);
     } else {
       setChannel(newChannel);
       setUpdateChannel(newChannel);
@@ -82,11 +88,20 @@ export function SystemSettings() {
     setShowBetaWarning(false);
   };
 
+  const confirmDevChannel = () => {
+    setChannel("dev");
+    setUpdateChannel("dev");
+    setShowDevWarning(false);
+  };
+
   const startOTA = (version: string) => {
-    const isBeta = version.includes("-");
-    const warningText = isBeta
-      ? `Install BETA version ${version}? This is a pre-release version for testing. The device will restart after update.`
-      : `Install version ${version}? The device will restart after update.`;
+    const isDev = version === "dev-latest";
+    const isBeta = version.includes("-") && !isDev;
+    const warningText = isDev
+      ? `Install DEV build? This is an automated build from main branch for developers. May be unstable. The device will restart after update.`
+      : isBeta
+        ? `Install BETA version ${version}? This is a pre-release version for testing. The device will restart after update.`
+        : `Install version ${version}? The device will restart after update.`;
 
     sendCommandWithConfirm("ota_start", warningText, { version }, 
       { successMessage: `Installing version ${version}...` });
@@ -192,19 +207,19 @@ export function SystemSettings() {
             variant="secondary"
             size="sm"
             onClick={handleCheckForUpdates}
-            loading={checkingUpdate}
+            disabled={checkingUpdate}
           >
-            <RefreshCw className="w-4 h-4" />
-            Check
+            <RefreshCw className={`w-4 h-4 ${checkingUpdate ? "animate-spin" : ""}`} />
+            {checkingUpdate ? "Checking..." : "Check"}
           </Button>
         </div>
 
         {/* Update Channel Selection */}
         <div className="mb-6">
           <label className="text-sm font-medium text-theme mb-3 block">
-            Update Channel
+            Update Channel {devMode && <span className="text-purple-400 text-xs">(Dev Mode)</span>}
           </label>
-          <div className="grid grid-cols-2 gap-3">
+          <div className={`grid gap-3 ${devMode ? "grid-cols-3" : "grid-cols-2"}`}>
             <button
               onClick={() => handleChannelChange("stable")}
               className={`p-4 rounded-xl border-2 transition-all text-left ${
@@ -230,7 +245,7 @@ export function SystemSettings() {
                 </span>
               </div>
               <p className="text-xs text-theme-muted">
-                Recommended for most users. Tested and reliable.
+                Recommended. Tested and reliable.
               </p>
             </button>
 
@@ -257,9 +272,39 @@ export function SystemSettings() {
                 </span>
               </div>
               <p className="text-xs text-theme-muted">
-                Get new features early. May contain bugs.
+                New features early. May have bugs.
               </p>
             </button>
+
+            {/* Dev channel - only visible in dev mode */}
+            {devMode && (
+              <button
+                onClick={() => handleChannelChange("dev")}
+                className={`p-4 rounded-xl border-2 transition-all text-left ${
+                  channel === "dev"
+                    ? "border-purple-500 bg-purple-500/10"
+                    : "border-theme hover:border-theme-light"
+                }`}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <Terminal
+                    className={`w-5 h-5 ${
+                      channel === "dev" ? "text-purple-500" : "text-theme-muted"
+                    }`}
+                  />
+                  <span
+                    className={`font-semibold ${
+                      channel === "dev" ? "text-purple-400" : "text-theme"
+                    }`}
+                  >
+                    Dev
+                  </span>
+                </div>
+                <p className="text-xs text-theme-muted">
+                  Latest from main. For developers.
+                </p>
+              </button>
+            )}
           </div>
         </div>
 
@@ -396,9 +441,66 @@ export function SystemSettings() {
               </div>
             )}
 
+            {/* Dev Build - only show if user is on dev channel AND dev mode enabled */}
+            {devMode && channel === "dev" && updateResult.dev && (
+              <div className="p-4 rounded-xl border border-purple-500 bg-purple-500/10">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Terminal className="w-4 h-4 text-purple-500" />
+                      <span className="font-semibold text-theme">
+                        Dev Build
+                      </span>
+                      <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30">
+                        {updateResult.dev.version}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-theme-muted mb-2">
+                      Built{" "}
+                      {formatReleaseDate(updateResult.dev.releaseDate)}
+                    </p>
+                    <p className="text-sm text-purple-400 flex items-center gap-1">
+                      <RefreshCw className="w-4 h-4" />
+                      Latest from main branch
+                    </p>
+
+                    {/* Dev Warning */}
+                    <div className="mt-3 p-2 bg-purple-500/10 rounded-lg flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 text-purple-400 flex-shrink-0 mt-0.5" />
+                      <p className="text-xs text-purple-300">
+                        Dev builds are for development testing only. 
+                        They may be unstable or contain breaking changes.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Button
+                      size="sm"
+                      className="bg-purple-600 hover:bg-purple-700"
+                      onClick={() => startOTA("dev-latest")}
+                    >
+                      <Download className="w-4 h-4" />
+                      Install Dev
+                    </Button>
+                    {updateResult.dev.downloadUrl && (
+                      <a
+                        href={updateResult.dev.downloadUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-purple-400 hover:underline flex items-center gap-1"
+                      >
+                        View Build <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* No updates available message */}
             {!updateResult.hasStableUpdate &&
-              (channel !== "beta" || !updateResult.hasBetaUpdate) && (
+              (channel !== "beta" || !updateResult.hasBetaUpdate) &&
+              (channel !== "dev" || !updateResult.hasDevUpdate) && (
                 <div className="text-center py-4 text-theme-muted">
                   <Check className="w-8 h-8 mx-auto mb-2 text-emerald-500" />
                   <p className="text-sm">You're running the latest version!</p>
@@ -445,6 +547,53 @@ export function SystemSettings() {
                 <Button className="flex-1" onClick={confirmBetaChannel}>
                   <FlaskConical className="w-4 h-4" />
                   Enable Beta
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Dev Warning Modal - only in dev mode */}
+      {devMode && showDevWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <Card className="w-full max-w-md">
+            <div className="text-center p-6">
+              <div className="w-16 h-16 bg-purple-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Terminal className="w-8 h-8 text-purple-500" />
+              </div>
+              <h3 className="text-xl font-bold text-theme mb-2">
+                Enable Dev Builds?
+              </h3>
+              <p className="text-sm text-theme-muted mb-4">
+                Dev builds are automated builds from the main branch.
+                They're intended for developers testing the latest changes.
+              </p>
+              <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-lg mb-6 text-left">
+                <h4 className="font-semibold text-purple-400 text-sm mb-2 flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4" /> Warning:
+                </h4>
+                <ul className="text-xs text-theme-muted space-y-1">
+                  <li>• Untested, may contain breaking changes</li>
+                  <li>• Could be unstable or crash</li>
+                  <li>• Auto-updates on every push to main</li>
+                  <li>• For development testing only</li>
+                </ul>
+              </div>
+              <div className="flex gap-3">
+                <Button
+                  variant="secondary"
+                  className="flex-1"
+                  onClick={() => setShowDevWarning(false)}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  className="flex-1 bg-purple-600 hover:bg-purple-700" 
+                  onClick={confirmDevChannel}
+                >
+                  <Terminal className="w-4 h-4" />
+                  Enable Dev
                 </Button>
               </div>
             </div>

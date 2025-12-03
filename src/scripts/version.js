@@ -25,6 +25,11 @@ const { execSync } = require("child_process");
 // Project root (parent of src/scripts/)
 const PROJECT_ROOT = path.resolve(__dirname, "..", "..");
 const VERSION_FILE = path.join(PROJECT_ROOT, "VERSION");
+const VERSION_JSON = path.join(PROJECT_ROOT, "version.json");
+const MANIFEST_FILE = path.join(PROJECT_ROOT, "src/web/public/version-manifest.json");
+
+// GitHub repository for release URLs
+const GITHUB_REPO = "mizrachiran/brewos";
 
 // Files to update
 const PICO_CONFIG = path.join(PROJECT_ROOT, "src/pico/include/config.h");
@@ -34,9 +39,11 @@ const PROTOCOL_DEFS = path.join(PROJECT_ROOT, "src/shared/protocol_defs.h");
 // Files to commit for a release
 const VERSION_FILES = [
   "VERSION",
+  "version.json",
   "src/pico/include/config.h",
   "src/esp32/include/config.h",
   "src/shared/protocol_defs.h",
+  "src/web/public/version-manifest.json",
 ];
 
 /**
@@ -77,12 +84,8 @@ function getCurrentBranch() {
  * Check if a tag already exists
  */
 function tagExists(tag) {
-  try {
-    git(`rev-parse ${tag}`, { silent: true, ignoreError: true });
-    return true;
-  } catch {
-    return false;
-  }
+  const result = git(`rev-parse --verify refs/tags/${tag}`, { silent: true, ignoreError: true });
+  return result !== "";
 }
 
 /**
@@ -137,20 +140,91 @@ PROTOCOL_VERSION=${protocolVersion}
 }
 
 /**
- * Parse version string into [major, minor, patch]
+ * Write version.json file (used by CI and version display)
+ */
+function writeVersionJson(firmwareVersion, protocolVersion) {
+  const isPrerelease = /-(alpha|beta|rc)/.test(firmwareVersion);
+  const channel = isPrerelease ? "beta" : "stable";
+  
+  const content = {
+    version: firmwareVersion,
+    protocol: protocolVersion,
+    channel: channel,
+    updatedAt: new Date().toISOString(),
+  };
+  
+  fs.writeFileSync(VERSION_JSON, JSON.stringify(content, null, 2) + "\n");
+  console.log(`✓ Updated version.json`);
+}
+
+/**
+ * Generate version manifest for OTA updates
+ * This manifest is served by the web app and used by ESP32 to check for updates
+ */
+function writeVersionManifest(firmwareVersion, protocolVersion) {
+  const tag = `v${firmwareVersion}`;
+  const baseUrl = `https://github.com/${GITHUB_REPO}/releases/download/${tag}`;
+  const isPrerelease = /-(alpha|beta|rc)/.test(firmwareVersion);
+  
+  const manifest = {
+    // Current latest version info
+    latest: {
+      version: firmwareVersion,
+      tag: tag,
+      channel: isPrerelease ? "beta" : "stable",
+      protocol: protocolVersion,
+      releaseUrl: `https://github.com/${GITHUB_REPO}/releases/tag/${tag}`,
+    },
+    // ESP32 firmware files
+    esp32: {
+      firmware: `${baseUrl}/brewos_esp32.bin`,
+      filesystem: `${baseUrl}/brewos_esp32_littlefs.bin`,
+    },
+    // Pico firmware files for different machine types
+    pico: {
+      dual_boiler: `${baseUrl}/brewos_dual_boiler.uf2`,
+      single_boiler: `${baseUrl}/brewos_single_boiler.uf2`,
+      heat_exchanger: `${baseUrl}/brewos_heat_exchanger.uf2`,
+    },
+    // Metadata
+    generatedAt: new Date().toISOString(),
+  };
+  
+  // Ensure directory exists
+  const manifestDir = path.dirname(MANIFEST_FILE);
+  if (!fs.existsSync(manifestDir)) {
+    fs.mkdirSync(manifestDir, { recursive: true });
+  }
+  
+  fs.writeFileSync(MANIFEST_FILE, JSON.stringify(manifest, null, 2) + "\n");
+  console.log(`✓ Updated src/web/public/version-manifest.json`);
+}
+
+/**
+ * Parse version string into [major, minor, patch, prerelease]
+ * Supports: "1.2.3" and "1.2.3-beta.1"
  */
 function parseVersion(versionStr) {
-  const match = versionStr.match(/^(\d+)\.(\d+)\.(\d+)$/);
+  const match = versionStr.match(/^(\d+)\.(\d+)\.(\d+)(?:-(.+))?$/);
   if (!match) {
     throw new Error(
-      `Invalid version format: ${versionStr}. Expected MAJOR.MINOR.PATCH`
+      `Invalid version format: ${versionStr}. Expected MAJOR.MINOR.PATCH or MAJOR.MINOR.PATCH-prerelease`
     );
   }
   return [
     parseInt(match[1], 10),
     parseInt(match[2], 10),
     parseInt(match[3], 10),
+    match[4] || null, // prerelease tag (e.g., "beta.1", "rc.2")
   ];
+}
+
+/**
+ * Get base version without prerelease tag
+ */
+function getBaseVersion(versionStr) {
+  const [major, minor, patch] = parseVersion(versionStr);
+  return formatVersion(major, minor, patch);
 }
 
 /**
@@ -162,6 +236,7 @@ function formatVersion(major, minor, patch) {
 
 /**
  * Bump version by type (major, minor, patch)
+ * Note: Bumping removes any prerelease tag (e.g., 1.0.0-beta.1 -> 1.0.1)
  */
 function bumpVersion(versionStr, bumpType) {
   const [major, minor, patch] = parseVersion(versionStr);
@@ -262,6 +337,8 @@ function updateAllVersions(firmwareVersion, protocolVersion) {
   updateEsp32Config(firmwareVersion);
   updateProtocolDefs(protocolVersion);
   writeVersionFile(firmwareVersion, protocolVersion);
+  writeVersionJson(firmwareVersion, protocolVersion);
+  writeVersionManifest(firmwareVersion, protocolVersion);
 
   console.log();
   console.log("✓ All versions updated successfully!");
@@ -334,12 +411,16 @@ function showHelp() {
   console.log(`
 BrewOS Version Management
 
+Manages firmware and protocol versions from a single source of truth.
+Updates version definitions in all firmware projects and generates
+a version manifest for OTA updates.
+
 Usage:
   node src/scripts/version.js [options]
 
 Options:
   --bump <type>     Bump version (major, minor, or patch)
-  --set <version>   Set specific version (e.g., 1.2.3)
+  --set <version>   Set specific version (e.g., 1.2.3 or 1.2.3-beta.1)
   --protocol <num>  Set protocol version
   --release         Create release (commit, tag, push) after version update
   --dry-run         Show what would be done without making changes
@@ -352,6 +433,7 @@ Examples:
   node src/scripts/version.js --bump minor          # Bump minor version
   node src/scripts/version.js --bump major          # Bump major version
   node src/scripts/version.js --set 1.2.3           # Set specific version
+  node src/scripts/version.js --set 1.2.3-beta.1    # Set beta version
   node src/scripts/version.js --protocol 2          # Set protocol version
   
   # Create a release (bump, commit, tag, push)
@@ -359,8 +441,19 @@ Examples:
   node src/scripts/version.js --bump minor --release
   node src/scripts/version.js --set 2.0.0 --protocol 2 --release
   
+  # Create a beta release
+  node src/scripts/version.js --set 2.0.0-beta.1 --release
+  
   # Preview release without making changes
   node src/scripts/version.js --bump minor --release --dry-run
+
+Files Updated:
+  VERSION                              - Source of truth
+  version.json                         - Machine-readable version info
+  src/web/public/version-manifest.json - OTA update manifest
+  src/pico/include/config.h            - Pico firmware version
+  src/esp32/include/config.h           - ESP32 firmware version
+  src/shared/protocol_defs.h           - Protocol version
 `);
 }
 

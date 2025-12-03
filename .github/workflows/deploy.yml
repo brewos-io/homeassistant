@@ -1,4 +1,6 @@
-name: Deploy Cloud Service
+# Deploy to STAGING on push to main
+# Production deploys happen via release.yml when a version tag is pushed
+name: Deploy Staging
 
 on:
   push:
@@ -10,7 +12,7 @@ on:
 
 # Only allow one deploy at a time - cancel older runs
 concurrency:
-  group: deploy-production
+  group: deploy-staging
   cancel-in-progress: true
 
 jobs:
@@ -42,22 +44,22 @@ jobs:
           npm ci
           npx tsc --noEmit
 
-  deploy:
-    name: Deploy
-    needs: build-check  # Only deploy if build succeeds
+  deploy-staging:
+    name: Deploy to Staging
+    needs: build-check
     runs-on: ubuntu-latest
     environment:
-      name: production
-      url: https://cloud.brewos.io
+      name: staging
+      url: https://staging.brewos.io
     steps:
-      - name: Deploy to server
+      - name: Deploy to staging server
         uses: appleboy/ssh-action@v1.2.4
         env:
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
         with:
-          host: ${{ secrets.SERVER_HOST }}
+          host: ${{ secrets.STAGING_SERVER_HOST }}
           username: root
-          key: ${{ secrets.SERVER_SSH_KEY }}
+          key: ${{ secrets.STAGING_SERVER_SSH_KEY }}
           envs: GOOGLE_CLIENT_ID
           script_stop: true
           command_timeout: 15m
@@ -73,7 +75,8 @@ jobs:
             # Create .env for web build (Vite needs these at build time)
             cat > src/web/.env << EOF
             VITE_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-            VITE_CLOUD_WS_URL=wss://cloud.brewos.io/ws
+            VITE_CLOUD_WS_URL=wss://staging.brewos.io/ws
+            VITE_ENVIRONMENT=staging
             EOF
             
             # Create .env for cloud service
@@ -106,7 +109,7 @@ jobs:
             # Health check
             for i in 1 2 3 4 5; do
               if curl -sf http://localhost:3001/api/health > /dev/null; then
-                echo "✓ Service is healthy!"
+                echo "✓ Staging service is healthy!"
                 exit 0
               fi
               echo "Waiting... ($i/5)"

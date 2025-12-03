@@ -1,10 +1,11 @@
-# Build and publish release when a tag is pushed
+# Build firmware, create GitHub release, and deploy to production
+# Triggered when a version tag (v*) is pushed
 name: Release
 
 on:
   push:
     tags:
-      - "v*" # Triggers on v1.0.0, v0.1.0, etc.
+      - "v*" # Triggers on v1.0.0, v0.1.0-beta.1, etc.
   workflow_dispatch:
     inputs:
       version:
@@ -15,9 +16,15 @@ permissions:
   contents: write # Required to create releases
 
 jobs:
+  # ==========================================================================
+  # Build firmware and create GitHub Release
+  # ==========================================================================
   build:
     name: Build All Firmware
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      is_prerelease: ${{ steps.version.outputs.is_prerelease }}
 
     steps:
       - name: Checkout
@@ -106,10 +113,22 @@ jobs:
         id: version
         run: |
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+            VERSION="${{ github.event.inputs.version }}"
           else
-            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+            VERSION="${GITHUB_REF#refs/tags/}"
           fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          
+          # Check if this is a prerelease (beta, alpha, rc)
+          if [[ "$VERSION" == *"beta"* ]] || [[ "$VERSION" == *"alpha"* ]] || [[ "$VERSION" == *"rc"* ]]; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          fi
+          
+          # Extract version number without 'v' prefix for RELEASE_VERSION env var
+          VERSION_NUM="${VERSION#v}"
+          echo "version_num=$VERSION_NUM" >> $GITHUB_OUTPUT
 
       - name: Check for Previous Tags
         id: check_tags
@@ -192,3 +211,86 @@ jobs:
             Verify your download with `sha256sum -c SHA256SUMS.txt`
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ==========================================================================
+  # Deploy Web App to Production
+  # ==========================================================================
+  deploy-production:
+    name: Deploy to Production
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://cloud.brewos.io
+    steps:
+      - name: Deploy to production server
+        uses: appleboy/ssh-action@v1.2.4
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          RELEASE_VERSION: ${{ needs.build.outputs.version }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: root
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          envs: GOOGLE_CLIENT_ID,RELEASE_VERSION
+          script_stop: true
+          command_timeout: 15m
+          script: |
+            set -e
+            cd /root/brewos
+            
+            # Fetch the release tag
+            git fetch origin --tags
+            git checkout ${RELEASE_VERSION}
+            
+            # Create .env for web build with release version
+            cat > src/web/.env << EOF
+            VITE_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+            VITE_CLOUD_WS_URL=wss://cloud.brewos.io/ws
+            VITE_ENVIRONMENT=production
+            EOF
+            
+            # Create .env for cloud service
+            cat > src/cloud/.env << EOF
+            GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+            PORT=3001
+            DATA_DIR=/data
+            EOF
+            
+            # Get version number without 'v' prefix
+            VERSION_NUM="${RELEASE_VERSION#v}"
+            
+            # Rebuild web UI with release version embedded
+            cd src/web
+            npm ci
+            RELEASE_VERSION="$VERSION_NUM" npm run build
+            
+            # Copy built web UI to cloud service
+            cp -r dist ../cloud/web
+            
+            # Build new container without stopping old one
+            cd ../cloud
+            docker compose build
+            
+            # Only restart after successful build
+            docker compose down
+            docker compose up -d
+            
+            # Wait for service to be healthy
+            echo "Waiting for service to start..."
+            sleep 5
+            
+            # Health check
+            for i in 1 2 3 4 5; do
+              if curl -sf http://localhost:3001/api/health > /dev/null; then
+                echo "✓ Production service is healthy!"
+                echo "  Deployed version: ${RELEASE_VERSION}"
+                exit 0
+              fi
+              echo "Waiting... ($i/5)"
+              sleep 3
+            done
+            
+            echo "✗ Health check failed!"
+            docker compose logs --tail=50
+            exit 1
