@@ -38,6 +38,12 @@ yarn-debug.log*
 yarn-error.log*
 .npm/
 
+# TypeScript build info (auto-generated)
+*.tsbuildinfo
+
+# Cloud web UI (copied during deploy)
+src/cloud/web/
+
 # Environment files
 .env
 .env.local
