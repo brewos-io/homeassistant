@@ -6,7 +6,7 @@ import { Button } from '@/components/Button';
 import { Toggle } from '@/components/Toggle';
 import { Badge } from '@/components/Badge';
 import { useToast } from '@/components/Toast';
-import { Clock, Globe, RefreshCw, Save, Thermometer } from 'lucide-react';
+import { Clock, Globe, RefreshCw, Thermometer, Settings, ChevronRight } from 'lucide-react';
 import { TIMEZONES } from '../constants/timezones';
 import { getUnitLabel } from '@/lib/temperature';
 import type { TemperatureUnit } from '@/lib/types';
@@ -37,6 +37,7 @@ export function TimeSettings() {
   });
   const [syncing, setSyncing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   useEffect(() => {
     fetchTimeStatus();
@@ -97,6 +98,12 @@ export function TimeSettings() {
     setSyncing(false);
   };
 
+  // Get timezone label from offset
+  const getTimezoneLabel = (offsetMinutes: number) => {
+    const tz = TIMEZONES.find(t => t.offset === offsetMinutes);
+    return tz?.label || `UTC${offsetMinutes >= 0 ? '+' : ''}${offsetMinutes / 60}`;
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -104,7 +111,7 @@ export function TimeSettings() {
       </CardHeader>
 
       {/* Current Time Status */}
-      <div className="mb-6 p-4 bg-theme-secondary rounded-xl">
+      <div className="mb-4 p-4 bg-theme-secondary rounded-xl">
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm text-theme-muted">Current Time</span>
           <Badge variant={timeStatus?.synced ? 'success' : 'warning'}>
@@ -119,77 +126,114 @@ export function TimeSettings() {
         </div>
       </div>
 
-      <p className="text-sm text-theme-muted mb-4">
-        Configure time synchronization for accurate schedule triggers.
-      </p>
-
-      <div className="space-y-4">
-        {/* NTP Server */}
-        <Input
-          label="NTP Server"
-          value={settings.ntpServer}
-          onChange={(e) => setSettings({ ...settings, ntpServer: e.target.value })}
-          placeholder="pool.ntp.org"
-          hint="Network Time Protocol server"
-        />
-
-        {/* Timezone */}
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-theme-muted mb-1.5">
-            Timezone
-          </label>
-          <select
-            value={settings.utcOffsetMinutes}
-            onChange={(e) => setSettings({ ...settings, utcOffsetMinutes: parseInt(e.target.value) })}
-            className="input"
-          >
-            {TIMEZONES.map(tz => (
-              <option key={tz.offset} value={tz.offset}>
-                {tz.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* DST */}
-        <div className="flex items-center justify-between p-3 bg-theme-secondary rounded-xl">
-          <div>
-            <div className="font-medium text-theme">Daylight Saving Time</div>
-            <div className="text-sm text-theme-muted">
-              Add {settings.dstOffsetMinutes} minutes during DST period
-            </div>
+      {!editing ? (
+        /* View mode */
+        <div className="space-y-0">
+          <div className="flex items-center justify-between py-2 border-b border-theme">
+            <span className="text-sm text-theme-muted">NTP Server</span>
+            <span className="text-sm font-medium font-mono text-theme">{settings.ntpServer}</span>
           </div>
-          <Toggle
-            checked={settings.dstEnabled}
-            onChange={(enabled) => setSettings({ ...settings, dstEnabled: enabled })}
-          />
+          <div className="flex items-center justify-between py-2 border-b border-theme">
+            <span className="text-sm text-theme-muted">Timezone</span>
+            <span className="text-sm font-medium text-theme">{getTimezoneLabel(settings.utcOffsetMinutes)}</span>
+          </div>
+          <div className="flex items-center justify-between py-2 border-b border-theme">
+            <span className="text-sm text-theme-muted">Daylight Saving</span>
+            <span className="text-sm font-medium text-theme">{settings.dstEnabled ? `+${settings.dstOffsetMinutes} min` : 'Off'}</span>
+          </div>
+          
+          {/* Configure button */}
+          <button
+            onClick={() => setEditing(true)}
+            className="w-full flex items-center justify-between py-2.5 border-b border-theme text-left group transition-colors hover:opacity-80"
+          >
+            <div className="flex items-center gap-3">
+              <Settings className="w-4 h-4 text-theme-muted" />
+              <span className="text-sm font-medium text-theme">Configure Time</span>
+            </div>
+            <ChevronRight className="w-4 h-4 text-theme-muted group-hover:text-theme transition-colors" />
+          </button>
+          
+          {/* Sync button */}
+          <button
+            onClick={syncNow}
+            disabled={syncing}
+            className="w-full flex items-center justify-between py-2.5 text-left group transition-colors hover:opacity-80 disabled:opacity-50"
+          >
+            <div className="flex items-center gap-3">
+              <RefreshCw className={`w-4 h-4 text-theme-muted ${syncing ? 'animate-spin' : ''}`} />
+              <span className="text-sm font-medium text-theme">Sync Now</span>
+            </div>
+            <ChevronRight className="w-4 h-4 text-theme-muted group-hover:text-theme transition-colors" />
+          </button>
         </div>
-
-        {settings.dstEnabled && (
+      ) : (
+        /* Edit mode */
+        <div className="space-y-4">
           <Input
-            label="DST Offset"
-            type="number"
-            min={0}
-            max={120}
-            step={15}
-            value={settings.dstOffsetMinutes}
-            onChange={(e) => setSettings({ ...settings, dstOffsetMinutes: parseInt(e.target.value) })}
-            unit="min"
-            hint="Usually 60 minutes"
+            label="NTP Server"
+            value={settings.ntpServer}
+            onChange={(e) => setSettings({ ...settings, ntpServer: e.target.value })}
+            placeholder="pool.ntp.org"
+            hint="Network Time Protocol server"
           />
-        )}
-      </div>
 
-      <div className="flex justify-end gap-3 mt-6">
-        <Button variant="secondary" onClick={syncNow} loading={syncing}>
-          <RefreshCw className="w-4 h-4" />
-          Sync Now
-        </Button>
-        <Button onClick={saveSettings} loading={saving}>
-          <Save className="w-4 h-4" />
-          Save Time Settings
-        </Button>
-      </div>
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-theme-muted mb-1.5">
+              Timezone
+            </label>
+            <select
+              value={settings.utcOffsetMinutes}
+              onChange={(e) => setSettings({ ...settings, utcOffsetMinutes: parseInt(e.target.value) })}
+              className="input"
+            >
+              {TIMEZONES.map(tz => (
+                <option key={tz.offset} value={tz.offset}>
+                  {tz.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center justify-between py-2 border-b border-theme">
+            <span className="text-sm text-theme-muted">Daylight Saving Time</span>
+            <Toggle
+              checked={settings.dstEnabled}
+              onChange={(enabled) => setSettings({ ...settings, dstEnabled: enabled })}
+              label={settings.dstEnabled ? 'On' : 'Off'}
+            />
+          </div>
+
+          {settings.dstEnabled && (
+            <Input
+              label="DST Offset"
+              type="number"
+              min={0}
+              max={120}
+              step={15}
+              value={settings.dstOffsetMinutes}
+              onChange={(e) => setSettings({ ...settings, dstOffsetMinutes: parseInt(e.target.value) })}
+              unit="min"
+              hint="Usually 60 minutes"
+            />
+          )}
+
+          <div className="flex justify-end gap-3">
+            <Button variant="ghost" onClick={() => setEditing(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => {
+                saveSettings();
+                setEditing(false);
+              }} 
+              loading={saving}
+            >
+              Save
+            </Button>
+          </div>
+        </div>
+      )}
     </Card>
   );
 }

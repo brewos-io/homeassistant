@@ -5,12 +5,13 @@ import { Card, CardHeader, CardTitle } from "@/components/Card";
 import { Input } from "@/components/Input";
 import { Button } from "@/components/Button";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { Zap, Leaf, AlertTriangle } from "lucide-react";
+import { Zap, Leaf, AlertTriangle, Settings, ChevronRight } from "lucide-react";
 import {
   convertFromCelsius,
   convertToCelsius,
   getUnitSymbol,
   getTemperatureStep,
+  formatTemperatureWithUnit,
 } from "@/lib/temperature";
 
 export function PowerSettings() {
@@ -27,6 +28,8 @@ export function PowerSettings() {
   const [savingPower, setSavingPower] = useState(false);
   const [savingEco, setSavingEco] = useState(false);
   const [showPowerWarning, setShowPowerWarning] = useState(false);
+  const [editingEco, setEditingEco] = useState(false);
+  const [editingPower, setEditingPower] = useState(false);
 
   // Eco temp stored internally in Celsius (80°C default)
   const [ecoBrewTempCelsius] = useState(80);
@@ -76,9 +79,10 @@ export function PowerSettings() {
     originalVoltageRef.current = voltage;
     originalMaxCurrentRef.current = maxCurrent;
     // Brief visual feedback for fire-and-forget WebSocket command
-    setTimeout(() => {
+        setTimeout(() => {
       setSavingPower(false);
       setShowPowerWarning(false);
+      setEditingPower(false);
     }, 600);
   };
 
@@ -99,6 +103,14 @@ export function PowerSettings() {
     setTimeout(() => setSavingEco(false), 600);
   };
 
+  // Voltage label helper
+  const getVoltageLabel = (v: number) => {
+    if (v === 110) return '110V (US)';
+    if (v === 220) return '220V (EU/AU)';
+    if (v === 240) return '240V (UK)';
+    return `${v}V`;
+  };
+
   return (
     <>
       {/* Eco Mode */}
@@ -107,38 +119,78 @@ export function PowerSettings() {
           <CardTitle icon={<Leaf className="w-5 h-5" />}>Eco Mode</CardTitle>
         </CardHeader>
 
-        <p className="text-sm text-coffee-500 mb-4">
-          Reduce power consumption when idle by lowering boiler temperatures.
-        </p>
+        {!editingEco ? (
+          /* View mode */
+          <div className="space-y-0">
+            <div className="flex items-center justify-between py-2 border-b border-theme">
+              <span className="text-sm text-theme-muted">Eco Temperature</span>
+              <span className="text-sm font-medium text-theme">
+                {formatTemperatureWithUnit(ecoBrewTempCelsius, temperatureUnit, 0)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between py-2 border-b border-theme">
+              <span className="text-sm text-theme-muted">Auto-Eco After</span>
+              <span className="text-sm font-medium text-theme">{ecoTimeout} min</span>
+            </div>
+            
+            <button
+              onClick={() => setEditingEco(true)}
+              className="w-full flex items-center justify-between py-2.5 border-t border-theme text-left group transition-colors hover:opacity-80 mt-2"
+            >
+              <div className="flex items-center gap-3">
+                <Settings className="w-4 h-4 text-theme-muted" />
+                <span className="text-sm font-medium text-theme">Configure Eco Mode</span>
+              </div>
+              <ChevronRight className="w-4 h-4 text-theme-muted group-hover:text-theme transition-colors" />
+            </button>
+          </div>
+        ) : (
+          /* Edit mode */
+          <div className="space-y-4">
+            <p className="text-sm text-theme-muted">
+              Reduce power consumption when idle by lowering boiler temperatures.
+            </p>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-          <Input
-            label="Eco Brew Temp"
-            type="number"
-            min={ecoTempMin}
-            max={ecoTempMax}
-            step={step}
-            value={ecoBrewTempDisplay}
-            onChange={(e) => setEcoBrewTempDisplay(parseFloat(e.target.value))}
-            unit={unitSymbol}
-          />
-          <Input
-            label="Auto-Eco After"
-            type="number"
-            min={5}
-            max={120}
-            step={5}
-            value={ecoTimeout}
-            onChange={(e) => setEcoTimeout(parseInt(e.target.value))}
-            unit="min"
-          />
-        </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Input
+                label="Eco Brew Temp"
+                type="number"
+                min={ecoTempMin}
+                max={ecoTempMax}
+                step={step}
+                value={ecoBrewTempDisplay}
+                onChange={(e) => setEcoBrewTempDisplay(parseFloat(e.target.value))}
+                unit={unitSymbol}
+              />
+              <Input
+                label="Auto-Eco After"
+                type="number"
+                min={5}
+                max={120}
+                step={5}
+                value={ecoTimeout}
+                onChange={(e) => setEcoTimeout(parseInt(e.target.value))}
+                unit="min"
+              />
+            </div>
 
-        <div className="flex justify-end">
-          <Button onClick={saveEco} loading={savingEco} disabled={savingEco}>
-            Save Eco Settings
-          </Button>
-        </div>
+            <div className="flex justify-end gap-3">
+              <Button variant="ghost" onClick={() => setEditingEco(false)}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={() => {
+                  saveEco();
+                  setEditingEco(false);
+                }} 
+                loading={savingEco} 
+                disabled={savingEco}
+              >
+                Save
+              </Button>
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* Power Settings */}
@@ -147,39 +199,79 @@ export function PowerSettings() {
           <CardTitle icon={<Zap className="w-5 h-5" />}>Power</CardTitle>
         </CardHeader>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-          <div className="space-y-1.5">
-            <label className="block text-xs font-semibold uppercase tracking-wider text-coffee-500">
-              Mains Voltage
-            </label>
-            <select
-              value={voltage}
-              onChange={(e) => setVoltage(parseInt(e.target.value))}
-              className="input"
+        {!editingPower ? (
+          /* View mode */
+          <div className="space-y-0">
+            <div className="flex items-center justify-between py-2 border-b border-theme">
+              <span className="text-sm text-theme-muted">Mains Voltage</span>
+              <span className="text-sm font-medium text-theme">{getVoltageLabel(voltage)}</span>
+            </div>
+            <div className="flex items-center justify-between py-2 border-b border-theme">
+              <span className="text-sm text-theme-muted">Max Current</span>
+              <span className="text-sm font-medium text-theme">{maxCurrent}A</span>
+            </div>
+            
+            <button
+              onClick={() => setEditingPower(true)}
+              className="w-full flex items-center justify-between py-2.5 border-t border-theme text-left group transition-colors hover:opacity-80 mt-2"
             >
-              <option value="110">110V (US)</option>
-              <option value="220">220V (EU/AU)</option>
-              <option value="240">240V (UK)</option>
-            </select>
+              <div className="flex items-center gap-3">
+                <Settings className="w-4 h-4 text-theme-muted" />
+                <span className="text-sm font-medium text-theme">Configure Power</span>
+              </div>
+              <ChevronRight className="w-4 h-4 text-theme-muted group-hover:text-theme transition-colors" />
+            </button>
           </div>
-          <Input
-            label="Max Current"
-            type="number"
-            min={10}
-            max={20}
-            step={1}
-            value={maxCurrent}
-            onChange={(e) => setMaxCurrent(parseInt(e.target.value) || 10)}
-            unit="A"
-            hint="10A (AU), 13A (UK), 15-20A (US), 16A (EU)"
-          />
-        </div>
+        ) : (
+          /* Edit mode */
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-theme-muted">
+                  Mains Voltage
+                </label>
+                <select
+                  value={voltage}
+                  onChange={(e) => setVoltage(parseInt(e.target.value))}
+                  className="input"
+                >
+                  <option value="110">110V (US)</option>
+                  <option value="220">220V (EU/AU)</option>
+                  <option value="240">240V (UK)</option>
+                </select>
+              </div>
+              <Input
+                label="Max Current"
+                type="number"
+                min={10}
+                max={20}
+                step={1}
+                value={maxCurrent}
+                onChange={(e) => setMaxCurrent(parseInt(e.target.value) || 10)}
+                unit="A"
+                hint="10A (AU), 13A (UK), 15-20A (US), 16A (EU)"
+              />
+            </div>
 
-        <div className="flex justify-end">
-          <Button onClick={handleSavePower} loading={savingPower} disabled={savingPower}>
-            Save Power Settings
-          </Button>
-        </div>
+            <div className="flex justify-end gap-3">
+              <Button variant="ghost" onClick={() => setEditingPower(false)}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={() => {
+                  handleSavePower();
+                  if (!hasPowerSettingsChanged) {
+                    setEditingPower(false);
+                  }
+                }} 
+                loading={savingPower} 
+                disabled={savingPower}
+              >
+                Save
+              </Button>
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* Power Settings Warning Dialog */}

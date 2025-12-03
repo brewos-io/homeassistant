@@ -6,13 +6,15 @@ import { Input } from '@/components/Input';
 import { Button } from '@/components/Button';
 import { Toggle } from '@/components/Toggle';
 import { Badge } from '@/components/Badge';
-import { Wifi, Radio, X, Check, Network, Pencil } from 'lucide-react';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { Wifi, Radio, Network, Settings, ChevronRight, Trash2, AlertTriangle } from 'lucide-react';
 import { StatusRow } from './StatusRow';
 
 export function NetworkSettings() {
   const wifi = useStore((s) => s.wifi);
   const mqtt = useStore((s) => s.mqtt);
-  const { sendCommand, sendCommandWithConfirm } = useCommand();
+  const { sendCommand } = useCommand();
+  const [showForgetWarning, setShowForgetWarning] = useState(false);
 
   // IP configuration state
   const [ipConfig, setIpConfig] = useState({
@@ -50,6 +52,7 @@ export function NetworkSettings() {
   });
   const [testingMqtt, setTestingMqtt] = useState(false);
   const [savingMqtt, setSavingMqtt] = useState(false);
+  const [editingMqtt, setEditingMqtt] = useState(false);
 
   const testMqtt = () => {
     if (testingMqtt) return;
@@ -66,13 +69,9 @@ export function NetworkSettings() {
     setTimeout(() => setSavingMqtt(false), 600);
   };
 
-  const forgetWifi = () => {
-    sendCommandWithConfirm(
-      'wifi_forget',
-      'Are you sure? The device will restart in AP mode.',
-      undefined,
-      { successMessage: 'WiFi forgotten. Device will restart...' }
-    );
+  const confirmForgetWifi = () => {
+    sendCommand('wifi_forget', undefined, { successMessage: 'WiFi forgotten. Device will restart...' });
+    setShowForgetWarning(false);
   };
 
   const saveIpConfig = () => {
@@ -108,7 +107,7 @@ export function NetworkSettings() {
           <CardTitle icon={<Wifi className="w-5 h-5" />}>WiFi</CardTitle>
         </CardHeader>
 
-        <div className="space-y-3 mb-6">
+        <div className="space-y-0">
           <StatusRow 
             label="Status" 
             value={
@@ -123,12 +122,19 @@ export function NetworkSettings() {
             label="Signal" 
             value={wifi.rssi ? `${wifi.rssi} dBm` : '—'} 
           />
-        </div>
 
-        <Button variant="ghost" onClick={forgetWifi}>
-          <X className="w-4 h-4" />
-          Forget Network
-        </Button>
+          {/* Forget Network button */}
+          <button
+            onClick={() => setShowForgetWarning(true)}
+            className="w-full flex items-center justify-between py-2.5 border-t border-theme text-left group transition-colors hover:opacity-80 mt-2"
+          >
+            <div className="flex items-center gap-3">
+              <Trash2 className="w-4 h-4 text-red-500" />
+              <span className="text-sm font-medium text-red-500">Forget Network</span>
+            </div>
+            <ChevronRight className="w-4 h-4 text-red-500/50 group-hover:text-red-500 transition-colors" />
+          </button>
+        </div>
       </Card>
 
       {/* IP Configuration */}
@@ -141,20 +147,25 @@ export function NetworkSettings() {
 
         {!editingIp ? (
           /* View mode */
-          <>
-            <div className="space-y-0 mb-4">
-              <StatusRow label="Mode" value={wifi.staticIp ? 'Static' : 'DHCP'} />
-              <StatusRow label="Gateway" value={wifi.gateway || '—'} mono />
-              <StatusRow label="Subnet" value={wifi.subnet || '—'} mono />
-              <StatusRow label="DNS" value={wifi.dns1 ? `${wifi.dns1}${wifi.dns2 ? `, ${wifi.dns2}` : ''}` : '—'} mono />
-            </div>
+          <div className="space-y-0">
+            <StatusRow label="Mode" value={wifi.staticIp ? 'Static' : 'DHCP'} />
+            <StatusRow label="Gateway" value={wifi.gateway || '—'} mono />
+            <StatusRow label="Subnet" value={wifi.subnet || '—'} mono />
+            <StatusRow label="DNS" value={wifi.dns1 ? `${wifi.dns1}${wifi.dns2 ? `, ${wifi.dns2}` : ''}` : '—'} mono />
+            
             {!wifi.apMode && (
-              <Button variant="ghost" onClick={() => setEditingIp(true)}>
-                <Pencil className="w-4 h-4" />
-                Edit
-              </Button>
+              <button
+                onClick={() => setEditingIp(true)}
+                className="w-full flex items-center justify-between py-2.5 border-t border-theme text-left group transition-colors hover:opacity-80 mt-2"
+              >
+                <div className="flex items-center gap-3">
+                  <Settings className="w-4 h-4 text-theme-muted" />
+                  <span className="text-sm font-medium text-theme">Configure IP Settings</span>
+                </div>
+                <ChevronRight className="w-4 h-4 text-theme-muted group-hover:text-theme transition-colors" />
+              </button>
             )}
-          </>
+          </div>
         ) : (
           /* Edit mode */
           <div className="space-y-4">
@@ -233,89 +244,151 @@ export function NetworkSettings() {
 
       {/* MQTT Settings */}
       <Card>
-        <CardHeader
-          action={
-            <Toggle
-              checked={mqttConfig.enabled}
-              onChange={(enabled) => setMqttConfig({ ...mqttConfig, enabled })}
-            />
-          }
-        >
+        <CardHeader>
           <CardTitle icon={<Radio className="w-5 h-5" />}>
             MQTT / Home Assistant
           </CardTitle>
         </CardHeader>
 
-        <div className="space-y-4 mb-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input
-              label="Broker Address"
-              placeholder="homeassistant.local"
-              value={mqttConfig.broker}
-              onChange={(e) => setMqttConfig({ ...mqttConfig, broker: e.target.value })}
+        {!editingMqtt ? (
+          /* View mode */
+          <div className="space-y-0">
+            <StatusRow 
+              label="Status" 
+              value={
+                <Badge variant={mqtt.connected ? 'success' : mqtt.enabled ? 'error' : 'default'}>
+                  {mqtt.connected ? 'Connected' : mqtt.enabled ? 'Disconnected' : 'Disabled'}
+                </Badge>
+              }
             />
-            <Input
-              label="Topic Prefix"
-              placeholder="brewos"
-              value={mqttConfig.topic}
-              onChange={(e) => setMqttConfig({ ...mqttConfig, topic: e.target.value })}
-              hint="Topics: {prefix}/status, {prefix}/command"
-            />
+            <StatusRow label="Broker" value={mqtt.broker || '—'} mono />
+            <StatusRow label="Topic" value={mqtt.topic || '—'} mono />
+            
+            <button
+              onClick={() => setEditingMqtt(true)}
+              className="w-full flex items-center justify-between py-2.5 border-t border-theme text-left group transition-colors hover:opacity-80 mt-2"
+            >
+              <div className="flex items-center gap-3">
+                <Settings className="w-4 h-4 text-theme-muted" />
+                <span className="text-sm font-medium text-theme">Configure MQTT</span>
+              </div>
+              <ChevronRight className="w-4 h-4 text-theme-muted group-hover:text-theme transition-colors" />
+            </button>
           </div>
+        ) : (
+          /* Edit mode */
+          <div className="space-y-4">
+            <div className="flex items-center justify-between py-2 border-b border-theme">
+              <span className="text-sm text-theme-muted">Enabled</span>
+              <Toggle
+                checked={mqttConfig.enabled}
+                onChange={(enabled) => setMqttConfig({ ...mqttConfig, enabled })}
+              />
+            </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Input
-              label="Port"
-              type="number"
-              value={mqttConfig.port}
-              onChange={(e) => setMqttConfig({ ...mqttConfig, port: parseInt(e.target.value) })}
-            />
-            <Input
-              label="Username"
-              placeholder="Optional"
-              value={mqttConfig.username}
-              onChange={(e) => setMqttConfig({ ...mqttConfig, username: e.target.value })}
-            />
-            <Input
-              label="Password"
-              type="password"
-              placeholder="Optional"
-              value={mqttConfig.password}
-              onChange={(e) => setMqttConfig({ ...mqttConfig, password: e.target.value })}
-            />
-          </div>
+            {mqttConfig.enabled && (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Input
+                    label="Broker Address"
+                    placeholder="homeassistant.local"
+                    value={mqttConfig.broker}
+                    onChange={(e) => setMqttConfig({ ...mqttConfig, broker: e.target.value })}
+                  />
+                  <Input
+                    label="Topic Prefix"
+                    placeholder="brewos"
+                    value={mqttConfig.topic}
+                    onChange={(e) => setMqttConfig({ ...mqttConfig, topic: e.target.value })}
+                    hint="Topics: {prefix}/status, {prefix}/command"
+                  />
+                </div>
 
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={mqttConfig.discovery}
-              onChange={(e) => setMqttConfig({ ...mqttConfig, discovery: e.target.checked })}
-              className="w-4 h-4 rounded border-theme text-accent focus:ring-accent"
-            />
-            <span className="text-sm text-theme-secondary">Enable Home Assistant auto-discovery</span>
-          </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <Input
+                    label="Port"
+                    type="number"
+                    value={mqttConfig.port}
+                    onChange={(e) => setMqttConfig({ ...mqttConfig, port: parseInt(e.target.value) })}
+                  />
+                  <Input
+                    label="Username"
+                    placeholder="Optional"
+                    value={mqttConfig.username}
+                    onChange={(e) => setMqttConfig({ ...mqttConfig, username: e.target.value })}
+                  />
+                  <Input
+                    label="Password"
+                    type="password"
+                    placeholder="Optional"
+                    value={mqttConfig.password}
+                    onChange={(e) => setMqttConfig({ ...mqttConfig, password: e.target.value })}
+                  />
+                </div>
 
-          <div className="flex items-center gap-2 p-3 bg-theme-secondary rounded-xl">
-            {mqtt.connected ? (
-              <Check className="w-4 h-4 text-emerald-500" />
-            ) : mqtt.enabled ? (
-              <X className="w-4 h-4 text-red-500" />
-            ) : (
-              <div className="w-4 h-4 rounded-full bg-theme-muted/30" />
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={mqttConfig.discovery}
+                    onChange={(e) => setMqttConfig({ ...mqttConfig, discovery: e.target.checked })}
+                    className="w-4 h-4 rounded border-theme text-accent focus:ring-accent"
+                  />
+                  <span className="text-sm text-theme-secondary">Enable Home Assistant auto-discovery</span>
+                </label>
+              </>
             )}
-            <span className="text-sm text-theme-secondary">
-              {mqtt.connected ? 'Connected to broker' : mqtt.enabled ? 'Disconnected' : 'Disabled'}
-            </span>
-          </div>
-        </div>
 
-        <div className="flex justify-end gap-3">
-          <Button variant="secondary" onClick={testMqtt} loading={testingMqtt}>
-            {testingMqtt ? 'Testing...' : 'Test Connection'}
-          </Button>
-          <Button onClick={saveMqtt} loading={savingMqtt} disabled={savingMqtt}>Save MQTT Settings</Button>
-        </div>
+            <div className="flex justify-end gap-3">
+              <Button variant="ghost" onClick={() => setEditingMqtt(false)}>
+                Cancel
+              </Button>
+              {mqttConfig.enabled && (
+                <Button variant="secondary" onClick={testMqtt} loading={testingMqtt}>
+                  Test
+                </Button>
+              )}
+              <Button 
+                onClick={() => {
+                  saveMqtt();
+                  setEditingMqtt(false);
+                }} 
+                loading={savingMqtt} 
+                disabled={savingMqtt}
+              >
+                Save
+              </Button>
+            </div>
+          </div>
+        )}
       </Card>
+
+      {/* Forget Network Warning Dialog */}
+      <ConfirmDialog
+        isOpen={showForgetWarning}
+        onClose={() => setShowForgetWarning(false)}
+        onConfirm={confirmForgetWifi}
+        title="Forget Network"
+        description="You are about to remove the saved WiFi network."
+        variant="danger"
+        confirmText="Forget Network"
+        cancelText="Cancel"
+      >
+        <div className="space-y-3 text-sm">
+          <div className="flex gap-3 p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+            <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-red-500">Device Will Restart</p>
+              <p className="text-theme-muted mt-1">
+                The device will restart in <span className="text-red-500 font-medium">Access Point (AP) mode</span>.
+                You will need to reconnect to the device's WiFi hotspot to configure a new network.
+              </p>
+            </div>
+          </div>
+          <p className="text-theme-muted text-xs">
+            Current network: <span className="font-medium text-theme">{wifi.ssid || 'Unknown'}</span>
+          </p>
+        </div>
+      </ConfirmDialog>
     </>
   );
 }

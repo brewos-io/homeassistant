@@ -11,6 +11,9 @@ import {
   Signal,
   Check,
   X,
+  ChevronRight,
+  RotateCcw,
+  Unplug,
 } from 'lucide-react';
 
 export function ScaleSettings() {
@@ -89,14 +92,28 @@ export function ScaleSettings() {
             </Badge>
           </div>
 
-          <div className="flex gap-3">
-            <Button variant="secondary" onClick={tareScale}>
-              Tare
-            </Button>
-            <Button variant="ghost" onClick={disconnectScale}>
-              <X className="w-4 h-4" />
-              Disconnect
-            </Button>
+          {/* Action buttons */}
+          <div className="space-y-0 border-t border-emerald-500/20">
+            <button
+              onClick={tareScale}
+              className="w-full flex items-center justify-between py-2.5 border-b border-emerald-500/20 text-left group transition-colors hover:opacity-80"
+            >
+              <div className="flex items-center gap-3">
+                <RotateCcw className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <span className="text-sm font-medium text-emerald-900 dark:text-emerald-100">Tare Scale</span>
+              </div>
+              <ChevronRight className="w-4 h-4 text-emerald-600/50 dark:text-emerald-400/50 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />
+            </button>
+            <button
+              onClick={disconnectScale}
+              className="w-full flex items-center justify-between py-2.5 text-left group transition-colors hover:opacity-80"
+            >
+              <div className="flex items-center gap-3">
+                <Unplug className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <span className="text-sm font-medium text-emerald-900 dark:text-emerald-100">Disconnect Scale</span>
+              </div>
+              <ChevronRight className="w-4 h-4 text-emerald-600/50 dark:text-emerald-400/50 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />
+            </button>
           </div>
         </Card>
       )}

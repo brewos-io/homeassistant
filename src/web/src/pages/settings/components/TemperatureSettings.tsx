@@ -4,13 +4,14 @@ import { useCommand } from '@/lib/useCommand';
 import { Card, CardHeader, CardTitle } from '@/components/Card';
 import { Input } from '@/components/Input';
 import { Button } from '@/components/Button';
-import { Thermometer } from 'lucide-react';
+import { Thermometer, Coffee, Wind, ChevronRight, Settings } from 'lucide-react';
 import { 
   convertFromCelsius, 
   convertToCelsius, 
   getUnitSymbol, 
   getTemperatureStep,
   getTemperatureRanges,
+  formatTemperatureWithUnit,
 } from '@/lib/temperature';
 
 export function TemperatureSettings() {
@@ -19,6 +20,7 @@ export function TemperatureSettings() {
   const temperatureUnit = useStore((s) => s.preferences.temperatureUnit);
   const { sendCommand } = useCommand();
   const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   // Store values in display unit for the UI
   const [brewTempDisplay, setBrewTempDisplay] = useState(() => 
@@ -68,12 +70,14 @@ export function TemperatureSettings() {
   const showBrewControl = isDualBoiler || isSingleBoiler || !device.machineType;
   const showSteamControl = isDualBoiler || isHeatExchanger || !device.machineType;
 
-  // Get appropriate labels and hints based on machine type and unit
-  const brewLabel = isSingleBoiler ? 'Boiler Temperature' : 'Brew Temperature';
+  // Get appropriate labels based on machine type
+  const brewLabel = isSingleBoiler ? 'Boiler' : 'Brew';
+  const steamLabel = isHeatExchanger ? 'Boiler' : 'Steam';
+
+  // Get hints for edit mode
   const brewHint = isSingleBoiler 
     ? `Brew mode: ${ranges.brew.recommended.min.toFixed(0)}-${ranges.brew.recommended.max.toFixed(0)}${unitSymbol}`
     : `Recommended: ${ranges.brew.recommended.min.toFixed(0)}-${ranges.brew.recommended.max.toFixed(0)}${unitSymbol}`;
-  const steamLabel = isHeatExchanger ? 'Boiler Temperature' : 'Steam Temperature';
   const steamHint = isHeatExchanger 
     ? 'Controls HX brew water temperature' 
     : 'For milk frothing';
@@ -92,38 +96,106 @@ export function TemperatureSettings() {
         </CardTitle>
       </CardHeader>
 
-      <div className={`grid grid-cols-1 ${showBrewControl && showSteamControl ? 'sm:grid-cols-2' : ''} gap-4 mb-6`}>
-        {showBrewControl && (
-          <Input
-            label={brewLabel}
-            type="number"
-            min={brewMin}
-            max={brewMax}
-            step={step}
-            value={brewTempDisplay}
-            onChange={(e) => setBrewTempDisplay(parseFloat(e.target.value))}
-            unit={unitSymbol}
-            hint={brewHint}
-          />
-        )}
-        {showSteamControl && (
-          <Input
-            label={steamLabel}
-            type="number"
-            min={steamMin}
-            max={steamMax}
-            step={step}
-            value={steamTempDisplay}
-            onChange={(e) => setSteamTempDisplay(parseFloat(e.target.value))}
-            unit={unitSymbol}
-            hint={steamHint}
-          />
-        )}
-      </div>
+      {!editing ? (
+        /* View mode */
+        <div className="space-y-4">
+          {/* Temperature cards */}
+          <div className={`grid gap-3 ${showBrewControl && showSteamControl ? 'grid-cols-2' : 'grid-cols-1'}`}>
+            {showBrewControl && (
+              <div className="p-4 rounded-xl bg-gradient-to-br from-amber-500/10 to-orange-500/5 border border-amber-500/20">
+                <div className="flex items-center gap-2 mb-2">
+                  <Coffee className="w-4 h-4 text-amber-500" />
+                  <span className="text-xs font-medium text-amber-500 uppercase tracking-wide">
+                    {brewLabel}
+                  </span>
+                </div>
+                <div className="text-2xl font-bold text-theme tabular-nums">
+                  {formatTemperatureWithUnit(temps.brew.setpoint, temperatureUnit, 1)}
+                </div>
+                <div className="text-xs text-theme-muted mt-1">
+                  Target setpoint
+                </div>
+              </div>
+            )}
+            {showSteamControl && (
+              <div className="p-4 rounded-xl bg-gradient-to-br from-blue-500/10 to-cyan-500/5 border border-blue-500/20">
+                <div className="flex items-center gap-2 mb-2">
+                  <Wind className="w-4 h-4 text-blue-500" />
+                  <span className="text-xs font-medium text-blue-500 uppercase tracking-wide">
+                    {steamLabel}
+                  </span>
+                </div>
+                <div className="text-2xl font-bold text-theme tabular-nums">
+                  {formatTemperatureWithUnit(temps.steam.setpoint, temperatureUnit, 1)}
+                </div>
+                <div className="text-xs text-theme-muted mt-1">
+                  Target setpoint
+                </div>
+              </div>
+            )}
+          </div>
 
-      <div className="flex justify-end">
-        <Button onClick={saveTemps} loading={saving} disabled={saving}>Save Temperatures</Button>
-      </div>
+          {/* Configure button */}
+          <button
+            onClick={() => setEditing(true)}
+            className="w-full flex items-center justify-between py-2.5 border-t border-theme text-left group transition-colors hover:opacity-80"
+          >
+            <div className="flex items-center gap-3">
+              <Settings className="w-4 h-4 text-theme-muted" />
+              <span className="text-sm font-medium text-theme">Adjust Temperatures</span>
+            </div>
+            <ChevronRight className="w-4 h-4 text-theme-muted group-hover:text-theme transition-colors" />
+          </button>
+        </div>
+      ) : (
+        /* Edit mode */
+        <div className="space-y-4">
+          <div className={`grid grid-cols-1 ${showBrewControl && showSteamControl ? 'sm:grid-cols-2' : ''} gap-4`}>
+            {showBrewControl && (
+              <Input
+                label={brewLabel + ' Temperature'}
+                type="number"
+                min={brewMin}
+                max={brewMax}
+                step={step}
+                value={brewTempDisplay}
+                onChange={(e) => setBrewTempDisplay(parseFloat(e.target.value))}
+                unit={unitSymbol}
+                hint={brewHint}
+              />
+            )}
+            {showSteamControl && (
+              <Input
+                label={steamLabel + ' Temperature'}
+                type="number"
+                min={steamMin}
+                max={steamMax}
+                step={step}
+                value={steamTempDisplay}
+                onChange={(e) => setSteamTempDisplay(parseFloat(e.target.value))}
+                unit={unitSymbol}
+                hint={steamHint}
+              />
+            )}
+          </div>
+
+          <div className="flex justify-end gap-3">
+            <Button variant="ghost" onClick={() => setEditing(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => {
+                saveTemps();
+                setEditing(false);
+              }} 
+              loading={saving} 
+              disabled={saving}
+            >
+              Save
+            </Button>
+          </div>
+        </div>
+      )}
     </Card>
   );
 }

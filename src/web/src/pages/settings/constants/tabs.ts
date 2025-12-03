@@ -28,8 +28,8 @@ export interface TabConfig {
 export const getSettingsTabs = (isCloud: boolean): TabConfig[] => {
   const tabs: TabConfig[] = [
     { id: "machine", label: "Machine", icon: Coffee },
-    { id: "network", label: "Network", icon: Wifi },
     { id: "scale", label: "Scale", icon: ScaleIcon },
+    { id: "network", label: "Network", icon: Wifi },
   ];
 
   // Only show Cloud tab in local mode
@@ -38,8 +38,8 @@ export const getSettingsTabs = (isCloud: boolean): TabConfig[] => {
   }
 
   tabs.push(
-    { id: "regional", label: "Regional", icon: Globe },
     { id: "appearance", label: "Theme", icon: Palette },
+    { id: "regional", label: "Regional", icon: Globe },
     { id: "system", label: "System", icon: Server },
     { id: "about", label: "About", icon: Info }
   );
