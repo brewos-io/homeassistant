@@ -111,15 +111,18 @@ async function fetchModeFromServer(): Promise<{
     console.log(`[Mode] /api/mode failed:`, error);
   }
   
-  // If all API calls fail, check if we're running in dev mode (localhost)
-  // In dev mode without backend, default to cloud mode (for testing UI)
-  if (typeof window !== "undefined" && 
-      (window.location.hostname === "localhost" || 
-       window.location.hostname === "127.0.0.1" ||
-       window.location.hostname.startsWith("127."))) {
-    console.log("[Mode] Running on localhost, defaulting to cloud mode (no backend detected)");
-    return { mode: "cloud", apMode: false };
-  }
+        // If all API calls fail, check if we're running in dev mode (localhost)
+        // In dev mode without backend, default to cloud mode (for testing UI)
+        if (typeof window !== "undefined") {
+          const hostname = window.location.hostname;
+          const isLocalhost = hostname === "localhost" || 
+                             hostname === "127.0.0.1" ||
+                             /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname);
+          if (isLocalhost) {
+            console.log("[Mode] Running on localhost, defaulting to cloud mode (no backend detected)");
+            return { mode: "cloud", apMode: false };
+          }
+        }
   // Otherwise default to local (ESP32 might be in AP mode with no network)
   console.log("[Mode] All API calls failed, defaulting to local mode");
   return { mode: "local", apMode: false };

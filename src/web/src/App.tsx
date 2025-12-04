@@ -417,7 +417,6 @@ function App() {
   }
 
   // Logged in with devices -> Full app
-  // NOTE: Onboarding is only accessible when devices.length === 0 (handled above)
   const selectedDevice = getSelectedDevice();
 
   return (
