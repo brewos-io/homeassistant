@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, Request } from "express";
 import rateLimit from "express-rate-limit";
 import { sessionAuthMiddleware } from "../middleware/auth.js";
 import {
@@ -20,9 +20,9 @@ const router = Router();
 
 // Rate limiters with different strictness levels
 
-// Strict limiter for sensitive operations (claiming devices)
+// IP-based limiter for unauthenticated routes (ESP32 device registration)
 // 5 requests per minute per IP
-const strictLimiter = rateLimit({
+const ipStrictLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   max: 5,
   standardHeaders: true,
@@ -30,33 +30,48 @@ const strictLimiter = rateLimit({
   message: { error: "Too many requests, please try again later" },
 });
 
-// Write limiter for mutations (PATCH, DELETE)
-// 30 requests per 15 minutes per IP
-const writeLimiter = rateLimit({
+// User-based limiter for authenticated write operations
+// Uses user ID after authentication, falls back to IP
+// 30 requests per 15 minutes per user
+const userWriteLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 30,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many requests, please try again later" },
+  keyGenerator: (req: Request) => req.user?.id || req.ip || "unknown",
 });
 
-// Read limiter for GET operations
-// 100 requests per 15 minutes per IP
-const readLimiter = rateLimit({
+// User-based limiter for authenticated read operations
+// Uses user ID after authentication, falls back to IP
+// 100 requests per 15 minutes per user
+const userReadLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many requests, please try again later" },
+  keyGenerator: (req: Request) => req.user?.id || req.ip || "unknown",
+});
+
+// Strict user-based limiter for sensitive operations (claiming)
+// 5 requests per minute per user
+const userStrictLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later" },
+  keyGenerator: (req: Request) => req.user?.id || req.ip || "unknown",
 });
 
 /**
  * POST /api/devices/register-claim
  * Called by ESP32 to register a claim token
  * No auth required (the token itself is the auth)
- * Rate limited strictly to prevent abuse
+ * Rate limited by IP to prevent abuse
  */
-router.post("/register-claim", strictLimiter, (req, res) => {
+router.post("/register-claim", ipStrictLimiter, (req, res) => {
   try {
     const { deviceId, token } = req.body;
 
@@ -81,9 +96,9 @@ router.post("/register-claim", strictLimiter, (req, res) => {
 /**
  * POST /api/devices/claim
  * Claim a device using QR code token
- * Rate limited strictly to prevent brute-force attacks
+ * Rate limited by user to prevent brute-force attacks
  */
-router.post("/claim", strictLimiter, sessionAuthMiddleware, (req, res) => {
+router.post("/claim", sessionAuthMiddleware, userStrictLimiter, (req, res) => {
   try {
     const { deviceId, token, name } = req.body;
     const userId = req.user!.id;
@@ -124,7 +139,7 @@ router.post("/claim", strictLimiter, sessionAuthMiddleware, (req, res) => {
  * GET /api/devices
  * List user's devices
  */
-router.get("/", readLimiter, sessionAuthMiddleware, (req, res) => {
+router.get("/", sessionAuthMiddleware, userReadLimiter, (req, res) => {
   try {
     const devices = getUserDevices(req.user!.id);
 
@@ -151,7 +166,7 @@ router.get("/", readLimiter, sessionAuthMiddleware, (req, res) => {
  * GET /api/devices/:id
  * Get a specific device
  */
-router.get("/:id", readLimiter, sessionAuthMiddleware, (req, res) => {
+router.get("/:id", sessionAuthMiddleware, userReadLimiter, (req, res) => {
   try {
     const { id } = req.params;
 
@@ -192,7 +207,7 @@ router.get("/:id", readLimiter, sessionAuthMiddleware, (req, res) => {
  * PATCH /api/devices/:id
  * Update device (name, brand, model)
  */
-router.patch("/:id", writeLimiter, sessionAuthMiddleware, (req, res) => {
+router.patch("/:id", sessionAuthMiddleware, userWriteLimiter, (req, res) => {
   try {
     const { id } = req.params;
     const { name, brand, model } = req.body;
@@ -214,30 +229,35 @@ router.patch("/:id", writeLimiter, sessionAuthMiddleware, (req, res) => {
  * GET /api/devices/:id/users
  * Get all users who have access to a device
  */
-router.get("/:id/users", readLimiter, sessionAuthMiddleware, (req, res) => {
-  try {
-    const { id } = req.params;
+router.get(
+  "/:id/users",
+  sessionAuthMiddleware,
+  userReadLimiter,
+  (req, res) => {
+    try {
+      const { id } = req.params;
 
-    // Verify the requesting user has access to the device
-    if (!userOwnsDevice(req.user!.id, id)) {
-      return res.status(404).json({ error: "Device not found" });
+      // Verify the requesting user has access to the device
+      if (!userOwnsDevice(req.user!.id, id)) {
+        return res.status(404).json({ error: "Device not found" });
+      }
+
+      const users = getDeviceUsers(id);
+
+      res.json({
+        users: users.map((u) => ({
+          userId: u.user_id,
+          email: u.email,
+          displayName: u.display_name,
+          avatarUrl: u.avatar_url,
+          claimedAt: u.claimed_at,
+        })),
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get device users" });
     }
-
-    const users = getDeviceUsers(id);
-
-    res.json({
-      users: users.map((u) => ({
-        userId: u.user_id,
-        email: u.email,
-        displayName: u.display_name,
-        avatarUrl: u.avatar_url,
-        claimedAt: u.claimed_at,
-      })),
-    });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to get device users" });
   }
-});
+);
 
 /**
  * DELETE /api/devices/:id/users/:userId
@@ -245,8 +265,8 @@ router.get("/:id/users", readLimiter, sessionAuthMiddleware, (req, res) => {
  */
 router.delete(
   "/:id/users/:userId",
-  writeLimiter,
   sessionAuthMiddleware,
+  userWriteLimiter,
   (req, res) => {
     try {
       const { id, userId } = req.params;
@@ -272,7 +292,7 @@ router.delete(
  * DELETE /api/devices/:id
  * Remove device from account
  */
-router.delete("/:id", writeLimiter, sessionAuthMiddleware, (req, res) => {
+router.delete("/:id", sessionAuthMiddleware, userWriteLimiter, (req, res) => {
   try {
     const { id } = req.params;
 

@@ -23,7 +23,7 @@ const router = Router();
 
 // Rate limiters
 
-// Strict limiter for login attempts - prevent brute force
+// IP-based limiter for login - prevents brute force before we know the user
 // 5 requests per minute per IP
 const loginLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
@@ -33,7 +33,7 @@ const loginLimiter = rateLimit({
   message: { error: "Too many login attempts, please try again later" },
 });
 
-// Refresh limiter - slightly more lenient
+// IP-based limiter for refresh - slightly more lenient
 // 10 requests per minute per IP
 const refreshLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
@@ -43,14 +43,16 @@ const refreshLimiter = rateLimit({
   message: { error: "Too many requests, please try again later" },
 });
 
-// General auth limiter for other operations
-// 30 requests per 15 minutes per IP
-const authLimiter = rateLimit({
+// User-based limiter for authenticated operations
+// Uses user ID after authentication, falls back to IP
+// 30 requests per 15 minutes per user
+const userAuthLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 30,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many requests, please try again later" },
+  keyGenerator: (req: Request) => req.user?.id || req.ip || "unknown",
 });
 
 // Google OAuth client
@@ -62,6 +64,7 @@ const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
  *
  * Exchange Google ID token for our session tokens.
  * This is the ONLY time we verify with Google.
+ * Rate limited by IP (we don't know the user yet)
  */
 router.post("/google", loginLimiter, async (req: Request, res: Response) => {
   try {
@@ -129,6 +132,7 @@ router.post("/google", loginLimiter, async (req: Request, res: Response) => {
  *
  * Refresh session using refresh token.
  * Implements refresh token rotation for security.
+ * Rate limited by IP (token-based, not session-based)
  */
 router.post("/refresh", refreshLimiter, (req: Request, res: Response) => {
   try {
@@ -169,11 +173,12 @@ router.post("/refresh", refreshLimiter, (req: Request, res: Response) => {
  * POST /api/auth/logout
  *
  * Revoke current session.
+ * Rate limited by user
  */
 router.post(
   "/logout",
-  authLimiter,
   sessionAuthMiddleware,
+  userAuthLimiter,
   (req: Request, res: Response) => {
     try {
       const sessionId = req.session?.id;
@@ -194,11 +199,12 @@ router.post(
  * POST /api/auth/logout-all
  *
  * Revoke all sessions for the current user.
+ * Rate limited by user
  */
 router.post(
   "/logout-all",
-  authLimiter,
   sessionAuthMiddleware,
+  userAuthLimiter,
   (req: Request, res: Response) => {
     try {
       const userId = req.user?.id;
@@ -221,11 +227,12 @@ router.post(
  *
  * Get all active sessions for current user.
  * Useful for "manage sessions" UI.
+ * Rate limited by user
  */
 router.get(
   "/sessions",
-  authLimiter,
   sessionAuthMiddleware,
+  userAuthLimiter,
   (req: Request, res: Response) => {
     try {
       const userId = req.user?.id;
@@ -258,11 +265,12 @@ router.get(
  * DELETE /api/auth/sessions/:id
  *
  * Revoke a specific session.
+ * Rate limited by user
  */
 router.delete(
   "/sessions/:id",
-  authLimiter,
   sessionAuthMiddleware,
+  userAuthLimiter,
   (req: Request, res: Response) => {
     try {
       const { id } = req.params;
@@ -293,11 +301,12 @@ router.delete(
  * GET /api/auth/me
  *
  * Get current user info.
+ * Rate limited by user
  */
 router.get(
   "/me",
-  authLimiter,
   sessionAuthMiddleware,
+  userAuthLimiter,
   (req: Request, res: Response) => {
     try {
       const user = req.user;
