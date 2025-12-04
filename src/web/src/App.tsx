@@ -25,6 +25,7 @@ import { useThemeStore } from "@/lib/themeStore";
 import { Loading } from "@/components/Loading";
 import { DemoBanner } from "@/components/DemoBanner";
 import { UpdateNotification } from "@/components/UpdateNotification";
+import { FirmwareUpdateNotification } from "@/components/FirmwareUpdateNotification";
 import { getDemoConnection, clearDemoConnection } from "@/lib/demo-connection";
 import { isDemoMode, disableDemoMode } from "@/lib/demo-mode";
 import { isRunningAsPWA, isDemoModeAllowed } from "@/lib/pwa";
@@ -266,6 +267,7 @@ function App() {
           </Route>
         </Routes>
         <UpdateNotification />
+        <FirmwareUpdateNotification />
       </>
     );
   }
@@ -317,6 +319,7 @@ function App() {
           </Route>
         </Routes>
         <UpdateNotification />
+        <FirmwareUpdateNotification />
       </>
     );
   }
@@ -349,6 +352,7 @@ function App() {
           <Route path="*" element={<Navigate to="/onboarding" replace />} />
         </Routes>
         <UpdateNotification />
+        <FirmwareUpdateNotification />
       </>
     );
   }
@@ -395,6 +399,7 @@ function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <UpdateNotification />
+      <FirmwareUpdateNotification />
     </>
   );
 }

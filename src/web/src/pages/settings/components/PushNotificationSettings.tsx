@@ -24,7 +24,12 @@ import {
   Wifi,
   Settings2,
   Loader2,
+  Download,
 } from "lucide-react";
+import {
+  getFirmwareUpdateNotificationEnabled,
+  setFirmwareUpdateNotificationEnabled,
+} from "@/lib/firmware-update-checker";
 
 // Notification preference types
 interface NotificationPreferences {
@@ -37,6 +42,7 @@ interface NotificationPreferences {
   picoOffline: boolean;
   scheduleTriggered: boolean;
   brewComplete: boolean;
+  firmwareUpdate: boolean;
 }
 
 const defaultPreferences: NotificationPreferences = {
@@ -49,6 +55,7 @@ const defaultPreferences: NotificationPreferences = {
   picoOffline: true,
   scheduleTriggered: true,
   brewComplete: false,
+  firmwareUpdate: true,
 };
 
 // Notification categories for better UX
@@ -140,6 +147,19 @@ const notificationCategories = [
       },
     ],
   },
+  {
+    title: "System",
+    description: "System and firmware notifications",
+    items: [
+      {
+        key: "firmwareUpdate" as const,
+        label: "Firmware Updates",
+        description: "When a new firmware version is available for your channel",
+        icon: Download,
+        recommended: true,
+      },
+    ],
+  },
 ];
 
 export function PushNotificationSettings() {
@@ -168,9 +188,12 @@ export function PushNotificationSettings() {
   }, [isSubscribed]);
 
   const fetchPreferences = async () => {
-    // Demo mode: use default preferences
+    // Get local firmware update preference
+    const firmwareUpdateEnabled = getFirmwareUpdateNotificationEnabled();
+
+    // Demo mode: use default preferences with local firmware setting
     if (isDemo) {
-      setPreferences(defaultPreferences);
+      setPreferences({ ...defaultPreferences, firmwareUpdate: firmwareUpdateEnabled });
       return;
     }
 
@@ -181,10 +204,16 @@ export function PushNotificationSettings() {
       });
       if (response.ok) {
         const data = await response.json();
-        setPreferences(data.preferences);
+        // Merge server preferences with local firmware update preference
+        setPreferences({ ...data.preferences, firmwareUpdate: firmwareUpdateEnabled });
+      } else {
+        // If server fetch fails, at least set local preference
+        setPreferences({ ...defaultPreferences, firmwareUpdate: firmwareUpdateEnabled });
       }
     } catch (err) {
       console.error("Failed to fetch notification preferences:", err);
+      // Set defaults with local firmware preference on error
+      setPreferences({ ...defaultPreferences, firmwareUpdate: firmwareUpdateEnabled });
     } finally {
       setLoadingPrefs(false);
     }
@@ -196,6 +225,12 @@ export function PushNotificationSettings() {
   ) => {
     // Optimistically update UI
     setPreferences((prev) => ({ ...prev, [key]: value }));
+
+    // Firmware update preference is stored locally (client-side periodic check)
+    if (key === "firmwareUpdate") {
+      setFirmwareUpdateNotificationEnabled(value);
+      return;
+    }
 
     // Demo mode: just update locally, no API call
     if (isDemo) {
