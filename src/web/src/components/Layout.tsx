@@ -5,6 +5,7 @@ import { useAppStore } from "@/lib/mode";
 import { Logo } from "./Logo";
 import { InstallPrompt, usePWAInstall } from "./InstallPrompt";
 import { ConnectionOverlay } from "./ConnectionOverlay";
+import { DeviceOfflineBanner } from "./DeviceOfflineBanner";
 import { VersionWarning } from "./VersionWarning";
 import { UserMenu } from "./UserMenu";
 import { isDemoMode } from "@/lib/demo-mode";
@@ -155,6 +156,11 @@ export function Layout({ onExitDemo }: LayoutProps) {
           </div>
         </div>
       </header>
+
+      {/* Device Offline Banner - Cloud mode only */}
+      {isCloud && selectedDevice && !selectedDevice.isOnline && (
+        <DeviceOfflineBanner deviceName={selectedDevice.name} />
+      )}
 
       {/* Install App Banner - shown to mobile users only */}
       {showInstallBanner && isMobile && (
