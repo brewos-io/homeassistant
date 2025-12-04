@@ -350,12 +350,30 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
     );
   };
 
+  const isWelcomeStep = STEPS[currentStep].id === "welcome";
+
   return (
-    <div className="full-page-scroll bg-gradient-to-br from-coffee-800 via-coffee-900 to-coffee-950 flex items-center justify-center p-4">
-      <div className="w-full max-w-xl">
+    <div
+      className={`full-page-scroll bg-gradient-to-br from-coffee-800 via-coffee-900 to-coffee-950 p-4 transition-all duration-300 ${
+        isWelcomeStep
+          ? "flex items-center justify-center"
+          : "flex justify-center"
+      }`}
+    >
+      <div
+        className={`w-full max-w-xl transition-all duration-300 ${
+          !isWelcomeStep ? "pt-16" : ""
+        }`}
+      >
         <ProgressIndicator steps={STEPS} currentStep={currentStep} />
 
-        <Card>
+        <Card
+          className={
+            !isWelcomeStep
+              ? "animate-in fade-in slide-in-from-right-4 duration-300"
+              : ""
+          }
+        >
           {renderStepContent()}
 
           <div className="flex justify-between pt-6 border-t border-theme mt-6">
