@@ -54,6 +54,20 @@ export function Stats() {
   const [dailyHistory, setDailyHistory] = useState<DailySummary[]>([]);
   const [brewHistory, setBrewHistory] = useState<BrewRecord[]>([]);
 
+  const generateWeeklyEstimate = useCallback(() => {
+    const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    const avgPerDay = stats.weeklyCount > 0 ? Math.round(stats.weeklyCount / 7) : 0;
+    const weekly = days.map((day, index) => {
+      const today = new Date().getDay();
+      const dayIndex = (index + 1) % 7;
+      return {
+        day,
+        shots: dayIndex === today ? stats.shotsToday : avgPerDay,
+      };
+    });
+    setWeeklyData(weekly);
+  }, [stats.weeklyCount, stats.shotsToday]);
+
   const fetchExtendedStats = useCallback(async () => {
     setLoading(true);
     try {
@@ -87,20 +101,6 @@ export function Stats() {
   useEffect(() => {
     fetchExtendedStats();
   }, [fetchExtendedStats]);
-
-  const generateWeeklyEstimate = useCallback(() => {
-    const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-    const avgPerDay = stats.weeklyCount > 0 ? Math.round(stats.weeklyCount / 7) : 0;
-    const weekly = days.map((day, index) => {
-      const today = new Date().getDay();
-      const dayIndex = (index + 1) % 7;
-      return {
-        day,
-        shots: dayIndex === today ? stats.shotsToday : avgPerDay,
-      };
-    });
-    setWeeklyData(weekly);
-  }, [stats.weeklyCount, stats.shotsToday]);
 
   const markCleaning = (type: "backflush" | "descale") => {
     const typeLabels = {
