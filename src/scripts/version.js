@@ -26,7 +26,10 @@ const { execSync } = require("child_process");
 const PROJECT_ROOT = path.resolve(__dirname, "..", "..");
 const VERSION_FILE = path.join(PROJECT_ROOT, "VERSION");
 const VERSION_JSON = path.join(PROJECT_ROOT, "version.json");
-const MANIFEST_FILE = path.join(PROJECT_ROOT, "src/web/public/version-manifest.json");
+const MANIFEST_FILE = path.join(
+  PROJECT_ROOT,
+  "src/web/public/version-manifest.json"
+);
 
 // GitHub repository for release URLs
 const GITHUB_REPO = "mizrachiran/brewos";
@@ -84,7 +87,10 @@ function getCurrentBranch() {
  * Check if a tag already exists
  */
 function tagExists(tag) {
-  const result = git(`rev-parse --verify refs/tags/${tag}`, { silent: true, ignoreError: true });
+  const result = git(`rev-parse --verify refs/tags/${tag}`, {
+    silent: true,
+    ignoreError: true,
+  });
   return result !== "";
 }
 
@@ -145,14 +151,14 @@ PROTOCOL_VERSION=${protocolVersion}
 function writeVersionJson(firmwareVersion, protocolVersion) {
   const isPrerelease = /-(alpha|beta|rc)/.test(firmwareVersion);
   const channel = isPrerelease ? "beta" : "stable";
-  
+
   const content = {
     version: firmwareVersion,
     protocol: protocolVersion,
     channel: channel,
     updatedAt: new Date().toISOString(),
   };
-  
+
   fs.writeFileSync(VERSION_JSON, JSON.stringify(content, null, 2) + "\n");
   console.log(`✓ Updated version.json`);
 }
@@ -165,7 +171,7 @@ function writeVersionManifest(firmwareVersion, protocolVersion) {
   const tag = `v${firmwareVersion}`;
   const baseUrl = `https://github.com/${GITHUB_REPO}/releases/download/${tag}`;
   const isPrerelease = /-(alpha|beta|rc)/.test(firmwareVersion);
-  
+
   const manifest = {
     // Current latest version info
     latest: {
@@ -189,13 +195,13 @@ function writeVersionManifest(firmwareVersion, protocolVersion) {
     // Metadata
     generatedAt: new Date().toISOString(),
   };
-  
+
   // Ensure directory exists
   const manifestDir = path.dirname(MANIFEST_FILE);
   if (!fs.existsSync(manifestDir)) {
     fs.mkdirSync(manifestDir, { recursive: true });
   }
-  
+
   fs.writeFileSync(MANIFEST_FILE, JSON.stringify(manifest, null, 2) + "\n");
   console.log(`✓ Updated src/web/public/version-manifest.json`);
 }
@@ -387,9 +393,10 @@ function createRelease(version, dryRun = false) {
   console.log(`✓ Created tag ${tag}`);
 
   // Push branch and only the new tag (not all tags)
+  // Use refs/tags/ prefix to ensure tag push triggers workflow reliably
   console.log("Pushing to remote...");
   git(`push origin ${branch}`);
-  git(`push origin ${tag}`);
+  git(`push origin refs/tags/${tag}:refs/tags/${tag}`);
   console.log(`✓ Pushed to origin/${branch} with tag ${tag}`);
 
   console.log();
