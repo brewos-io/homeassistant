@@ -15,7 +15,7 @@ export class Connection implements IConnection {
   private stateHandlers = new Set<StateHandler>();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectDelay = 1000;
-  private maxReconnectDelay = 30000;
+  private maxReconnectDelay = 5000;
   private pingInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(config: ConnectionConfig) {

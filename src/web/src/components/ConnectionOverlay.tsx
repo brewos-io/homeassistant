@@ -1,13 +1,15 @@
 import { useStore } from "@/lib/store";
 import { getActiveConnection } from "@/lib/connection";
-import { cn } from "@/lib/utils";
-import { Wifi, WifiOff, RefreshCw, AlertTriangle, X } from "lucide-react";
+import { Wifi, RefreshCw, X } from "lucide-react";
 import { Button } from "./Button";
 import { useState, useEffect } from "react";
 
 // Allow bypassing overlay in development for easier testing
 const DEV_MODE = import.meta.env.DEV;
 const DEV_BYPASS_KEY = "brewos-dev-bypass-overlay";
+
+// Debounce time before hiding overlay after connection
+const HIDE_DELAY_MS = 500;
 
 export function ConnectionOverlay() {
   const connectionState = useStore((s) => s.connectionState);
@@ -20,17 +22,23 @@ export function ConnectionOverlay() {
   });
 
   const isConnected = connectionState === "connected";
-  const isConnecting =
-    connectionState === "connecting" || connectionState === "reconnecting";
-  const isError = connectionState === "error";
+  const [isVisible, setIsVisible] = useState(!isConnected);
 
-  // Determine if overlay should be visible - show immediately when not connected
-  const isOverlayVisible = !isConnected && !(DEV_MODE && devBypassed);
+  // Simple visibility control - show when not connected, hide with delay when connected
+  useEffect(() => {
+    if (isConnected) {
+      const timeout = setTimeout(() => {
+        setIsVisible(false);
+      }, HIDE_DELAY_MS);
+      return () => clearTimeout(timeout);
+    } else {
+      setIsVisible(true);
+    }
+  }, [isConnected]);
 
   // Lock body scroll when overlay is visible
   useEffect(() => {
-    if (isOverlayVisible) {
-      // Save current scroll position and lock
+    if (isVisible) {
       const scrollY = window.scrollY;
       document.body.style.position = "fixed";
       document.body.style.top = `-${scrollY}px`;
@@ -39,7 +47,6 @@ export function ConnectionOverlay() {
       document.body.style.overflow = "hidden";
 
       return () => {
-        // Restore scroll position
         document.body.style.position = "";
         document.body.style.top = "";
         document.body.style.left = "";
@@ -48,15 +55,16 @@ export function ConnectionOverlay() {
         window.scrollTo(0, scrollY);
       };
     }
-  }, [isOverlayVisible]);
+  }, [isVisible]);
 
   const handleDevBypass = () => {
     localStorage.setItem(DEV_BYPASS_KEY, "true");
     setDevBypassed(true);
   };
 
-  // Don't render if not visible
-  if (!isOverlayVisible) return null;
+  // Don't render if bypassed in dev mode or not visible
+  if (DEV_MODE && devBypassed) return null;
+  if (!isVisible) return null;
 
   const handleRetry = async () => {
     setRetrying(true);
@@ -68,46 +76,22 @@ export function ConnectionOverlay() {
     setRetrying(false);
   };
 
-  const getStatusContent = () => {
-    if (isConnecting || retrying) {
-      return {
-        icon: <Wifi className="w-16 h-16 text-accent animate-pulse" />,
-        title: "Connecting to your machine...",
-        subtitle: "Please wait while we establish a connection",
-        showRetry: false,
-      };
-    }
+  // Always show "Connecting" state - simpler and no flickering
+  // The overlay is only visible when not connected, and we're always trying to reconnect
+  const isRetryingOrConnecting = retrying || 
+    connectionState === "connecting" || 
+    connectionState === "reconnecting";
 
-    if (isError) {
-      return {
-        icon: <AlertTriangle className="w-16 h-16 text-amber-500" />,
-        title: "Connection Error",
-        subtitle:
-          "Unable to connect to your espresso machine. Please check that your device is powered on and connected to the same network.",
-        showRetry: true,
-      };
-    }
-
-    // Disconnected
-    return {
-      icon: <WifiOff className="w-16 h-16 text-red-400" />,
-      title: "Disconnected",
-      subtitle:
-        "Lost connection to your espresso machine. Attempting to reconnect automatically...",
-      showRetry: true,
-    };
+  const status = {
+    icon: <Wifi className="w-16 h-16 text-accent" />,
+    title: "Connecting to your machine...",
+    subtitle: "Please wait while we establish a connection",
+    showRetry: !isRetryingOrConnecting,
+    showPulse: true,
   };
 
-  const status = getStatusContent();
-
   return (
-    <div
-      className={cn(
-        "fixed inset-0 z-[60] flex items-center justify-center p-6",
-        "bg-theme/95 backdrop-blur-md",
-        "animate-in fade-in duration-300"
-      )}
-    >
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-theme/95 backdrop-blur-md">
       {/* Dev mode bypass button */}
       {DEV_MODE && (
         <button
@@ -123,13 +107,15 @@ export function ConnectionOverlay() {
         {/* Animated Icon */}
         <div className="relative inline-flex items-center justify-center">
           {/* Pulsing ring for connecting state */}
-          {(isConnecting || retrying) && (
+          {status.showPulse && (
             <>
               <div className="absolute inset-0 w-24 h-24 -m-4 rounded-full bg-accent/20 animate-ping" />
               <div className="absolute inset-0 w-20 h-20 -m-2 rounded-full bg-accent/30 animate-pulse" />
             </>
           )}
-          {status.icon}
+          <div className={status.showPulse ? "animate-pulse" : ""}>
+            {status.icon}
+          </div>
         </div>
 
         {/* Status Text */}
@@ -153,7 +139,7 @@ export function ConnectionOverlay() {
         )}
 
         {/* Connection attempts indicator */}
-        {(isConnecting || retrying) && (
+        {status.showPulse && (
           <div className="flex items-center justify-center gap-1.5 text-xs text-theme-muted">
             <span
               className="w-1.5 h-1.5 rounded-full bg-accent animate-bounce"
