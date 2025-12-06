@@ -9,115 +9,7 @@
 
 ---
 
-## ⚠️ DESIGN UPDATE IN v2.21 (Dec 2025)
-
-### ✅ External Power Metering Interface (Universal Module Support)
-
-- **REMOVED:** PZEM-004T-100A-D-P embedded daughterboard (J17, J24 connectors eliminated)
-- **NEW:** Universal external power meter interface via **J17 (JST-XH 6-pin)** for UART/RS485 communication
-- **Supports multiple modules:** PZEM-004T, JSY-MK-163T, JSY-MK-194T, Eastron SDM, and more
-- **Off-board metering:** External modules handle their own HV connections (no 220V through control PCB for metering)
-- **RS485 support:** On-board MAX3485 transceiver with jumper-selectable termination resistor
-- **Auto-baud scanning:** Firmware supports 2400, 4800, 9600, 19200 baud auto-detection
-- **Benefits:** Superior safety (HV isolated from control PCB), mechanical flexibility, future-proof design
-
-### ✅ Unified Low-Voltage Screw Terminal Block (J26 - 22 Position)
-
-- **ALL low-voltage connections** consolidated into **single 22-position screw terminal block**
-- **J26 includes:** Switch inputs (S1-S4), Analog sensors (NTC×2, Thermocouple, Pressure), SSR control outputs
-- **6.3mm spades retained ONLY for 220V AC:** Mains input (J1: L, N, PE), K1 LED (J2), K2 Pump (J3), K3 Solenoid (J4)
-- **Benefits:** Single terminal block for ALL low-voltage wiring, professional appearance, easier assembly
-
-### ✅ Spare Relay K4 Removed
-
-- **Simplified to 3 relays:** K1 (Water LED), K2 (Pump), K3 (Solenoid) - no spare relay
-- **Removed components:** K4, Q4, D4, LED4, R13, R23, R33, R83, C53, J9
-- **GPIO20 available:** Test point TP1 added for future expansion access
-- **Benefits:** Reduced BOM cost, smaller PCB footprint, simplified design
-
-```
-┌────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                    J26 - UNIFIED LOW-VOLTAGE SCREW TERMINAL (22-pos)                           │
-│                           Phoenix MKDS 1/22-5.08 (5.08mm pitch)                                │
-│                                  ⚠️ LOW VOLTAGE ONLY ⚠️                                        │
-├────────────────────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                                │
-│  SWITCHES (S1-S4)          ANALOG SENSORS                    SSR OUTPUTS            SPARE     │
-│  ┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐    │
-│  │ 1 │ 2 │ 3 │ 4 │ 5 │ 6 │ 7 │ 8 │ 9 │10 │11 │12 │13 │14 │15 │16 │17 │18 │19 │20 │21 │22 │    │
-│  │S1 │S1G│S2 │S2G│S3 │S4 │S4G│T1 │T1G│T2 │T2G│TC+│TC-│P5V│PGD│PSG│SR+│SR-│SR+│SR-│GND│GND│    │
-│  └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘    │
-│   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │           │
-│   └─S1─┘   └─S2─┘  S3  └─S4─┘   └─Brew─┘   └Steam┘ └─TC──┘ └─Pressure─┘ └SSR1─┘ └SSR2─┘ Spare │
-│   Water    Tank   Lvl  Brew     NTC      NTC     Thermo    Transducer   Brew    Steam         │
-│   Res.     Level  Prb  Handle                    couple    (YD4060)     Heater  Heater        │
-│                                                                                                │
-│  ⚠️ NOTE: CT Clamp connections REMOVED - now handled by external power meter module           │
-│                                                                                                │
-└────────────────────────────────────────────────────────────────────────────────────────────────┘
-
-220V AC RELAY OUTPUTS (6.3mm Spade - Unchanged):
-┌────────────────────────────────────────────────────────────────┐
-│  J2-NO: K1 Water LED (220V, ≤100mA)                           │
-│  J3-NO: K2 Pump Motor (220V, 5A) - HIGH POWER                 │
-│  J4-NO: K3 Solenoid Valve (220V, ~0.5A)                       │
-└────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## ⚠️ DESIGN UPDATE IN v2.17 (Nov 2025)
-
-### ✅ Brew-by-Weight Support (J15 Expanded to 8-pin)
-
-- **J15 ESP32 connector expanded** from 6-pin to 8-pin JST-XH
-- **GPIO21:** WEIGHT_STOP signal - ESP32 → Pico for brew-by-weight
-- **GPIO22:** SPARE - Reserved for future expansion
-- **Enables Bluetooth scale integration** via ESP32 (e.g., Acaia, Decent)
-- **No interrupt needed** - ESP32 signals Pico when target weight reached
-
-```
-┌─────────────────┐                    ┌─────────────────┐
-│   ESP32 + BLE   │                    │   Pico (Main)   │
-│   + Display     │     J15 Pin 7      │                 │
-│                 │   (WEIGHT_STOP)    │                 │
-│  Scale Weight ──┼────────────────────┼──► GPIO21       │
-│  Reached?       │                    │     │           │
-│                 │                    │     ▼           │
-│                 │                    │  Stop Pump!     │
-└─────────────────┘                    └─────────────────┘
-```
-
----
-
-## ⚠️ MAJOR DESIGN UPDATE IN v2.15 (Nov 2025)
-
-**This specification has been significantly simplified with two major component changes:**
-
-### ✅ AC Level Sensing Circuit (OPA342 + TLV3201)
-
-- **Custom oscillator + comparator circuit** for liquid level detection
-- **AC excitation** (~1kHz) - prevents electrolysis and probe corrosion
-- **Uses commonly available, modern components** (OPA342, TLV3201)
-- **Highly reliable** with clean digital output to GPIO4
-- **Logic entirely on PCB** - no external modules
-
-### ✅ Universal Power Metering Interface (External Modules)
-
-- **Design:** External power metering modules with universal interface connector
-- **Connector:** J17 (JST-XH 6-pin) for low-voltage UART/RS485 communication
-- **No HV on control PCB:** External modules handle their own mains voltage connections
-- **Dual-mode support:** TTL UART + RS485 via on-board MAX3485 transceiver
-- **Compatible modules:** PZEM-004T, JSY-MK-163T/194T, Eastron SDM, ATM90E32, and others
-- **Auto-detection:** Firmware scans baud rates (9600, 4800, 2400, 19200) on startup
-- **Register map architecture:** Data-driven driver supports multiple meter types via configuration
-
-**Why External is Better:**
-
-- **Superior Safety:** High voltage physically separated from control PCB
-- **Mechanical Flexibility:** Modules mount anywhere in enclosure (DIN rail, wall, etc.)
-- **Future-Proof:** Support new modules without PCB redesign
-- **Better Thermal:** Heat-generating modules kept away from sensitive electronics
+**📋 Revision History:** See [`CHANGELOG.md`](CHANGELOG.md) for detailed version history.
 
 ---
 
@@ -267,10 +159,16 @@ This specification defines a custom control PCB to replace the factory GICAR con
 | S2  | Tank Level Sensor            | 2-wire Magnetic Float | Digital, Active Low | J26 Pin 3-4   |
 | S3  | Steam Boiler Level Probe     | Conductivity Probe    | Digital/Analog      | J26 Pin 5     |
 | S4  | Brew Handle Switch           | SPST N.O./N.C.        | Digital, Active Low | J26 Pin 6-7   |
-| T1  | Brew Boiler Temp             | NTC 3.3kΩ @ 25°C      | Analog (ADC)        | J26 Pin 8-9   |
-| T2  | Steam Boiler Temp            | NTC 3.3kΩ @ 25°C      | Analog (ADC)        | J26 Pin 10-11 |
-| T3  | Brew Head Temp               | K-Type Thermocouple   | SPI (MAX31855)      | J26 Pin 12-13 |
+| T1  | Brew Boiler Temp             | NTC 50kΩ @ 25°C       | Analog (ADC)        | J26 Pin 8-9   |
+| T2  | Steam Boiler Temp            | NTC 50kΩ @ 25°C       | Analog (ADC)        | J26 Pin 10-11 |
+| T3  | Brew Head Temp               | K-Type Thermocouple   | SPI (MAX31855K)     | J26 Pin 12-13 |
 | P1  | Pressure Transducer (YD4060) | 0.5-4.5V, 0-16 bar    | Analog (ADC)        | J26 Pin 14-16 |
+
+**⚠️ SENSOR COMPATIBILITY NOTES:**
+
+- **NTC:** Default configured for 50kΩ @ 25°C. R1/R2 are socketed (1206) for other NTC values.
+- **Thermocouple:** MAX31855**K** = Type-K **ONLY**. Cannot use Type-J, Type-T, or PT100 RTD.
+- **Pressure:** 0.5-4.5V ratiometric only. Cannot use 4-20mA current loop sensors.
 
 ## 3.2 Outputs (Actuators)
 
@@ -284,11 +182,12 @@ This specification defines a custom control PCB to replace the factory GICAR con
 
 ## 3.3 Communication Interfaces
 
-| Interface     | Purpose                                  | Connector           |
-| ------------- | ---------------------------------------- | ------------------- |
-| ESP32 Display | Main UI, WiFi, MQTT, OTA, Brew-by-Weight | JST-XH 8-pin        |
-| Service/Debug | Firmware debug, emergency access         | 2.54mm 4-pin header |
-| Power Meter   | Universal external modules (TTL/RS485)   | JST-XH 6-pin (J17)  |
+| Interface        | Purpose                                  | Connector                  |
+| ---------------- | ---------------------------------------- | -------------------------- |
+| ESP32 Display    | Main UI, WiFi, MQTT, OTA, Brew-by-Weight | JST-XH 8-pin (J15)         |
+| Service/Debug    | Firmware debug, emergency access         | 2.54mm 4-pin header        |
+| Power Meter (LV) | UART/RS485 communication to meter        | JST-XH 6-pin (J17)         |
+| Power Meter (HV) | Mains power for external meter module    | Screw terminal 3-pos (J24) |
 
 ## 3.4 User Interface (Onboard)
 
@@ -435,7 +334,7 @@ This specification defines a custom control PCB to replace the factory GICAR con
 | 20   | RS485 DE/RE                     | Output    | Digital | Pull-down     | MAX3485 direction (TTL mode: NC)  |
 | 21   | WEIGHT_STOP (ESP32→Pico)        | Input     | Digital | Pull-down     | Brew-by-weight signal (J15 Pin 7) |
 | 22   | SPARE (ESP32)                   | I/O       | Digital | None          | Reserved for future (J15 Pin 8)   |
-| 23   | (Spare)                         | -         | -       | -             | Available for expansion           |
+| 23   | EXPANSION (J25)                 | I/O       | Digital | Pull-down     | 3-pin header for future use       |
 | 26   | ADC0 - Brew NTC                 | Input     | Analog  | None          | RC filter                         |
 | 27   | ADC1 - Steam NTC                | Input     | Analog  | None          | RC filter                         |
 | 28   | ADC2 - Pressure                 | Input     | Analog  | None          | RC filter, divider                |
@@ -938,13 +837,24 @@ Solution: NPN transistor as low-side switch provides full 5V to SSR.
 
 ## 7.1 NTC Thermistor Interface
 
-For **50kΩ @ 25°C NTC thermistors** (typical B25/85 = 3950K) - ECM Synchronika standard
+### Multi-Machine Compatibility (Jumper Selectable)
+
+Different espresso machine brands use different NTC sensor values. **Solder jumpers JP2/JP3** allow switching between configurations **without soldering resistors**.
+
+| Machine Brand     | NTC @ 25°C | JP2 (Brew) | JP3 (Steam) | Effective R1 | Effective R2 |
+| ----------------- | ---------- | ---------- | ----------- | ------------ | ------------ |
+| **ECM, Profitec** | 50kΩ       | **OPEN**   | **OPEN**    | 3.3kΩ        | 1.2kΩ        |
+| Rocket, Rancilio  | 10kΩ       | **CLOSED** | **CLOSED**  | ~1kΩ         | ~430Ω        |
+| Gaggia            | 10kΩ       | **CLOSED** | **CLOSED**  | ~1kΩ         | ~430Ω        |
+| Lelit (50kΩ)      | 50kΩ       | OPEN       | OPEN        | 3.3kΩ        | 1.2kΩ        |
+
+**Default:** JP2/JP3 **OPEN** = ECM/Profitec (50kΩ NTC)
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────┐
 │                         NTC THERMISTOR INPUT CIRCUITS                           │
 │          ⚠️  EACH SENSOR OPTIMIZED FOR ITS TARGET TEMPERATURE RANGE            │
-│          ⚠️  CONFIGURED FOR 50kΩ NTC SENSORS (NOT 3.3kΩ!)                      │
+│          ⚠️  JP2/JP3 SOLDER JUMPERS SELECT NTC TYPE (NO SOLDERING RESISTORS)   │
 ├────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                 │
 │    BREW BOILER (GPIO26/ADC0)              STEAM BOILER (GPIO27/ADC1)           │
@@ -953,13 +863,18 @@ For **50kΩ @ 25°C NTC thermistors** (typical B25/85 = 3950K) - ECM Synchronika
 │         3.3V (Analog)                          3.3V (Analog)                   │
 │             │                                      │                           │
 │        ┌────┴────┐                            ┌────┴────┐                      │
-│        │  3.3kΩ  │  ← R1                      │  1.2kΩ  │  ← R2                │
-│        │  ±1%    │    Optimized for           │  ±1%    │    Optimized for     │
-│        │  0805   │    93°C target             │  0805   │    135°C target      │
+│        │  3.3kΩ  │  R1 (always populated)     │  1.2kΩ  │  R2 (always populated)│
+│        │  ±1%    │                            │  ±1%    │                      │
 │        └────┬────┘                            └────┬────┘                      │
 │             │                                      │                           │
+│             ├────[1.5kΩ R1A]────[JP2]──┐          ├────[680Ω R2A]────[JP3]──┐ │
+│             │                          │          │                          │ │
+│             │  (JP2 adds R1A parallel) │          │  (JP3 adds R2A parallel) │ │
+│             │                          │          │                          │ │
+│             └──────────────────────────┘          └──────────────────────────┘ │
+│             │                                      │                           │
 │    NTC     ┌┴─────┬────────┐          NTC        ┌┴─────┬────────┐            │
-│    50kΩ    │      │        │          50kΩ       │      │        │            │
+│   10k/50k  │      │        │         10k/50k     │      │        │            │
 │    @25°C ──┤   ┌──┴──┐  ┌──┴──┐       @25°C ─────┤   ┌──┴──┐  ┌──┴──┐         │
 │            │   │ 1kΩ │  │100nF│                  │   │ 1kΩ │  │100nF│         │
 │            │   │ R5  │  │     │                  │   │ R6  │  │     │         │
@@ -968,6 +883,19 @@ For **50kΩ @ 25°C NTC thermistors** (typical B25/85 = 3950K) - ECM Synchronika
 │            │   ADC0        │                     │   ADC1        │            │
 │            │               │                     │               │            │
 │            └───────────────┴─► GND               └───────────────┴─► GND      │
+│                                                                                 │
+│    JUMPER CONFIGURATION:                                                       │
+│    ─────────────────────                                                       │
+│                                                                                 │
+│    JP2 (Brew):   ═══[OPEN]═══     JP3 (Steam):  ═══[OPEN]═══                  │
+│                  Solder to close                 Solder to close               │
+│                                                                                 │
+│    ECM/Profitec (50kΩ NTC):  JP2 OPEN,  JP3 OPEN  → R1=3.3kΩ, R2=1.2kΩ       │
+│    Rocket/Gaggia (10kΩ NTC): JP2 CLOSE, JP3 CLOSE → R1≈1kΩ,  R2≈430Ω         │
+│                                                                                 │
+│    MATH:                                                                       │
+│    • JP2 CLOSED: 3.3kΩ || 1.5kΩ = (3.3×1.5)/(3.3+1.5) = 1.03kΩ ✓            │
+│    • JP3 CLOSED: 1.2kΩ || 680Ω = (1.2×0.68)/(1.2+0.68) = 434Ω ✓             │
 │                                                                                 │
 │    ═══════════════════════════════════════════════════════════════════════    │
 │                                                                                 │
@@ -1015,19 +943,28 @@ For **50kΩ @ 25°C NTC thermistors** (typical B25/85 = 3950K) - ECM Synchronika
 │                                                                                 │
 │    COMPONENT VALUES:                                                           │
 │    ─────────────────                                                           │
-│    R1:  3.3kΩ ±1% 0805 (Brew NTC pull-up) - NOT same as R2!                  │
-│    R2:  1.2kΩ ±1% 0805 (Steam NTC pull-up) - NOT same as R1!                 │
-│    R5:  1kΩ ±5% 0805 (ADC series protection, brew)                           │
-│    R6:  1kΩ ±5% 0805 (ADC series protection, steam)                          │
-│    NTC: 50kΩ @ 25°C, B25/85 ≈ 3950K (ECM Synchronika standard)               │
+│    R1:   3.3kΩ ±1% 0805 (Brew pull-up, always populated)                     │
+│    R1A:  1.5kΩ ±1% 0805 (Brew parallel, enabled by JP2)                      │
+│    R2:   1.2kΩ ±1% 0805 (Steam pull-up, always populated)                    │
+│    R2A:  680Ω ±1% 0805 (Steam parallel, enabled by JP3)                      │
+│    R5:   1kΩ ±5% 0805 (ADC series protection, brew)                          │
+│    R6:   1kΩ ±5% 0805 (ADC series protection, steam)                         │
+│    JP2:  Solder jumper (OPEN = 50kΩ NTC, CLOSED = 10kΩ NTC)                  │
+│    JP3:  Solder jumper (OPEN = 50kΩ NTC, CLOSED = 10kΩ NTC)                  │
 │                                                                                 │
-│    NOTE: At 25°C the voltage is near 3.3V (high) but this is normal.         │
-│          We optimize for operating temperature, not room temp.                 │
+│    ⚠️ DEFAULT: JP2/JP3 OPEN (ECM/Profitec 50kΩ NTC)                          │
+│    ⚠️ FOR ROCKET/GAGGIA: Close JP2 and JP3 with solder bridge               │
 │                                                                                 │
 └────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## 7.2 K-Type Thermocouple Interface
+
+**⚠️ SENSOR RESTRICTION:** MAX31855**K** is hard-wired for **Type-K thermocouples ONLY**.
+
+- ✅ Type-K (Chromel/Alumel) - Standard for E61 group head thermometers
+- ❌ Type-J, Type-T, or other thermocouple types (readings will be incorrect)
+- ❌ PT100/RTD sensors (require different chip: MAX31865)
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────┐
@@ -1050,9 +987,9 @@ For **50kΩ @ 25°C NTC thermistors** (typical B25/85 = 3950K) - ECM Synchronika
 │                       │                                                        │
 │                      GND                                                       │
 │                                                                                 │
-│    Component: MAX31855KASA+ (SOIC-8)                                          │
-│    ─────────────────────────────────                                          │
-│    - K-type thermocouple specific                                             │
+│    Component: MAX31855KASA+ (SOIC-8) - K-TYPE ONLY                            │
+│    ────────────────────────────────────────────────                           │
+│    - K-type thermocouple specific (NOT configurable)                          │
 │    - 14-bit, 0.25°C resolution                                                │
 │    - Range: -200°C to +1350°C                                                 │
 │    - Accuracy: ±2°C (-20°C to +125°C ambient)                                │
@@ -1077,6 +1014,15 @@ For **50kΩ @ 25°C NTC thermistors** (typical B25/85 = 3950K) - ECM Synchronika
 ```
 
 ## 7.3 Pressure Transducer Interface
+
+**⚠️ SENSOR RESTRICTION:** Circuit designed for **0.5-4.5V ratiometric output ONLY**.
+
+- ✅ 3-wire sensors (5V, GND, Signal) like YD4060 or automotive pressure sensors
+- ✅ 0.5V offset allows broken wire detection (0.0V = disconnected, 0.5V = 0 bar)
+- ❌ 4-20mA current loop sensors (require different circuit with shunt resistor)
+- ❌ 0-5V sensors without offset (no broken wire detection)
+
+**Recommended Thread:** G1/4" or 1/8" NPT (verify machine's hydraulic fitting)
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────┐
@@ -2694,10 +2640,13 @@ Relay-switched loads (pump, valves) are fused and distributed via internal bus. 
 │                    └─────────┘   └─────────┘         ├──► Relay K1 COM          │
 │                                                      ├──► Relay K2 COM          │
 │                                                      ├──► Relay K3 COM          │
-│                                                      └──► J24-L (PZEM 220V)     │
+│                                                      └──► J24-L (Power Meter)   │
 │                                                                                  │
 │   N_IN ──────────────────────────────────────────────┬──► N (to all loads)      │
-│                                                      └──► J24-N (PZEM 220V)     │
+│   (J1-N)                                             └──► J24-N (Power Meter)   │
+│                                                                                  │
+│   PE ────────────────────────────────────────────────────► J24-PE (Power Meter) │
+│   (J1-PE)                                                  (optional, for DIN)  │
 │                                                                                  │
 │   ⚠️ SSR heater power: Mains → SSR → Heater (via existing machine wiring)       │
 │      NOT through this PCB! PCB provides 5V control signals via J26 Pin 19-22.   │
@@ -2810,15 +2759,102 @@ Relay-switched loads (pump, valves) are fused and distributed via internal bus. 
 
 ## 13.2 Pin Headers and JST Connectors
 
-| Designator | Function            | Type               | Pitch  | Notes                                     |
-| ---------- | ------------------- | ------------------ | ------ | ----------------------------------------- |
-| J15        | ESP32 Display       | JST-XH 8-pin       | 2.54mm | Keyed, locking (incl. WEIGHT_STOP, SPARE) |
-| J16        | Service/Debug       | Pin header 4-pin   | 2.54mm | 3V3, GND, TX, RX (shared GPIO0/1)         |
-| J17        | Power Meter (Univ.) | JST-XH 6-pin       | 2.54mm | 3V3, 5V, GND, RX, TX, DE/RE (TTL/RS485)   |
-| J20        | Pico Socket         | 2×20 female header | 2.54mm | Or solder direct                          |
-| J23        | I2C Accessory       | Pin header 4-pin   | 2.54mm | 3V3, GND, SDA, SCL (GPIO8/9)              |
+| Designator | Function            | Type                 | Pitch  | Notes                                     |
+| ---------- | ------------------- | -------------------- | ------ | ----------------------------------------- |
+| J15        | ESP32 Display       | JST-XH 8-pin         | 2.54mm | Keyed, locking (incl. WEIGHT_STOP, SPARE) |
+| J16        | Service/Debug       | Pin header 4-pin     | 2.54mm | 3V3, GND, TX, RX (shared GPIO0/1)         |
+| J17        | Power Meter (Univ.) | JST-XH 6-pin         | 2.54mm | 3V3, 5V, GND, RX, TX, DE/RE (TTL/RS485)   |
+| J20        | Pico Socket         | 2×20 female header   | 2.54mm | Or solder direct                          |
+| J23        | I2C Accessory       | Pin header 4-pin     | 2.54mm | 3V3, GND, SDA, SCL (GPIO8/9)              |
+| J24        | Power Meter HV      | Screw terminal 3-pos | 5.08mm | L (fused), N, PE for external meter       |
+| J25        | Expansion Header    | Pin header 3-pin     | 2.54mm | 3V3, GND, GPIO23 (future: flow meter)     |
 
-**Note:** J24 (PZEM HV+CT) has been **REMOVED** - external power meters handle their own HV connections.
+### J24 External Power Meter HV Terminals (L, N, PE)
+
+3-position screw terminal for easy wiring of external power meter modules (PZEM, JSY, Eastron, etc.).
+
+```
+┌────────────────────────────────────────────────────────────────────────────────┐
+│                    J24 - POWER METER HV SCREW TERMINAL (3-pos)                  │
+│                          ⚠️ HIGH VOLTAGE - 220V AC ⚠️                           │
+├────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│    ┌───┬───┬───┐                                                               │
+│    │ L │ N │ PE│    Phoenix MKDS 1/3-5.08 (5.08mm pitch)                       │
+│    └───┴───┴───┘    Or equivalent HV-rated screw terminal                      │
+│      │   │   │                                                                  │
+│      │   │   └─────► Protective Earth (from J1-PE bus)                         │
+│      │   └─────────► Neutral (from J1-N bus)                                   │
+│      └─────────────► Live FUSED (from internal L_FUSED bus, after F1)          │
+│                                                                                 │
+│    WIRING TO EXTERNAL POWER METER:                                             │
+│    ───────────────────────────────                                             │
+│                                                                                 │
+│    ┌──────────────┐                    ┌─────────────────────────┐             │
+│    │  J24 (PCB)   │      User wire     │  External Power Meter   │             │
+│    │              │                    │  (PZEM, JSY, Eastron)   │             │
+│    │  L  ─────────┼────────────────────┼──► L (Live input)       │             │
+│    │  N  ─────────┼────────────────────┼──► N (Neutral input)    │             │
+│    │  PE ─────────┼────────────────────┼──► PE/GND (if needed)   │             │
+│    └──────────────┘                    │                         │             │
+│                                        │  CT clamp clips around  │             │
+│                                        │  machine's Live wire    │             │
+│                                        └─────────────────────────┘             │
+│                                                                                 │
+│    PE USAGE:                                                                   │
+│    ─────────                                                                   │
+│    • PZEM-004T: PE not required (isolated plastic case)                       │
+│    • JSY-MK-163T: PE not required (isolated plastic case)                     │
+│    • Eastron SDM (DIN rail): Connect PE for metal enclosure grounding         │
+│    • Leave unconnected if meter doesn't need it                               │
+│                                                                                 │
+│    ⚠️ SAFETY NOTES:                                                            │
+│    ────────────────                                                            │
+│    • L is FUSED (via F1) - protected from overcurrent                         │
+│    • Maintain >6mm creepage from LV circuits                                   │
+│    • Use 16 AWG or heavier wire for L and N                                   │
+│    • Route HV wires away from LV signal wires                                 │
+│                                                                                 │
+└────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### J25 Expansion Header (Future-Proofing)
+
+3-pin header for future expansion (e.g., flow meter, shot timer display).
+
+```
+┌────────────────────────────────────────────────────────────────────────────────┐
+│                    J25 - EXPANSION HEADER (3-Pin 2.54mm)                        │
+├────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│    ┌───┬───┬───┐                                                               │
+│    │ 1 │ 2 │ 3 │                                                               │
+│    │3V3│GND│IO │                                                               │
+│    └───┴───┴───┘                                                               │
+│                                                                                 │
+│    Pin 1: 3.3V (100mA max)                                                     │
+│    Pin 2: GND                                                                  │
+│    Pin 3: GPIO23 (with 10kΩ pull-down, 5V tolerant input)                     │
+│                                                                                 │
+│    EXAMPLE USES:                                                               │
+│    ─────────────                                                               │
+│    • Flow Meter: 5V Hall-effect flow sensor (pulse output)                    │
+│    • Shot Timer: External display trigger                                      │
+│    • Additional sensor: Any 3.3V or 5V tolerant digital input                 │
+│                                                                                 │
+│    WIRING FOR FLOW METER:                                                      │
+│    ──────────────────────                                                      │
+│    │ Flow Meter │ J25  │ Notes                                                │
+│    │────────────│──────│──────────────────────────────────────────────────────│
+│    │ VCC (Red)  │ Pin 1│ 3.3V power (or external 5V if flow meter needs it)  │
+│    │ GND (Black)│ Pin 2│ Ground                                               │
+│    │ Signal     │ Pin 3│ Pulse output → GPIO23 (count in firmware)           │
+│                                                                                 │
+│    ⚠️ NOTE: GPIO23 has 10kΩ pull-down. For 5V flow meters, verify             │
+│       the sensor's output is open-collector or logic-level compatible.        │
+│                                                                                 │
+└────────────────────────────────────────────────────────────────────────────────┘
+```
 
 ### Complete SSR Wiring (Each SSR has 2 connections to the board)
 
@@ -2916,8 +2952,10 @@ Relay-switched loads (pump, valves) are fused and distributed via internal bus. 
 
 | Qty | Ref     | Value | Tolerance | Package | Notes                                                            |
 | --- | ------- | ----- | --------- | ------- | ---------------------------------------------------------------- |
-| 1   | R1      | 3.3kΩ | 1%        | 0805    | Brew NTC pull-up (50kΩ NTC, optimized for 93°C)                  |
-| 1   | R2      | 1.2kΩ | 1%        | 0805    | Steam NTC pull-up (50kΩ NTC, optimized for 135°C)                |
+| 1   | R1      | 3.3kΩ | 1%        | 0805    | Brew NTC pull-up (always populated)                              |
+| 1   | R1A     | 1.5kΩ | 1%        | 0805    | Brew NTC parallel (via JP2, for 10kΩ NTC)                        |
+| 1   | R2      | 1.2kΩ | 1%        | 0805    | Steam NTC pull-up (always populated)                             |
+| 1   | R2A     | 680Ω  | 1%        | 0805    | Steam NTC parallel (via JP3, for 10kΩ NTC)                       |
 | 2   | R5-R6   | 1kΩ   | 1%        | 0805    | NTC ADC series protection                                        |
 | 1   | R3      | 10kΩ  | 1%        | 0805    | Pressure divider                                                 |
 | 1   | R4      | 4.7kΩ | 1%        | 0805    | Pressure divider (optimized for 90% ADC range)                   |
@@ -2932,6 +2970,7 @@ Relay-switched loads (pump, valves) are fused and distributed via internal bus. 
 | 1   | R49     | 100Ω  | 5%        | 0805    | Buzzer                                                           |
 | 2   | R71-R72 | 10kΩ  | 5%        | 0805    | Pico RUN/BOOTSEL pull-ups (J15 Pin 5/6)                          |
 | 1   | R73     | 10kΩ  | 5%        | 0805    | WEIGHT_STOP pull-down (J15 Pin 7)                                |
+| 1   | R75     | 10kΩ  | 5%        | 0805    | GPIO23 expansion pull-down (J25 Pin 3)                           |
 | 1   | R91     | 10kΩ  | 1%        | 0805    | Level probe oscillator feedback                                  |
 | 2   | R92-R93 | 10kΩ  | 1%        | 0805    | Level probe Wien bridge                                          |
 | 1   | R94     | 100Ω  | 5%        | 0805    | Level probe current limit                                        |
@@ -2941,6 +2980,16 @@ Relay-switched loads (pump, valves) are fused and distributed via internal bus. 
 | 2   | R80-R81 | 100Ω  | 2W        | 1210    | **MANDATORY** - Snubber for K2 (Pump), K3 (Solenoid)             |
 | 1   | R82     | 100Ω  | 2W        | 1210    | DNP - Snubber for K1 (footprint required, populate if inductive) |
 | 1   | R99     | 120Ω  | 1%        | 0805    | RS485 termination (via JP1 solder jumper)                        |
+
+## 14.3a Solder Jumpers
+
+| Qty | Ref | Function               | Default | Notes                                       |
+| --- | --- | ---------------------- | ------- | ------------------------------------------- |
+| 1   | JP1 | RS485 120Ω termination | OPEN    | Close for long cable runs (>10m)            |
+| 1   | JP2 | Brew NTC selection     | OPEN    | OPEN=50kΩ (ECM), CLOSE=10kΩ (Rocket/Gaggia) |
+| 1   | JP3 | Steam NTC selection    | OPEN    | OPEN=50kΩ (ECM), CLOSE=10kΩ (Rocket/Gaggia) |
+
+**Solder Jumper Implementation:** 2 pads with ~0.5mm gap. Apply solder blob to bridge.
 
 ## 14.4 Passive Components - Capacitors
 
@@ -2992,8 +3041,8 @@ Relay-switched loads (pump, valves) are fused and distributed via internal bus. 
 | 1   | J17     | JST-XH 6-pin Header       | B6B-XH-A                   | Power Meter: 3V3, 5V, GND, RX, TX, DE/RE       |
 | 1   | J20     | Female Header 2×20        | -                          | Pico socket                                    |
 | 1   | J23     | Pin Header 1×4 2.54mm     | -                          | I2C accessory port                             |
-
-**Note:** J24 (PZEM HV+CT header) has been **REMOVED** - external modules handle their own HV.
+| 1   | J24     | Screw Terminal 3-pos      | Phoenix MKDS 1/3-5.08      | Power Meter HV: L (fused), N, PE               |
+| 1   | J25     | Pin Header 1×3 2.54mm     | -                          | Expansion: 3V3, GND, GPIO23 (future use)       |
 
 ## 14.8 User-Supplied Components (NOT included with PCB)
 
@@ -3007,6 +3056,47 @@ The following components are **NOT** included with the PCB and must be sourced b
 | ESP32 Display Module        | User purchases separately                          |
 | SSR Relays                  | Already exist on machine                           |
 | External Power Meter Module | PZEM-004T, JSY-MK-163T, Eastron SDM, or compatible |
+
+## 14.9 External Sensors BOM (User-Supplied)
+
+**⚠️ SENSOR COMPATIBILITY: The PCB is designed for specific sensor types. Order accordingly.**
+
+| Sensor              | Type Required                    | Constraint                              | Recommended Part                     |
+| ------------------- | -------------------------------- | --------------------------------------- | ------------------------------------ |
+| Brew/Steam NTC      | **50kΩ @ 25°C** (B25/85 ≈ 3950K) | R1/R2 optimized for 50kΩ (see 7.1)      | ECM OEM sensor or Semitec 503ET-4    |
+| Thermocouple        | **Type-K ONLY** (Chromel/Alumel) | MAX31855**K** is K-type specific        | M6 threaded probe for E61 mushroom   |
+| Pressure Transducer | **0.5-4.5V ratiometric**, 3-wire | Circuit is voltage divider (not 4-20mA) | YD4060 (0-16 bar), G1/4" or 1/8" NPT |
+
+### NTC Sensor Selection by Machine Brand (Jumper Selectable)
+
+| Machine Brand     | NTC Value @ 25°C | JP2 (Brew) | JP3 (Steam) | Effective R   |
+| ----------------- | ---------------- | ---------- | ----------- | ------------- |
+| **ECM, Profitec** | 50kΩ             | **OPEN**   | **OPEN**    | 3.3kΩ / 1.2kΩ |
+| Rocket, Rancilio  | 10kΩ             | **CLOSE**  | **CLOSE**   | ~1kΩ / ~430Ω  |
+| Gaggia Classic    | 10kΩ             | **CLOSE**  | **CLOSE**   | ~1kΩ / ~430Ω  |
+| Lelit (50kΩ)      | 50kΩ             | OPEN       | OPEN        | 3.3kΩ / 1.2kΩ |
+
+**Configuration:** Use **solder jumpers JP2/JP3** to switch between NTC types - no resistor swapping required.
+
+### Thermocouple Specifications
+
+| Parameter | Requirement               | Notes                                  |
+| --------- | ------------------------- | -------------------------------------- |
+| Type      | **K-Type ONLY**           | J/T/PT100 will NOT work                |
+| Junction  | Ungrounded preferred      | Grounded can cause noise with MAX31855 |
+| Thread    | M6 or as machine requires | For E61 group head mushroom bolt       |
+| Cable     | Shielded 2-wire           | Shield grounded at PCB end only        |
+| Accuracy  | ±2°C typical              | Adequate for brew head monitoring      |
+
+### Pressure Transducer Specifications
+
+| Parameter          | Requirement                | Notes                                    |
+| ------------------ | -------------------------- | ---------------------------------------- |
+| Output Type        | **0.5-4.5V ratiometric**   | NOT 4-20mA (different circuit required)  |
+| Supply Voltage     | 5V DC                      | Powered from PCB                         |
+| Range              | 0-16 bar (0-232 psi)       | Suitable for espresso (9-12 bar brew)    |
+| Thread             | G1/4" or 1/8" NPT          | Must match machine's hydraulic T-fitting |
+| Broken Wire Detect | 0.5V = 0 bar, 0.0V = fault | Built into circuit design                |
 
 **EXTERNAL POWER METER INSTALLATION:**
 
@@ -3152,12 +3242,12 @@ Hardware interfaces the firmware must support:
 
 ## 17.1 Key Design Decisions
 
-| Item                 | Decision                                                       |
-| -------------------- | -------------------------------------------------------------- |
-| Power Metering       | Universal external modules (PZEM, JSY, Eastron via J17 JST-XH) |
-| Pressure Transducers | J26 Pin 14-16 (0.5-4.5V amplified output)                      |
-| Pico Mounting        | Socket (2×20 female header) for easy replacement               |
-| Level Probe          | OPA342 + TLV3201 on-board AC sensing                           |
+| Item                 | Decision                                                |
+| -------------------- | ------------------------------------------------------- |
+| Power Metering       | External modules: J17 (LV comm) + J24 (HV power L/N/PE) |
+| Pressure Transducers | J26 Pin 14-16 (0.5-4.5V amplified output)               |
+| Pico Mounting        | Socket (2×20 female header) for easy replacement        |
+| Level Probe          | OPA342 + TLV3201 on-board AC sensing                    |
 
 ## 17.2 Critical Design Points
 

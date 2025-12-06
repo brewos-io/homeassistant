@@ -8,12 +8,14 @@
 
 ---
 
-## ⚠️ KEY DESIGN CHANGES IN v2.21
+## ⚠️ KEY DESIGN CHANGES IN v2.21+
 
-1. **Universal External Power Metering** - REMOVED embedded PZEM daughterboard (J17/J24 headers)
-2. **J17 (JST-XH 6-pin)** - New universal power meter interface (TTL UART + RS485)
-3. **Supports multiple modules:** PZEM-004T, JSY-MK-163T/194T, Eastron SDM, and more
-4. **MAX3485 RS485 transceiver (U8)** - On-board with jumper-selectable 120Ω termination
+1. **Universal External Power Metering** - REMOVED embedded PZEM daughterboard
+2. **J17 (JST-XH 6-pin)** - LV power meter interface (TTL UART + RS485)
+3. **J24 (Screw Terminal 3-pos)** - HV power meter input (L fused, N, PE)
+4. **Supports multiple modules:** PZEM-004T, JSY-MK-163T/194T, Eastron SDM, and more
+5. **MAX3485 RS485 transceiver (U8)** - On-board with jumper-selectable 120Ω termination
+6. **JP2/JP3 NTC jumpers** - Select between 50kΩ (ECM) and 10kΩ (Rocket/Gaggia) NTC sensors
 5. **J26 reduced to 22-pos** - CT clamp pins removed (now on external module)
 6. **No HV on PCB for metering** - External modules handle their own mains connections
 7. **GPIO20 → RS485 DE/RE** - Direction control for industrial meters
@@ -441,12 +443,20 @@
 
 ## 5.1 NTC Thermistor Inputs
 
+**Multi-Machine Compatibility:** Use **solder jumpers JP2/JP3** to switch NTC configurations.
+
+| Machine Brand     | NTC @ 25°C | JP2       | JP3       | Effective R1 | Effective R2 |
+| ----------------- | ---------- | --------- | --------- | ------------ | ------------ |
+| **ECM, Profitec** | 50kΩ       | **OPEN**  | **OPEN**  | 3.3kΩ        | 1.2kΩ        |
+| Rocket, Rancilio  | 10kΩ       | **CLOSE** | **CLOSE** | ~1kΩ         | ~430Ω        |
+| Gaggia            | 10kΩ       | **CLOSE** | **CLOSE** | ~1kΩ         | ~430Ω        |
+
 ```
                         NTC THERMISTOR INPUT CIRCUITS
     ════════════════════════════════════════════════════════════════════════════
 
     ⚠️ EACH SENSOR HAS DIFFERENT PULL-UP - OPTIMIZED FOR TARGET TEMPERATURE
-    ⚠️ CONFIGURED FOR 50kΩ NTC SENSORS (ECM Synchronika standard)
+    ⚠️ JP2/JP3 SOLDER JUMPERS SELECT NTC TYPE (NO RESISTOR SWAPPING NEEDED)
 
     BREW NTC (GPIO26/ADC0)                  STEAM NTC (GPIO27/ADC1)
     Target: 90-100°C                        Target: 125-150°C
@@ -484,13 +494,22 @@
 
     Component Values:
     ─────────────────
-    R1:      3.3kΩ ±1%, 0805 (Brew NTC, optimized for 93°C)
-    R2:      1.2kΩ ±1%, 0805 (Steam NTC, optimized for 135°C)
+    R1:      3.3kΩ ±1%, 0805 (Brew NTC pull-up, always populated)
+    R1A:     1.5kΩ ±1%, 0805 (Brew parallel, enabled by JP2)
+    R2:      1.2kΩ ±1%, 0805 (Steam NTC pull-up, always populated)
+    R2A:     680Ω ±1%, 0805 (Steam parallel, enabled by JP3)
     R5-R6:   1kΩ 1%, 0805 (series protection)
     C8-C9:   100nF 25V, 0805, Ceramic
     D10-D11: PESD5V0S1BL, SOD-323 (bidirectional ESD clamp)
+    JP2:     Solder jumper (OPEN=50kΩ NTC, CLOSE=10kΩ NTC)
+    JP3:     Solder jumper (OPEN=50kΩ NTC, CLOSE=10kΩ NTC)
 
-    NTC Sensors: 50kΩ @ 25°C, B25/85 ≈ 3950K (ECM Synchronika standard)
+    JUMPER MATH:
+    • JP2 CLOSED: R1 || R1A = 3.3kΩ || 1.5kΩ ≈ 1.03kΩ (for 10kΩ NTC)
+    • JP3 CLOSED: R2 || R2A = 1.2kΩ || 680Ω ≈ 434Ω (for 10kΩ NTC)
+
+    Default: JP2/JP3 OPEN = ECM/Profitec (50kΩ NTC)
+    For Rocket/Gaggia: Close JP2 and JP3 with solder bridge
 
     Resolution at Target Temps:
     ───────────────────────────
@@ -499,6 +518,10 @@
 ```
 
 ## 5.2 K-Type Thermocouple Input
+
+**⚠️ SENSOR RESTRICTION:** MAX31855**K** is hard-wired for **Type-K ONLY**.
+- ✅ Type-K (Chromel/Alumel) - Standard for E61 group head thermometers
+- ❌ Type-J, Type-T, PT100/RTD (will NOT work - different chips required)
 
 ```
                         K-TYPE THERMOCOUPLE INPUT
@@ -552,6 +575,11 @@
 ```
 
 ## 5.3 Pressure Transducer Input (J26 Pin 14-16 - Amplified 0.5-4.5V)
+
+**⚠️ SENSOR RESTRICTION:** Circuit designed for **0.5-4.5V ratiometric ONLY**.
+- ✅ 3-wire sensors (5V, GND, Signal) like YD4060 or automotive pressure sensors
+- ✅ 0.5V offset = broken wire detection (0.0V = fault, 0.5V = 0 bar)
+- ❌ 4-20mA current loop sensors (require different circuit)
 
 ```
                     PRESSURE TRANSDUCER INPUT (AMPLIFIED TYPE)
@@ -1336,6 +1364,7 @@
     GPIO20 → RS485_DE_RE (MAX3485 direction control, J17-6)
     GPIO21 → WEIGHT_STOP (J15-7, ESP32 brew-by-weight signal)
     GPIO22 → SPARE (J15-8, reserved for future)
+    GPIO23 → EXPANSION (J25-3, future: flow meter)
     GPIO26 → ADC0_BREW_NTC (J26-8/9)
     GPIO27 → ADC1_STEAM_NTC (J26-10/11)
     GPIO28 → ADC2_PRESSURE (from J26-16 voltage divider)
@@ -1348,14 +1377,26 @@
     J3-NO  → Relay K2 N.O. output (Pump, 220V 5A)
     J4-NO  → Relay K3 N.O. output (Solenoid, 220V ~0.5A)
 
-    J17 POWER METER INTERFACE (JST-XH 6-pin):
-    ─────────────────────────────────────────
+    J17 POWER METER LV INTERFACE (JST-XH 6-pin):
+    ─────────────────────────────────────────────
     J17-1  (3V3)   → 3.3V power for logic-level meters
     J17-2  (5V)    → 5V power for PZEM, JSY modules
     J17-3  (GND)   → System ground
     J17-4  (RX)    → GPIO7 (from meter TX, via 33Ω)
     J17-5  (TX)    → GPIO6 (to meter RX, via 33Ω)
     J17-6  (DE/RE) → GPIO20 (RS485 direction control)
+
+    J24 POWER METER HV TERMINALS (Screw Terminal 3-pos, 5.08mm):
+    ────────────────────────────────────────────────────────────
+    J24-1  (L)     → Live FUSED (from L_FUSED bus, after F1)
+    J24-2  (N)     → Neutral (from N bus)
+    J24-3  (PE)    → Protective Earth (optional, for DIN rail meters)
+
+    J25 EXPANSION HEADER (3-pin, 2.54mm):
+    ─────────────────────────────────────
+    J25-1  (3V3)   → 3.3V power (100mA max)
+    J25-2  (GND)   → System ground
+    J25-3  (IO)    → GPIO23 (with 10kΩ pull-down, future: flow meter)
 
     J26 UNIFIED LOW-VOLTAGE TERMINAL BLOCK (22-pos):
     ─────────────────────────────────────────────────
@@ -1384,9 +1425,11 @@
 
     ⚠️ CT CLAMP: Connects directly to external power meter module (not on J26)
 
-    SOLDER BRIDGE:
-    ──────────────
+    SOLDER JUMPERS:
+    ────────────────
     JP1 → RS485 120Ω termination (default: OPEN)
+    JP2 → Brew NTC selection (OPEN=50kΩ ECM, CLOSE=10kΩ Rocket/Gaggia)
+    JP3 → Steam NTC selection (OPEN=50kΩ ECM, CLOSE=10kΩ Rocket/Gaggia)
 ```
 
 ---
