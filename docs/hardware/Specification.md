@@ -1095,6 +1095,14 @@ Different espresso machine brands use different NTC sensor values. **Solder jump
 │         │                                                                      │
 │         ├───────────────────────────┬───────────────────────► GPIO28 (ADC2)   │
 │         │                           │                                          │
+│         │                      ┌────┴────┐                                    │
+│         │                      │  D16    │  ← CLAMPING DIODE (BAT54S)         │
+│         │                      │ Schottky│    Protects ADC if divider fails   │
+│         │                      │ to 3.3V │    Cathode → 3.3V_Analog           │
+│         │                      └────┬────┘                                    │
+│         │                           │                                          │
+│         │                       3.3V_A                                        │
+│         │                                                                      │
 │    ┌────┴────┐                 ┌────┴────┐                                    │
 │    │  10kΩ   │                 │  100nF  │  ← RC filter                       │
 │    │  ±1%    │  ← R3: To GND   │ Ceramic │    fc ≈ 100 Hz                     │
@@ -1112,6 +1120,12 @@ Different espresso machine brands use different NTC sensor values. **Solder jump
 │                                                                                 │
 │    ADC utilization: 91% of full scale                                         │
 │    Safe margin: 3.06V still below 3.3V ADC maximum                            │
+│                                                                                 │
+│    ⚠️ CLAMPING DIODE (D16 - BAT54S):                                          │
+│    ─────────────────────────────────                                          │
+│    CRITICAL PROTECTION: If R3 (10kΩ to GND) fails OPEN, full 5V from         │
+│    transducer appears at GPIO28, exceeding RP2350's 3.6V maximum!             │
+│    The Schottky diode clamps overvoltage to 3.3V + 0.3V = 3.6V (safe).       │
 │                                                                                 │
 │    Connector: 3-pin screw terminal (5V, GND, Signal)                          │
 │                                                                                 │
@@ -2857,7 +2871,7 @@ Relay-switched loads (pump, valves) are fused and distributed via internal bus. 
 
 ### Expansion via J15 Pin 8 (GPIO22)
 
-For future expansion (e.g., flow meter), use **GPIO22** available on **J15 Pin 8 (SPARE)**:
+GPIO22 is available on **J15 Pin 8 (SPARE)** for future expansion:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────┐
@@ -2874,12 +2888,6 @@ For future expansion (e.g., flow meter), use **GPIO22** available on **J15 Pin 8
 │    │                                  │                               │       │
 │    │                          GPIO22 ─┘  (Available for expansion)   │       │
 │    └──────────────────────────────────────────────────────────────────┘       │
-│                                                                                 │
-│    EXAMPLE USES:                                                               │
-│    ─────────────                                                               │
-│    • Flow Meter: Hall-effect pulse sensor                                     │
-│    • Shot Timer: External display trigger                                      │
-│    • Any 3.3V digital I/O                                                     │
 │                                                                                 │
 │    ⚠️ RP2350 GPIO is NOT 5V tolerant! Max input = 3.6V.                       │
 │       For 5V sensors, use voltage divider or level shifter.                   │
@@ -2979,6 +2987,7 @@ For future expansion (e.g., flow meter), use **GPIO22** available on **J15 Pin 8
 | 5   | Q1-Q5   | NPN Transistor | MMBT2222A   | SOT-23  | Relay (3) + SSR (2) drivers |
 | 3   | D1-D3   | Flyback Diode  | 1N4007      | DO-41   | K1, K2, K3 coil protection  |
 | 6   | D10-D15 | ESD Protection | PESD5V0S1BL | SOD-323 | Sensor inputs               |
+| 1   | D16     | Schottky Clamp | BAT54S      | SOT-23  | Pressure ADC overvoltage    |
 | 1   | D20     | TVS Diode      | SMBJ5.0A    | SMB     | 5V rail protection          |
 
 ## 14.3 Passive Components - Resistors

@@ -76,9 +76,17 @@
 | **GPIO23**        | Not available on Pico 2 header | J25 expansion header **removed** (use GPIO22 via J15 Pin 8)           |
 | **3.3V Rail**     | Unclear power architecture     | Clarified: External LDO (U3) for sensors only, Pico has internal 3.3V |
 | **Diagram**       | "RELAYS (4x)" incorrect        | Fixed to **"RELAYS (3x)"** (K1, K2, K3)                               |
-| **SSR Pins**      | J26 Pin 19-22 referenced       | Fixed: **SSR1=Pin 17-18, SSR2=Pin 19-20** (21-22 are spare GND)       |
+| **SSR Pins**      | J26 Pin 19-22 referenced       | Fixed: **SSR1=Pin 17-18, SSR2=Pin 19-20**                             |
 | **Power Budget**  | Relay current incorrect        | Updated: 80mA typical, 150mA peak (K2:70mA, K1/K3:40mA)               |
 | **Total Current** | Old values                     | Updated: **~355mA typical, ~910mA peak** (3A gives 3× headroom)       |
+
+### New Features (v2.21.1)
+
+| Item             | Description                                                                    |
+| ---------------- | ------------------------------------------------------------------------------ |
+| **ADC Clamping** | Added **D16 (BAT54S)** Schottky diode to protect pressure ADC from overvoltage |
+
+**ADC Protection:** Prevents RP2350 damage if pressure transducer voltage divider fails.
 
 ### Pico 2 GPIO Clarifications
 
