@@ -1,6 +1,6 @@
 Reference,Component,Value,Footprint,Net1,Net2,Net3,Description
-U1,Raspberry_Pi_Pico_2,RP2350,Module,VSYS=+5V,GND=GND,3V3=+3.3V,Microcontroller module (Pico 2)
-U2,AC_DC_Converter,HLK-15M05C,Module,L=L_FUSED,N=N_FUSED,+Vout=+5V,Isolated 5V 3A/15W power supply
+U1,Raspberry_Pi_Pico_2,RP2350,Module,VSYS=+5V,GND=GND,3V3=+3.3V,3V3_EN=GND,Microcontroller module (Pico 2) - Internal regulator DISABLED via 3V3_EN=GND
+U2,AC_DC_Converter,HLK-15M05C,Module,L=L_HLK,N=N_FUSED,+Vout=+5V,Isolated 5V 3A/15W power supply (via F2 500mA fuse)
 U3,DC_DC_Buck,TPS563200DDCR,SOT-23-6,VIN=+5V,VOUT=+3.3V,GND=GND,3.3V 3A synchronous buck converter (>90% efficient)
 U4,Thermocouple_Amp,MAX31855KASA+,SOIC-8,T+=TC_POS,T-=TC_NEG,VCC=+3.3V,K-type thermocouple amplifier
 U5,Voltage_Ref,LM4040DIM3-3.0,SOT-23,VREF=ADC_VREF,GND=GND,,Precision 3.0V shunt reference for ADC
@@ -8,7 +8,7 @@ U6,Op_Amp,OPA342UA,SOIC-8,VCC=+3.3V,OUT=AC_OUT,GND=GND,Level probe oscillator (W
 U7,Comparator,TLV3201AIDBVR,SOT-23-5,VCC=+3.3V,OUT=GPIO4,GND=GND,Level probe detector with hysteresis
 U8,RS485_Transceiver,MAX3485ESA+,SOIC-8,VCC=+3.3V,DI=GPIO6,RO=GPIO7,RS485 transceiver for industrial meters (DE/RE=GPIO20)
 K1,Relay_SPST,APAN3105,Relay_SPST,Coil+=K1_DRIVE,COM=J2_COM,NO=J2_NO,Mains indicator lamp relay 3A (slim 5mm)
-K2,Relay_SPST,G5LE-1A4_DC5,Relay_SPST,Coil+=K2_DRIVE,COM=J3_COM,NO=J3_NO,Pump relay 16A
+K2,Relay_SPST,G5LE-1A4-E_DC5,Relay_SPST,Coil+=K2_DRIVE,COM=J3_COM,NO=J3_NO,Pump relay 16A (high-capacity -E variant required)
 K3,Relay_SPST,APAN3105,Relay_SPST,Coil+=K3_DRIVE,COM=J4_COM,NO=J4_NO,Solenoid relay 3A (slim 5mm)
 Q1,NPN_Transistor,MMBT2222A,SOT-23,C=K1_COIL,B=GPIO10_R,E=GND,K1 relay driver
 Q2,NPN_Transistor,MMBT2222A,SOT-23,C=K2_COIL,B=GPIO11_R,E=GND,K2 relay driver
@@ -26,6 +26,7 @@ D14,ESD_Diode,PESD5V0S1BL,SOD-323,A=GND,K=ADC0,,Brew NTC ESD
 D15,ESD_Diode,PESD5V0S1BL,SOD-323,A=GND,K=ADC1,,Steam NTC ESD
 D16,Schottky_Diode,BAT54S,SOT-23,A1=ADC2,A2=GND,K=+3.3V,Pressure ADC overvoltage protection
 D20,TVS_Diode,SMBJ5.0A,SMB,A=GND,K=+5V,,5V rail protection
+D21,TVS_Diode,SM712,SOT-23,1=RS485_A,2=GND,3=RS485_B,RS485 A/B line surge protection (-7V to +12V asymmetric)
 LED1,LED,Green_0805,0805,A=LED1_A,K=GND,,K1 indicator
 LED2,LED,Green_0805,0805,A=LED2_A,K=GND,,K2 indicator
 LED3,LED,Green_0805,0805,A=LED3_A,K=GND,,K3 indicator
@@ -35,7 +36,7 @@ LED7,LED,Green_0805,0805,A=GPIO15,K=GND,,Status LED (Green)
 R1,Resistor,3.3k_1%,0805,1=ADC_VREF,2=ADC0,,Brew NTC pull-up (50k NTC optimized for 93C)
 R2,Resistor,1.2k_1%,0805,1=ADC_VREF,2=ADC1,,Steam NTC pull-up (50k NTC optimized for 135C)
 R3,Resistor,10k_1%,0805,1=ADC2,2=GND,,Pressure divider (to GND)
-R4,Resistor,4.7k_1%,0805,1=PRESS_SIG,2=ADC2,,Pressure divider (series) - 91% ADC range
+R4,Resistor,5.6k_1%,0805,1=PRESS_SIG,2=ADC2,,Pressure divider (series) - prevents ADC saturation at 4.5V sensor output
 R5,Resistor,1k_1%,0805,1=ADC0_R,2=ADC0,,Brew NTC series protection
 R6,Resistor,1k_1%,0805,1=ADC1_R,2=ADC1,,Steam NTC series protection
 R7,Resistor,1k_1%,0805,1=+3.3V,2=U5_K,,LM4040 bias resistor (0.3mA)
@@ -98,14 +99,15 @@ C11,Capacitor,100nF,0805,1=ADC2,2=GND,,Pressure filter
 C13,Capacitor,100uF_10V,Radial,1=+5V,2=GND,,ESP32 bulk cap
 C40,Capacitor,10nF,0805,1=TC_POS,2=TC_NEG,,Thermocouple filter
 C60,Capacitor,100nF,0805,1=+3.3V,2=GND,,OPA342 VCC decoupling
-C61,Capacitor,100nF,0805,1=WIEN1,2=GND,,Level probe Wien bridge timing
-C62,Capacitor,100nF,0805,1=WIEN2,2=GND,,Level probe Wien bridge timing
+C61,Capacitor,10nF,0805,1=WIEN1,2=GND,,Level probe Wien bridge timing (~1.6kHz for probe longevity)
+C62,Capacitor,10nF,0805,1=WIEN2,2=GND,,Level probe Wien bridge timing (~1.6kHz for probe longevity)
 C63,Capacitor,100nF,0805,1=+3.3V,2=GND,,TLV3201 VCC decoupling
 C64,Capacitor,1uF,0805,1=AC_OUT,2=AC_SENSE,,Level probe AC coupling
 C65,Capacitor,100nF,0805,1=AC_SENSE,2=GND,,Level probe sense filter
 C70,Capacitor,100nF,0805,1=+3.3V,2=GND,,MAX3485 VCC decoupling
-L1,Inductor,4.7uH_3A,1210,1=SW,2=+3.3V,,Buck inductor (TPS563200)
-F1,Fuse,10A_250V,5x20mm,1=L,2=L_FUSED,,Mains fuse 10A slow-blow + holder 01000056Z
+L1,Inductor,2.2uH_3A,1210,1=SW,2=+3.3V,,Buck inductor (TPS563200) - 2.2µH per TI datasheet for 3.3V output
+F1,Fuse,10A_250V,5x20mm,1=L,2=L_FUSED,,Main mains fuse 10A slow-blow + holder 01000056Z
+F2,Fuse,500mA_250V,5x20mm,1=L_FUSED,2=L_HLK,,HLK module secondary fuse 500mA slow-blow (fusing hierarchy)
 RV1,Varistor,275V,14mm,1=L_FUSED,2=N_FUSED,,Mains surge protection (S14K275)
 RV2,Varistor,275V,10mm,1=K2_NO,2=K2_COM,,Pump relay arc suppression MOV - MANDATORY (S10K275)
 RV3,Varistor,275V,10mm,1=K3_NO,2=K3_COM,,Solenoid relay arc suppression MOV - MANDATORY (S10K275)

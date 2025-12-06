@@ -139,10 +139,17 @@ critical for reliable operation inside hot espresso machine enclosures.
     Component Values:
     ─────────────────
     U3:  TI TPS563200DDCR, 3A sync buck, SOT-23-6
-    L1:  4.7µH, 3A saturation, DCR<100mΩ (Murata LQH32CN4R7M23)
+    L1:  2.2µH, 3A saturation, DCR<100mΩ (Murata LQH32CN2R2M23)
+         ⚠️ 2.2µH per TI datasheet for 3.3V output - D-CAP2 requires adequate ripple!
     C3:  22µF 25V X5R Ceramic, 1206 (input)
     C4:  22µF 10V X5R Ceramic, 1206 (output)
     C4A: 22µF 10V X5R Ceramic, 1206 (output, parallel for ripple)
+
+    ⚠️ CRITICAL: PICO INTERNAL REGULATOR DISABLED
+    ─────────────────────────────────────────────
+    Pico 2 Pin 37 (3V3_EN) is connected to GND, disabling the internal RT6150B
+    regulator. The TPS563200 powers the ENTIRE 3.3V domain via Pico Pin 36 (3V3).
+    This avoids "hard parallel" regulator contention and potential reverse current.
 ```
 
 ## 1.4 Precision ADC Voltage Reference
@@ -356,7 +363,8 @@ critical for reliable operation inside hot espresso machine enclosures.
             • K1 (Indicator Lamp): Switches mains indicator lamp (~100mA load)
               3A relay provides ample margin for this low-current application
             • K3 (Solenoid): ~0.5A load, 3A rating is plenty
-    K2:     Omron G5LE-1A4 DC5 (5V coil, 16A contacts, standard size)
+    K2:     Omron G5LE-1A4-E DC5 (5V coil, 16A contacts, standard size)
+            ⚠️ MUST use -E (high capacity) variant! Standard G5LE-1A4 = 10A only
             • Pump motor needs robust contacts for inrush current
     D1-D3:  UF4007 (1A, 1000V, 75ns fast recovery) - DO-41
             Fast recovery type ensures snappy relay contact opening
@@ -585,6 +593,11 @@ critical for reliable operation inside hot espresso machine enclosures.
 - ✅ Type-K (Chromel/Alumel) - Standard for E61 group head thermometers
 - ❌ Type-J, Type-T, PT100/RTD (will NOT work - different chips required)
 
+**🔴 CRITICAL: USE UNGROUNDED (INSULATED) THERMOCOUPLES ONLY! 🔴**
+
+Grounded junction thermocouples create a ground loop through the boiler PE bond,
+causing MAX31855 to report "Short to GND" fault. See Specification §7.2 for details.
+
 ```
                         K-TYPE THERMOCOUPLE INPUT
     ════════════════════════════════════════════════════════════════════════════
@@ -634,6 +647,12 @@ critical for reliable operation inside hot espresso machine enclosures.
     • Keep T+ and T- traces short and symmetric
     • Route away from power traces and relay coils
     • Add ground guard ring around thermocouple traces
+
+    ⚠️ GROUND LOOP WARNING:
+    ───────────────────────
+    Grounded junction thermocouples (TC junction welded to sheath) create a
+    ground loop: Boiler → PE → MH1 → PCB GND → MAX31855 GND → T- → Boiler.
+    This causes "Short to GND" fault. MUST use UNGROUNDED (insulated) TC!
 ```
 
 ## 5.3 Pressure Transducer Input (J26 Pin 14-16 - Amplified 0.5-4.5V)
@@ -679,20 +698,24 @@ critical for reliable operation inside hot espresso machine enclosures.
                                        ─┴─            ─┴─
                                        GND            GND
 
-    Voltage Divider Calculation (OPTIMIZED for 91% ADC range):
-    ───────────────────────────────────────────────────────────
-    Ratio = R3 / (R3 + R4) = 10k / (10k + 4.7k) = 0.68
+    Voltage Divider Calculation (OPTIMIZED for 3.0V ADC reference):
+    ─────────────────────────────────────────────────────────────────
+    Ratio = R3 / (R3 + R4) = 10k / (10k + 5.6k) = 0.641
 
-    Input 0.5V  → Output 0.34V → ADC ~422
-    Input 2.5V  → Output 1.70V → ADC ~2109
-    Input 4.5V  → Output 3.06V → ADC ~3795
+    Input 0.5V  → Output 0.32V → ADC ~437
+    Input 2.5V  → Output 1.60V → ADC ~2185
+    Input 4.5V  → Output 2.88V → ADC ~3940
 
-    Resolution: 0.0047 bar/count (15% better than old 15kΩ design)
+    ⚠️ WHY 5.6kΩ (not 4.7kΩ)?
+    With 4.7kΩ: V_max = 4.5V × 0.68 = 3.06V > 3.0V reference → SATURATES!
+    With 5.6kΩ: V_max = 4.5V × 0.641 = 2.88V < 3.0V reference → LINEAR
+
+    Resolution: 0.0046 bar/count (full 16 bar range, no saturation)
 
     Component Values:
     ─────────────────
     R3: 10kΩ ±1%, 0805 (to GND)
-    R4: 4.7kΩ ±1%, 0805 (series, from signal)
+    R4: 5.6kΩ ±1%, 0805 (series, from signal) - prevents ADC saturation
     C11: 100nF 25V Ceramic, 0805
 
     Selected Transducer: YD4060 Series
@@ -762,7 +785,7 @@ critical for reliable operation inside hot espresso machine enclosures.
 
     ⚠️  AC sensing prevents electrolysis and probe corrosion!
 
-    STAGE 1: WIEN BRIDGE OSCILLATOR (~160Hz)
+    STAGE 1: WIEN BRIDGE OSCILLATOR (~1.6kHz)
     ────────────────────────────────────────
                           +3.3V
                             │
@@ -788,7 +811,7 @@ critical for reliable operation inside hot espresso machine enclosures.
     │                  ├─────────────────────┤
     │                  │                     │
     │             ┌────┴────┐           ┌────┴────┐
-    │             │  100nF  │           │  100nF  │
+    │             │  10nF   │           │  10nF   │
     │             │  C61    │           │  C62    │
     │             └────┬────┘           └────┬────┘
     │                  │                     │
@@ -861,8 +884,14 @@ critical for reliable operation inside hot espresso machine enclosures.
     R97: 100kΩ 1%, 0805 (reference divider)
     R98: 1MΩ 5%, 0805 (hysteresis)
     C60: 100nF 25V, 0805 (OPA342 decoupling)
-    C61: 100nF 25V, 0805 (Wien bridge timing)
-    C62: 100nF 25V, 0805 (Wien bridge timing)
+    C61: 10nF 50V, 0805 (Wien bridge timing - 1.6kHz for probe longevity)
+    C62: 10nF 50V, 0805 (Wien bridge timing - 1.6kHz for probe longevity)
+
+    ⚠️ WHY 1.6kHz (NOT 160Hz)?
+    ──────────────────────────
+    Lower frequencies allow electrochemical reactions (electrolysis) during
+    each AC half-cycle, corroding the probe. Industry standard: 1-10 kHz.
+    At 1.6kHz, probe life extends from months to 5-10+ years.
     C63: 100nF 25V, 0805 (TLV3201 decoupling)
     C64: 1µF 25V, 0805 (AC coupling to probe)
     C65: 100nF 25V, 0805 (sense filter)
@@ -1328,11 +1357,19 @@ critical for reliable operation inside hot espresso machine enclosures.
     COMPONENT VALUES:
     ─────────────────
     U8:     MAX3485ESA+ or SP3485EN-L/TR (SOIC-8 or SOT-23-8)
+    D21:    SM712 (SOT-23) - RS485 A/B line TVS protection
     C70:    100nF 25V Ceramic, 0805 (U8 decoupling)
     R44:    33Ω 5%, 0805 (TX series protection)
     R45:    2.2kΩ 1%, 0805 (J17 RX 5V→3.3V level shift, upper)
     R45A:   3.3kΩ 1%, 0805 (J17 RX 5V→3.3V level shift, lower)
     R45B:   33Ω 5%, 0805 (RX series after divider)
+
+    ⚠️ RS485 SURGE PROTECTION (D21):
+    ─────────────────────────────────
+    SM712 asymmetric TVS protects A/B lines from industrial EMI:
+    • Clamps to -7V / +12V (matches RS485 common-mode range)
+    • Protects against lightning surges and motor switching noise
+    • Place close to J17 connector, between connector and MAX3485
     R99:    120Ω 1%, 0805 (RS485 termination, via JP1)
     JP1:    Solder jumper for termination (default: open)
     J17:    JST-XH 6-pin header (B6B-XH-A)

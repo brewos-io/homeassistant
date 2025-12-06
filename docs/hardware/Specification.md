@@ -369,6 +369,34 @@ The RP2350 has a documented errata (E9) where GPIO inputs can latch in a high st
 
 **All digital inputs have either internal pull-ups OR external pull-down resistors**, ensuring they cannot float and trigger the E9 errata condition.
 
+### ⚠️ RP2350 ADC E9 Errata (ADC Leakage Current)
+
+The RP2350 A2 stepping has a documented hardware issue (Erratum E9) affecting ADC-capable GPIO pins (GPIO 26-29).
+
+**Mechanism:**
+When voltage on an ADC pin exceeds ~2.0V or when the pin is in a high-impedance state, a parasitic leakage path activates within the pad driver circuitry. This leakage is non-linear and temperature-dependent.
+
+**Impact on This Design:**
+
+| ADC Pin | Function  | Source Impedance | Risk Level | Notes                            |
+| ------- | --------- | ---------------- | ---------- | -------------------------------- |
+| ADC0    | Brew NTC  | ~3.3kΩ (R1)      | Medium     | Leakage causes temperature error |
+| ADC1    | Steam NTC | ~1.2kΩ (R2)      | Lower      | Lower impedance reduces impact   |
+| ADC2    | Pressure  | ~3.8kΩ (R4‖R3)   | Medium     | Leakage causes pressure offset   |
+
+**Quantitative Impact:**
+For NTC circuits with R1=3.3kΩ, a few microamps of leakage induces several millivolts of offset. At brewing temperatures (93°C) where dR/dT is reduced, this can translate to >1°C temperature error.
+
+**Mitigations (choose based on accuracy requirements):**
+
+1. **Silicon Stepping:** Verify RP2350 is B0 stepping or later (may resolve E9)
+2. **Firmware Calibration:** Implement temperature-dependent offset compensation
+3. **External ADC (future revision):** Use dedicated ADC IC with voltage follower buffers
+4. **Lower Source Impedance:** Consider 1kΩ series + external buffer for critical channels
+
+**Current Design Status:**
+The RC filter capacitors (C8, C9, C11) suppress AC noise but do NOT mitigate DC leakage. For ±0.5°C espresso extraction accuracy, firmware calibration against a reference thermometer is **required** during commissioning.
+
 ---
 
 # 5. Power Supply Design
@@ -443,6 +471,7 @@ Use an integrated isolated AC/DC converter module for safety and simplicity.
 │    Component Details:                                                          │
 │    ─────────────────                                                           │
 │    F1: Fuse, 10A 250V, 5x20mm glass, slow-blow (relay-switched loads only)   │
+│    F2: Fuse, 500mA 250V, 5x20mm, slow-blow (HLK module only - fusing hierarchy)│
 │    RV1: MOV/Varistor, 275V AC, 14mm disc (surge protection)                   │
 │    C1: X2 safety capacitor, 100nF 275V AC (EMI filter)                        │
 │                                                                                 │
@@ -476,7 +505,7 @@ critical for reliable operation inside hot espresso machine enclosures.
 │    │  22µF   │     │      TPS563200DDCR         │              │  22µF   │    │
 │    │  25V    │     │   Synchronous Buck 3A      │              │  10V    │    │
 │    │ Ceramic │     │                            │              │ Ceramic │    │
-│    │  (C3)   │     │  VIN              VOUT ────┼──[L1 4.7µH]──┤  (C4)   │    │
+│    │  (C3)   │     │  VIN              VOUT ────┼──[L1 2.2µH]──┤  (C4)   │    │
 │    └────┬────┘     │                            │              │         │    │
 │         │      ┌──►│  EN               SW ──────┘              └────┬────┘    │
 │         │      │   │                            │                    │         │
@@ -509,23 +538,35 @@ critical for reliable operation inside hot espresso machine enclosures.
 │                                                                                 │
 │    External Components:                                                        │
 │    ───────────────────                                                         │
-│    L1: 4.7µH, 3A saturation, DCR <100mΩ (Murata LQH32CN4R7M23 or equiv)      │
+│    L1: 2.2µH, 3A saturation, DCR <100mΩ (Murata LQH32CN2R2M23 or equiv)      │
+│        ⚠️ 2.2µH per TI datasheet for 3.3V output - NOT 4.7µH!               │
+│        D-CAP2 topology requires adequate ripple for stable operation.         │
 │    C3: 22µF 25V X5R Ceramic, 1206 (input)                                     │
 │    C4: 22µF 10V X5R Ceramic, 1206 (output)                                    │
 │    C4A: 22µF 10V X5R Ceramic, 1206 (output, parallel for ripple)             │
 │                                                                                 │
-│    Load Budget (External 3.3V Rail - U3):                                      │
-│    ──────────────────────────────────────                                      │
+│    ⚠️ CRITICAL: PICO INTERNAL REGULATOR DISABLED                             │
+│    ─────────────────────────────────────────────                              │
+│    The Pico 2's Pin 37 (3V3_EN) is connected to GND, which DISABLES the      │
+│    internal RT6150B buck-boost regulator. This allows the external            │
+│    TPS563200 to power the ENTIRE 3.3V domain via Pico Pin 36 (3V3).          │
+│                                                                                 │
+│    WHY? Connecting two regulator outputs in parallel ("hard parallel")        │
+│    causes feedback loop contention and potential reverse current damage.      │
+│    The Pico's 3V3 pin is NOT 5V-tolerant as an input when the internal       │
+│    regulator is active. Disabling via 3V3_EN=GND is the correct approach.    │
+│                                                                                 │
+│    Load Budget (3.3V Rail - Entire System):                                    │
+│    ─────────────────────────────────────────                                   │
+│    RP2350 (Pico 2): ~50mA typical, 100mA peak (with PIO active)              │
 │    MAX31855: ~1mA                                                              │
 │    NTC dividers: ~1mA brew (3.3kΩ), ~3mA steam (1.2kΩ)                       │
 │    MAX3485 RS485: ~1mA                                                         │
 │    TLV3201 comparator: ~1mA                                                    │
+│    OPA342 op-amp: ~1mA                                                         │
 │    LM4040 reference: ~2mA                                                      │
-│    Total: ~10mA typical, 100mA max headroom                                   │
-│                                                                                 │
-│    ⚠️ IMPORTANT: This 3.3V rail is for SENSORS ONLY                          │
-│    The Pico 2's internal regulator provides 3.3V for the RP2350.             │
-│    Do NOT connect this rail to the Pico's 3V3 pin!                           │
+│    I2C pullups, misc: ~5mA                                                     │
+│    Total: ~70mA typical, 250mA peak → TPS563200 3A has ample margin          │
 │                                                                                 │
 │    ESP32: Power from 5V rail (J15 Pin 1) - has its own LDO.                  │
 │                                                                                 │
@@ -719,7 +760,7 @@ All relays use identical driver circuits with integrated indicator LEDs.
 │    GPIO HIGH → Transistor ON  → Relay ON, LED ON                              │
 │                                                                                 │
 │    Relay coil current:                                                       │
-│    • K2 (G5LE-1A4): 5V / ~70Ω = ~70mA                                       │
+│    • K2 (G5LE-1A4-E): 5V / ~70Ω = ~70mA                                     │
 │    • K1/K3 (APAN3105): 5V / ~125Ω = ~40mA                                   │
 │    LED current: (5V - 2.0V) / 470Ω = 6.4mA (bright indicator)                │
 │                                                                                 │
@@ -738,8 +779,9 @@ All relays use identical driver circuits with integrated indicator LEDs.
 │    K1 (Mains Indicator): Panasonic APAN3105 - 3A @ 250V AC, 5V coil, slim 5mm│
 │              Switches mains indicator lamp on machine front panel            │
 │              (~100mA load). 3A relay provides ample margin.                  │
-│    K2 (Pump): Omron G5LE-1A4 DC5 - 16A @ 250V AC, 5V coil, standard size     │
-│              DO NOT downsize - motor inrush needs robust contacts             │
+│    K2 (Pump): Omron G5LE-1A4-E DC5 - 16A @ 250V AC, 5V coil, standard size  │
+│              ⚠️ MUST use -E (high capacity) variant for 16A rating!          │
+│              Standard G5LE-1A4 is only 10A - insufficient for pump inrush    │
 │    K3 (Solenoid): Panasonic APAN3105 - 3A @ 250V AC, 5V coil, slim 5mm       │
 │              Solenoid ~15W (~0.5A) - 3A rating is plenty                      │
 │                                                                                 │
@@ -1138,6 +1180,77 @@ Different espresso machine brands use different NTC sensor values. **Solder jump
 └────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+### ⚠️ CRITICAL: Thermocouple Ground Loop Warning
+
+```
+┌────────────────────────────────────────────────────────────────────────────────┐
+│             ⚠️⚠️⚠️ GROUNDED JUNCTION THERMOCOUPLE WARNING ⚠️⚠️⚠️              │
+├────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│   🔴 REQUIREMENT: USE UNGROUNDED (INSULATED) THERMOCOUPLES ONLY! 🔴           │
+│                                                                                 │
+│   THE GROUND LOOP PROBLEM:                                                     │
+│   ────────────────────────                                                     │
+│                                                                                 │
+│   Espresso machine thermocouples are often "grounded junction" - the TC        │
+│   junction is welded to the stainless steel probe sheath for fast response.    │
+│   The sheath is screwed into the boiler, which is bonded to Protective Earth.  │
+│                                                                                 │
+│       ┌─────────────────────────────────────────────────────────────────┐      │
+│       │                    THE GROUND LOOP                              │      │
+│       │                                                                 │      │
+│       │    Boiler ────┬──── PE (chassis) ────┬──── MH1 ──── PCB GND    │      │
+│       │               │                      │                          │      │
+│       │    TC Sheath ─┘                      └──── MAX31855 GND        │      │
+│       │        │                                       │                │      │
+│       │        └───────────────────────────────────────┘                │      │
+│       │                     GROUND LOOP!                                │      │
+│       └─────────────────────────────────────────────────────────────────┘      │
+│                                                                                 │
+│   WHY THIS BREAKS THE MAX31855:                                                │
+│   ─────────────────────────────                                                │
+│   The MAX31855 internally biases T- to detect open-circuit faults.             │
+│   Shorting T- to GND (via the PE loop) overrides this internal bias.           │
+│                                                                                 │
+│   CONSEQUENCES:                                                                 │
+│   • "Short to GND" fault (Fault Bit D2) - chip returns 0.0 or NaN             │
+│   • AC noise from heater switching circulates through the ground loop          │
+│   • nV-level thermocouple signal buried in mV-level noise                     │
+│   • PID control becomes unstable or inoperative                                │
+│                                                                                 │
+│   ─────────────────────────────────────────────────────────────────────────    │
+│                                                                                 │
+│   ✅ SOLUTION: UNGROUNDED (INSULATED) THERMOCOUPLE                            │
+│   ─────────────────────────────────────────────────                            │
+│   The junction is electrically isolated from the sheath by MgO (magnesium     │
+│   oxide) insulation. This breaks the ground loop at the sensor end.            │
+│                                                                                 │
+│   WHEN ORDERING, SPECIFY:                                                      │
+│   • "Ungrounded junction" or "Insulated junction"                             │
+│   • NOT "grounded junction" or "exposed junction"                             │
+│                                                                                 │
+│   Example specifications:                                                       │
+│   • M6 threaded, K-type, UNGROUNDED, 50mm insertion length                    │
+│   • 1/8" NPT, K-type, INSULATED junction, stainless steel sheath              │
+│                                                                                 │
+│   ─────────────────────────────────────────────────────────────────────────    │
+│                                                                                 │
+│   ❌ IF GROUNDED THERMOCOUPLES MUST BE USED (not recommended):                │
+│   ───────────────────────────────────────────────────────────                  │
+│   The MAX31855 circuit requires galvanic isolation:                            │
+│   • Digital isolator (e.g., ISO7741) on SPI bus                               │
+│   • Isolated DC/DC converter (e.g., 1W module) for MAX31855 power             │
+│   • Completely separate ground plane for isolated section                      │
+│   This adds ~$10-15 and significant PCB complexity - NOT recommended.         │
+│                                                                                 │
+│   ─────────────────────────────────────────────────────────────────────────    │
+│                                                                                 │
+│   DIAGNOSTIC: If you see "Short to GND" fault or erratic readings,            │
+│   the thermocouple is likely grounded junction. Replace with ungrounded.      │
+│                                                                                 │
+└────────────────────────────────────────────────────────────────────────────────┘
+```
+
 ## 7.3 Pressure Transducer Interface
 
 **⚠️ SENSOR RESTRICTION:** Circuit designed for **0.5-4.5V ratiometric output ONLY**.
@@ -1170,8 +1283,8 @@ Different espresso machine brands use different NTC sensor values. **Solder jump
 │         │       Voltage Divider (5V → 3.3V range)                             │
 │         │                                                                      │
 │    ┌────┴────┐                                                                 │
-│    │  4.7kΩ  │  ← R4: Series resistor, 1% precision                           │
-│    │  ±1%    │                                                                 │
+│    │  5.6kΩ  │  ← R4: Series resistor, 1% precision                           │
+│    │  ±1%    │    (5.6kΩ prevents ADC saturation with 3.0V reference)         │
 │    └────┬────┘                                                                 │
 │         │                                                                      │
 │         ├───────────────────────────┬───────────────────────► GPIO28 (ADC2)   │
@@ -1191,16 +1304,20 @@ Different espresso machine brands use different NTC sensor values. **Solder jump
 │         │                           │                                          │
 │        GND                         GND                                         │
 │                                                                                 │
-│    Voltage Divider Calculation (OPTIMIZED for ADC range):                      │
-│    ──────────────────────────────────────────────────────                      │
-│    Ratio = R3 / (R3 + R4) = 10k / (10k + 4.7k) = 0.68                         │
+│    Voltage Divider Calculation (OPTIMIZED for 3.0V ADC Reference):            │
+│    ───────────────────────────────────────────────────────────────            │
+│    Ratio = R3 / (R3 + R4) = 10k / (10k + 5.6k) = 0.641                        │
 │                                                                                 │
-│    Input 0.5V → Output: 0.5V × 0.68 = 0.34V → ADC: 422                        │
-│    Input 2.5V → Output: 2.5V × 0.68 = 1.70V → ADC: 2109 (midscale)           │
-│    Input 4.5V → Output: 4.5V × 0.68 = 3.06V → ADC: 3795                       │
+│    Input 0.5V → Output: 0.5V × 0.641 = 0.32V → ADC: 437                       │
+│    Input 2.5V → Output: 2.5V × 0.641 = 1.60V → ADC: 2185 (midscale)          │
+│    Input 4.5V → Output: 4.5V × 0.641 = 2.88V → ADC: 3940                      │
 │                                                                                 │
-│    ADC utilization: 91% of full scale                                         │
-│    Safe margin: 3.06V still below 3.3V ADC maximum                            │
+│    ADC utilization: 85% of 3.0V reference (full 16 bar range linear)         │
+│    Headroom: 120mV below 3.0V reference - NO SATURATION                       │
+│                                                                                 │
+│    ⚠️ WHY 5.6kΩ (not 4.7kΩ)?                                                 │
+│    With 4.7kΩ: V_max = 4.5V × 0.68 = 3.06V > 3.0V reference → SATURATES!     │
+│    With 5.6kΩ: V_max = 4.5V × 0.641 = 2.88V < 3.0V reference → LINEAR        │
 │                                                                                 │
 │    ⚠️ CLAMPING DIODE (D16 - BAT54S):                                          │
 │    ─────────────────────────────────                                          │
@@ -1237,26 +1354,26 @@ Different espresso machine brands use different NTC sensor values. **Solder jump
 | Black        | GND               | J26 Pin 15 |
 | Yellow/White | Signal (0.5-4.5V) | J26 Pin 16 |
 
-**Pressure to Voltage/ADC Mapping (0-16 bar range, optimized divider):**
+**Pressure to Voltage/ADC Mapping (0-16 bar range, 5.6kΩ/10kΩ divider, 3.0V reference):**
 
 | Pressure             | Voltage Out | After Divider | ADC Count |
 | -------------------- | ----------- | ------------- | --------- |
-| 0 bar                | 0.5V        | 0.34V         | 422       |
-| 4 bar                | 1.5V        | 1.02V         | 1266      |
-| 8 bar                | 2.5V        | 1.70V         | 2109      |
-| 9 bar (typical brew) | 2.75V       | 1.87V         | 2320      |
-| 12 bar               | 3.5V        | 2.38V         | 2953      |
-| 16 bar               | 4.5V        | 3.06V         | 3795      |
+| 0 bar                | 0.5V        | 0.32V         | 437       |
+| 4 bar                | 1.5V        | 0.96V         | 1311      |
+| 8 bar                | 2.5V        | 1.60V         | 2185      |
+| 9 bar (typical brew) | 2.75V       | 1.76V         | 2404      |
+| 12 bar               | 3.5V        | 2.24V         | 3059      |
+| 16 bar               | 4.5V        | 2.88V         | 3940      |
 
-**Resolution:** 16 bar / (3795 - 422) = **0.0047 bar per ADC count**
+**Resolution:** 16 bar / (3940 - 437) = **0.0046 bar per ADC count** (~0.07 PSI)
 
 **Firmware Conversion:**
 
 ```python
 def adc_to_pressure(adc_count, range_bar=16):
     """Convert ADC reading to pressure in bar"""
-    ADC_MIN = 422   # 0 bar (0.5V input, after 0.68 divider)
-    ADC_MAX = 3795  # 16 bar (4.5V input, after 0.68 divider)
+    ADC_MIN = 437   # 0 bar (0.5V input, after 0.641 divider, 3.0V ref)
+    ADC_MAX = 3940  # 16 bar (4.5V input, after 0.641 divider, 3.0V ref)
 
     # Clamp to valid range
     adc_count = max(ADC_MIN, min(ADC_MAX, adc_count))
@@ -1373,7 +1490,7 @@ def adc_to_pressure(adc_count, range_bar=16):
 │    │    │         ├─────────────────┤                                        │  │
 │    │    │         │                 │                                        │  │
 │    │    │    ┌────┴────┐       ┌────┴────┐                                   │  │
-│    │    │    │  100nF  │       │  100nF  │                                   │  │
+│    │    │    │   10nF  │       │   10nF  │                                   │  │
 │    │    │    │   C61   │       │   C62   │                                   │  │
 │    │    │    └────┬────┘       └────┬────┘                                   │  │
 │    │    │         │                 │                                        │  │
@@ -1382,8 +1499,15 @@ def adc_to_pressure(adc_count, range_bar=16):
 │    │    │                                                                    │  │
 │    │    └───────────────────────────────────────────────────────────────┐    │  │
 │    │                                                                     │    │  │
-│    │    Oscillator frequency: f = 1/(2π × R × C) ≈ 160 Hz               │    │  │
-│    │    (with 10kΩ and 100nF, adjust R92/R93 for different frequencies) │    │  │
+│    │    Oscillator frequency: f = 1/(2π × R × C) ≈ 1.6 kHz              │    │  │
+│    │    (with 10kΩ and 10nF - optimized for probe longevity)            │    │  │
+│    │                                                                     │    │  │
+│    │    ⚠️ WHY ~1.6 kHz (NOT 160 Hz)?                                   │    │  │
+│    │    ─────────────────────────────                                    │    │  │
+│    │    Lower frequencies (< 500 Hz) allow electrochemical reactions    │    │  │
+│    │    (electrolysis) during each AC half-cycle, corroding the probe.  │    │  │
+│    │    Industry standard for conductivity sensors: 1-10 kHz.           │    │  │
+│    │    At 1.6 kHz, probe life extends from months to 5-10+ years.      │    │  │
 │    │                                                                     │    │  │
 │    └─────────────────────────────────────────────────────────────────────┘    │  │
 │                                                                                 │
@@ -1468,7 +1592,7 @@ def adc_to_pressure(adc_count, range_bar=16):
 │                                                                                 │
 │    OPERATION:                                                                  │
 │    ───────────                                                                 │
-│    1. OPA342 generates ~160Hz AC oscillation (Wien bridge)                    │
+│    1. OPA342 generates ~1.6kHz AC oscillation (Wien bridge)                   │
 │    2. AC signal excites probe through C64 (DC blocking capacitor)            │
 │    3. If water present: AC signal conducts through water to boiler (GND)     │
 │    4. Return AC signal is rectified/filtered, raising DC_LEVEL               │
@@ -1516,8 +1640,8 @@ def adc_to_pressure(adc_count, range_bar=16):
 │    R97: 100kΩ 1% 0805 (reference divider)                                    │
 │    R98: 1MΩ 5% 0805 (hysteresis)                                             │
 │    C60: 100nF 25V ceramic 0805 (OPA342 VCC decoupling)                       │
-│    C61: 100nF 25V ceramic 0805 (Wien bridge timing)                          │
-│    C62: 100nF 25V ceramic 0805 (Wien bridge timing)                          │
+│    C61: 10nF 50V ceramic 0805 (Wien bridge timing - 1.6kHz for probe life)   │
+│    C62: 10nF 50V ceramic 0805 (Wien bridge timing - 1.6kHz for probe life)   │
 │    C63: 100nF 25V ceramic 0805 (TLV3201 VCC decoupling)                      │
 │    C64: 1µF 25V ceramic 0805 (AC coupling to probe)                          │
 │    C65: 100nF 25V ceramic 0805 (sense filter)                                │
@@ -2178,8 +2302,8 @@ The control PCB provides a universal interface for connecting external power met
 │                        MAINS INPUT PROTECTION                                   │
 ├────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                 │
-│    COMPLETE MAINS INPUT CIRCUIT:                                              │
-│    ────────────────────────────                                                │
+│    COMPLETE MAINS INPUT CIRCUIT WITH FUSING HIERARCHY:                        │
+│    ───────────────────────────────────────────────────                        │
 │                                                                                 │
 │    L (Live)  ─────┬─────────────────────────────────────────────────────────  │
 │                   │                                                            │
@@ -2188,6 +2312,15 @@ The control PCB provides a universal interface for connecting external power met
 │              │  10A    │    (relay-switched loads only - pump, valves)        │
 │              │ 250V    │                                                       │
 │              └────┬────┘                                                       │
+│                   │ (L_FUSED)                                                  │
+│                   ├───────────────────────► To K1, K2, K3 relay COMs          │
+│                   │                                                            │
+│              ┌────┴────┐                                                       │
+│              │  F2     │  ← Fuse: 500mA slow-blow, 5x20mm glass               │
+│              │ 500mA   │    (HLK AC/DC module only - fusing hierarchy)        │
+│              │ 250V    │                                                       │
+│              └────┬────┘                                                       │
+│                   │ (L_HLK)                                                    │
 │                   │                                                            │
 │              ┌────┴────┐     ┌─────────┐                                      │
 │              │  RV1    │     │   C1    │                                      │
@@ -2195,7 +2328,7 @@ The control PCB provides a universal interface for connecting external power met
 │              │  275V   ├─────┤  100nF  │    X2 safety rated, 275V AC          │
 │              │  14mm   │     │  275V   │                                      │
 │              └────┬────┘     └────┬────┘                                      │
-│                   │               │                                            │
+│                   │               │ (to HLK L input)                          │
 │    N (Neutral) ───┴───────────────┴─────────────────────────────────────────  │
 │                                                                                │
 │    Optional EMI Filter (for CE compliance):                                   │
@@ -2218,6 +2351,12 @@ The control PCB provides a universal interface for connecting external power met
 │    F1:  Fuse, 10A/250V, 5x20mm, slow-blow (time-lag)                         │
 │         Fuse: Littelfuse 0218010.MXP or equivalent                            │
 │         Holder: Littelfuse 01000056Z (PCB mount clips with cover)            │
+│                                                                                │
+│    F2:  Fuse, 500mA/250V, 5x20mm, slow-blow (HLK module only)                │
+│         Fuse: Littelfuse 0218.500MXP or equivalent                            │
+│         Holder: Littelfuse 01000056Z (PCB mount clips with cover)            │
+│         Purpose: Fusing hierarchy - protects HLK module and its PCB traces   │
+│         independently from relay loads. If HLK fails, only F2 blows.         │
 │                 Alt: Schurter 0031.8201 (enclosed PCB mount)                  │
 │                                                                                │
 │    ⚠️  FUSE HOLDER LAYOUT NOTES:                                              │
@@ -2330,10 +2469,39 @@ The control PCB provides a universal interface for connecting external power met
 │                                                                                 │
 │    Place ESD clamps as close to connector as possible.                        │
 │                                                                                 │
-│    UART LINES (GPIO0-1, GPIO8-9):                                             │
-│    ───────────────────────────────                                            │
-│    33Ω series resistor provides some protection.                              │
-│    Add ESD clamp if UART connectors are externally accessible.               │
+│    UART LINES (GPIO0-1, GPIO6-7):                                             │
+│    ─────────────────────────────────                                          │
+│    33Ω series resistors (R40-R44) limit current during ESD clamping events.  │
+│    This works with the ESD diode's clamping action to protect GPIO pins.     │
+│                                                                                 │
+│    ⚠️ ESD CLAMPING VOLTAGE WARNING:                                           │
+│    ─────────────────────────────────                                          │
+│    PESD5V0S1BL clamping voltage is ~14V at peak pulse current, but RP2350    │
+│    absolute max is 3.6V. The series resistors are CRITICAL - they limit      │
+│    current to the GPIO during the clamping transient, allowing the internal  │
+│    protection diodes to share the load without destructive current flow.     │
+│    For exposed connectors, use 33Ω-100Ω series resistors on ALL signal lines.│
+│                                                                                 │
+│    RS485 INTERFACE (U8 MAX3485, J17):                                         │
+│    ──────────────────────────────────                                          │
+│    Industrial environments (kitchens) have severe EMI from motors, heaters.  │
+│                                                                                 │
+│                       ┌───────────────┐                                       │
+│    J17 RS485_A ───┬───┤     SM712     ├───┬─── MAX3485 A                     │
+│                   │   │  Asymmetric   │   │                                   │
+│                   │   │  TVS Diode    │   │                                   │
+│    J17 RS485_B ───┼───┤   (-7V/+12V)  ├───┼─── MAX3485 B                     │
+│                   │   └───────┬───────┘   │                                   │
+│                   │           │           │                                   │
+│                  GND         GND         GND                                  │
+│                                                                                 │
+│    D21 (SM712): Asymmetric TVS designed for RS485/RS422                      │
+│    • Clamps to -7V / +12V (matches RS485 common-mode range)                  │
+│    • Protects against lightning-induced surges and motor switching noise     │
+│    • Place close to J17 connector                                             │
+│                                                                                 │
+│    R19 (10kΩ pull-down on GPIO20/DE): Ensures transceiver defaults to        │
+│    receive mode during boot, preventing bus contention on startup.            │
 │                                                                                 │
 │    5V RAIL TRANSIENT SUPPRESSION:                                             │
 │    ───────────────────────────────                                            │
@@ -3116,40 +3284,41 @@ GPIO22 is available on **J15 Pin 8 (SPARE)** for future expansion:
 | 6   | D10-D15 | ESD Protection     | PESD5V0S1BL | SOD-323 | Sensor inputs                                 |
 | 1   | D16     | Schottky Clamp     | BAT54S      | SOT-23  | Pressure ADC overvoltage                      |
 | 1   | D20     | TVS Diode          | SMBJ5.0A    | SMB     | 5V rail protection                            |
+| 1   | D21     | RS485 TVS          | SM712       | SOT-23  | RS485 A/B line surge protection (-7V/+12V)    |
 
 ## 14.3 Passive Components - Resistors
 
-| Qty | Ref     | Value | Tolerance | Package | Notes                                          |
-| --- | ------- | ----- | --------- | ------- | ---------------------------------------------- |
-| 1   | R1      | 3.3kΩ | 1%        | 0805    | Brew NTC pull-up (always populated)            |
-| 1   | R1A     | 1.5kΩ | 1%        | 0805    | Brew NTC parallel (via JP2, for 10kΩ NTC)      |
-| 1   | R2      | 1.2kΩ | 1%        | 0805    | Steam NTC pull-up (always populated)           |
-| 1   | R2A     | 680Ω  | 1%        | 0805    | Steam NTC parallel (via JP3, for 10kΩ NTC)     |
-| 2   | R5-R6   | 1kΩ   | 1%        | 0805    | NTC ADC series protection                      |
-| 1   | R3      | 10kΩ  | 1%        | 0805    | Pressure divider                               |
-| 1   | R4      | 4.7kΩ | 1%        | 0805    | Pressure divider (optimized for 90% ADC range) |
-| 10  | R10-R19 | 10kΩ  | 5%        | 0805    | Pull-ups/pull-downs                            |
-| 5   | R20-R24 | 1kΩ   | 5%        | 0805    | Transistor base (3 relay + 2 SSR)              |
-| 3   | R30-R32 | 470Ω  | 5%        | 0805    | Relay Indicator LEDs (K1, K2, K3)              |
-| 2   | R34-R35 | 330Ω  | 5%        | 0805    | SSR Indicator LEDs (logic-side)                |
-| 4   | R40-R43 | 33Ω   | 5%        | 0805    | UART series (ESP32/Service)                    |
-| 1   | R44     | 33Ω   | 5%        | 0805    | J17 TX series (power meter)                    |
-| 1   | R45     | 2.2kΩ | 1%        | 0805    | J17 RX 5V→3.3V level shifter (upper divider)   |
-| 1   | R45A    | 3.3kΩ | 1%        | 0805    | J17 RX 5V→3.3V level shifter (lower divider)   |
-| 1   | R45B    | 33Ω   | 5%        | 0805    | J17 RX series (after divider)                  |
-| 1   | R7      | 1kΩ   | 1%        | 0805    | LM4040 voltage reference bias resistor         |
-| 2   | R46-R47 | 4.7kΩ | 5%        | 0805    | I2C pull-ups (SDA, SCL)                        |
-| 1   | R48     | 330Ω  | 5%        | 0805    | Status LED                                     |
-| 1   | R49     | 100Ω  | 5%        | 0805    | Buzzer                                         |
-| 2   | R71-R72 | 10kΩ  | 5%        | 0805    | Pico RUN/BOOTSEL pull-ups (J15 Pin 5/6)        |
-| 1   | R73     | 10kΩ  | 5%        | 0805    | WEIGHT_STOP pull-down (J15 Pin 7)              |
-| 1   | R91     | 10kΩ  | 1%        | 0805    | Level probe oscillator feedback                |
-| 2   | R92-R93 | 10kΩ  | 1%        | 0805    | Level probe Wien bridge                        |
-| 1   | R94     | 100Ω  | 5%        | 0805    | Level probe current limit                      |
-| 1   | R95     | 10kΩ  | 5%        | 0805    | Level probe AC bias                            |
-| 2   | R96-R97 | 100kΩ | 1%        | 0805    | Level probe threshold divider                  |
-| 1   | R98     | 1MΩ   | 5%        | 0805    | Level probe hysteresis                         |
-| 1   | R99     | 120Ω  | 1%        | 0805    | RS485 termination (via JP1 solder jumper)      |
+| Qty | Ref     | Value | Tolerance | Package | Notes                                                         |
+| --- | ------- | ----- | --------- | ------- | ------------------------------------------------------------- |
+| 1   | R1      | 3.3kΩ | 1%        | 0805    | Brew NTC pull-up (always populated)                           |
+| 1   | R1A     | 1.5kΩ | 1%        | 0805    | Brew NTC parallel (via JP2, for 10kΩ NTC)                     |
+| 1   | R2      | 1.2kΩ | 1%        | 0805    | Steam NTC pull-up (always populated)                          |
+| 1   | R2A     | 680Ω  | 1%        | 0805    | Steam NTC parallel (via JP3, for 10kΩ NTC)                    |
+| 2   | R5-R6   | 1kΩ   | 1%        | 0805    | NTC ADC series protection                                     |
+| 1   | R3      | 10kΩ  | 1%        | 0805    | Pressure divider (to GND)                                     |
+| 1   | R4      | 5.6kΩ | 1%        | 0805    | Pressure divider (series) - prevents saturation with 3.0V ref |
+| 10  | R10-R19 | 10kΩ  | 5%        | 0805    | Pull-ups/pull-downs                                           |
+| 5   | R20-R24 | 1kΩ   | 5%        | 0805    | Transistor base (3 relay + 2 SSR)                             |
+| 3   | R30-R32 | 470Ω  | 5%        | 0805    | Relay Indicator LEDs (K1, K2, K3)                             |
+| 2   | R34-R35 | 330Ω  | 5%        | 0805    | SSR Indicator LEDs (logic-side)                               |
+| 4   | R40-R43 | 33Ω   | 5%        | 0805    | UART series (ESP32/Service)                                   |
+| 1   | R44     | 33Ω   | 5%        | 0805    | J17 TX series (power meter)                                   |
+| 1   | R45     | 2.2kΩ | 1%        | 0805    | J17 RX 5V→3.3V level shifter (upper divider)                  |
+| 1   | R45A    | 3.3kΩ | 1%        | 0805    | J17 RX 5V→3.3V level shifter (lower divider)                  |
+| 1   | R45B    | 33Ω   | 5%        | 0805    | J17 RX series (after divider)                                 |
+| 1   | R7      | 1kΩ   | 1%        | 0805    | LM4040 voltage reference bias resistor                        |
+| 2   | R46-R47 | 4.7kΩ | 5%        | 0805    | I2C pull-ups (SDA, SCL)                                       |
+| 1   | R48     | 330Ω  | 5%        | 0805    | Status LED                                                    |
+| 1   | R49     | 100Ω  | 5%        | 0805    | Buzzer                                                        |
+| 2   | R71-R72 | 10kΩ  | 5%        | 0805    | Pico RUN/BOOTSEL pull-ups (J15 Pin 5/6)                       |
+| 1   | R73     | 10kΩ  | 5%        | 0805    | WEIGHT_STOP pull-down (J15 Pin 7)                             |
+| 1   | R91     | 10kΩ  | 1%        | 0805    | Level probe oscillator feedback                               |
+| 2   | R92-R93 | 10kΩ  | 1%        | 0805    | Level probe Wien bridge                                       |
+| 1   | R94     | 100Ω  | 5%        | 0805    | Level probe current limit                                     |
+| 1   | R95     | 10kΩ  | 5%        | 0805    | Level probe AC bias                                           |
+| 2   | R96-R97 | 100kΩ | 1%        | 0805    | Level probe threshold divider                                 |
+| 1   | R98     | 1MΩ   | 5%        | 0805    | Level probe hysteresis                                        |
+| 1   | R99     | 120Ω  | 1%        | 0805    | RS485 termination (via JP1 solder jumper)                     |
 
 ## 14.3a Solder Jumpers
 
@@ -3174,7 +3343,7 @@ GPIO22 is available on **J15 Pin 8 (SPARE)** for future expansion:
 | 1   | C7A     | 100nF    | 25V     | 0805 Ceramic | ADC reference HF decoupling                                  |
 | 12  | C10-C21 | 100nF    | 25V     | 0805         | Decoupling (general)                                         |
 | 1   | C60     | 100nF    | 25V     | 0805         | OPA342 VCC decoupling                                        |
-| 2   | C61-C62 | 100nF    | 25V     | 0805         | Level probe Wien bridge timing                               |
+| 2   | C61-C62 | 10nF     | 50V     | 0805         | Level probe Wien bridge timing (~1.6kHz for probe longevity) |
 | 1   | C63     | 100nF    | 25V     | 0805         | TLV3201 VCC decoupling                                       |
 | 1   | C64     | 1µF      | 25V     | 0805         | Level probe AC coupling                                      |
 | 1   | C65     | 100nF    | 25V     | 0805         | Level probe sense filter                                     |
@@ -3184,21 +3353,22 @@ GPIO22 is available on **J15 Pin 8 (SPARE)** for future expansion:
 
 ## 14.4a Inductors
 
-| Qty | Ref | Value | Saturation | DCR    | Package | Notes                                |
-| --- | --- | ----- | ---------- | ------ | ------- | ------------------------------------ |
-| 1   | L1  | 4.7µH | 3A min     | <100mΩ | 1210    | Buck inductor (Murata LQH32CN4R7M23) |
+| Qty | Ref | Value | Saturation | DCR    | Package | Notes                                                                         |
+| --- | --- | ----- | ---------- | ------ | ------- | ----------------------------------------------------------------------------- |
+| 1   | L1  | 2.2µH | 3A min     | <100mΩ | 1210    | Buck inductor (Murata LQH32CN2R2M23) - 2.2µH per TPS563200 datasheet for 3.3V |
 
 ## 14.5 Electromechanical
 
-| Qty | Ref     | Description          | Part Number             | Notes                                    |
-| --- | ------- | -------------------- | ----------------------- | ---------------------------------------- |
-| 2   | K1,K3   | Relay 5V 3A SPST-NO  | Panasonic APAN3105      | Slim 5mm, K1=Indicator lamp, K3=Solenoid |
-| 1   | K2      | Relay 5V 16A SPST-NO | Omron G5LE-1A4 DC5      | Standard size, Pump motor                |
-| 1   | F1      | Fuse 10A + Holder    | 0218010.MXP + 01000056Z | 5×20mm slow, PCB mount with cover        |
-| 1   | RV1     | Varistor 275V        | S14K275                 | 14mm disc, mains surge protection        |
-| 2   | RV2-RV3 | Varistor 275V        | S10K275                 | 10mm disc, K2/K3 arc suppression         |
-| 2   | SW1-SW2 | Tactile Switch       | EVQP7A01P               | SMD 6×6mm                                |
-| 1   | BZ1     | Passive Buzzer       | CEM-1203(42)            | 12mm                                     |
+| Qty | Ref     | Description          | Part Number             | Notes                                      |
+| --- | ------- | -------------------- | ----------------------- | ------------------------------------------ |
+| 2   | K1,K3   | Relay 5V 3A SPST-NO  | Panasonic APAN3105      | Slim 5mm, K1=Indicator lamp, K3=Solenoid   |
+| 1   | K2      | Relay 5V 16A SPST-NO | Omron G5LE-1A4-E DC5    | Standard size, Pump motor (**-E** = 16A!)  |
+| 1   | F1      | Fuse 10A + Holder    | 0218010.MXP + 01000056Z | 5×20mm slow, PCB mount with cover (relays) |
+| 1   | F2      | Fuse 500mA + Holder  | 0218.500MXP + 01000056Z | 5×20mm slow, HLK module fusing hierarchy   |
+| 1   | RV1     | Varistor 275V        | S14K275                 | 14mm disc, mains surge protection          |
+| 2   | RV2-RV3 | Varistor 275V        | S10K275                 | 10mm disc, K2/K3 arc suppression           |
+| 2   | SW1-SW2 | Tactile Switch       | EVQP7A01P               | SMD 6×6mm                                  |
+| 1   | BZ1     | Passive Buzzer       | CEM-1203(42)            | 12mm                                       |
 
 ## 14.6 LEDs
 
@@ -3257,13 +3427,18 @@ The following components are **NOT** included with the PCB and must be sourced b
 
 ### Thermocouple Specifications
 
-| Parameter | Requirement               | Notes                                  |
-| --------- | ------------------------- | -------------------------------------- |
-| Type      | **K-Type ONLY**           | J/T/PT100 will NOT work                |
-| Junction  | Ungrounded preferred      | Grounded can cause noise with MAX31855 |
-| Thread    | M6 or as machine requires | For E61 group head mushroom bolt       |
-| Cable     | Shielded 2-wire           | Shield grounded at PCB end only        |
-| Accuracy  | ±2°C typical              | Adequate for brew head monitoring      |
+| Parameter    | Requirement                           | Notes                                         |
+| ------------ | ------------------------------------- | --------------------------------------------- |
+| Type         | **K-Type ONLY**                       | J/T/PT100 will NOT work with MAX31855K        |
+| **Junction** | **🔴 UNGROUNDED (INSULATED) ONLY 🔴** | Grounded junction causes ground loop → FAULT! |
+| Thread       | M6 or as machine requires             | For E61 group head mushroom bolt              |
+| Sheath       | Stainless steel                       | Food-safe, corrosion resistant                |
+| Cable        | Shielded 2-wire                       | Shield grounded at PCB end only               |
+| Accuracy     | ±2°C typical                          | Adequate for brew head monitoring             |
+
+⚠️ **CRITICAL:** Do NOT use "grounded junction" or "exposed junction" thermocouples.
+The MAX31855 will report "Short to GND" fault due to ground loop through boiler PE.
+See Section 7.2 for detailed explanation of the ground loop problem.
 
 ### Pressure Transducer Specifications
 
