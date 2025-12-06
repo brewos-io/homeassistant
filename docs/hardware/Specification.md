@@ -103,7 +103,7 @@ This specification defines a custom control PCB to replace the factory GICAR con
 │   │  • 3-Way Valve  │     │  • K-Type Thermocouple (Brew head)             │  │
 │   │  • Brew Heater  │     │  • Pressure Transducer (0.5-4.5V)              │  │
 │   │  • Steam Heater │     │  • Water Level Switches                         │  │
-│   │  • Water LED    │     │  • Steam Boiler Level Probe                     │  │
+│   │  • Mains Lamp   │     │  • Steam Boiler Level Probe                     │  │
 │   └─────────────────┘     └─────────────────────────────────────────────────┘  │
 │                                                                                  │
 └─────────────────────────────────────────────────────────────────────────────────┘
@@ -253,7 +253,7 @@ This specification defines a custom control PCB to replace the factory GICAR con
 │                                                                                 │
 │  ┌─────────────────────────────────────────────────────────────────────────┐  │
 │  │  DIGITAL OUTPUTS (Relay & SSR Drivers)                                   │  │
-│  │  ├── GPIO10 ─── Water LED Relay (K1) + Green Indicator LED              │  │
+│  │  ├── GPIO10 ─── Mains Indicator Lamp Relay (K1) + Green Indicator LED   │  │
 │  │  ├── GPIO11 ─── Pump Relay (K2) + Green Indicator LED                   │  │
 │  │  ├── GPIO12 ─── Solenoid Relay (K3) + Green Indicator LED               │  │
 │  │  ├── GPIO13 ─── Brew SSR Trigger (SSR1) + Orange Indicator LED          │  │
@@ -293,7 +293,7 @@ This specification defines a custom control PCB to replace the factory GICAR con
 │  │  ├── GPIO7 ─── METER RX (UART from meter TX / RS485 RO)                │  │
 │  │  └── GPIO20 ── RS485 DE/RE (Direction control for MAX3485)             │  │
 │  │  Supports: PZEM-004T, JSY-MK-163T/194T, Eastron SDM, and more          │  │
-│  │  NO high voltage through control PCB - external modules handle mains.   │  │
+│  │  No HV measurement circuitry on PCB - J24 provides pass-through to meter│  │
 │  └─────────────────────────────────────────────────────────────────────────┘  │
 │                                                                                 │
 │  ┌─────────────────────────────────────────────────────────────────────────┐  │
@@ -791,7 +791,7 @@ All relays use identical driver circuits with integrated indicator LEDs.
 │    ───────────────────────                                                   │
 │    • K2 (Pump) - MANDATORY (Ulka pump generates severe EMI spikes)          │
 │    • K3 (Solenoid) - MANDATORY (back-EMF can weld slim relay contacts)      │
-│    • K1 (Water LED) - OPTIONAL (resistive load, DNP footprint provided)     │
+│    • K1 (Mains Lamp) - OPTIONAL (resistive load, DNP footprint provided)    │
 │    • SSRs (heaters) - NOT NEEDED (resistive load)                           │
 │                                                                                │
 │    ⚠️  WARNING: With downsized K1/K3 relays (3A contacts), MOV protection   │
@@ -928,8 +928,8 @@ Solution: NPN transistor as low-side switch provides full 5V to SSR.
 │    Each relay has 3 contacts: COM (Common), NO (Normally Open), NC (Closed)   │
 │    This design uses only COM and NO for each relay.                           │
 │                                                                                 │
-│    K1 - WATER STATUS LED                                                       │
-│    ─────────────────────                                                       │
+│    K1 - MAINS INDICATOR LAMP                                                   │
+│    ─────────────────────────                                                   │
 │         COM ──[6.3mm]──► To machine LED power (typically 12V or 24V)          │
 │         NO  ──[6.3mm]──► To LED (+)                                           │
 │         NC  ── Not connected                                                   │
@@ -1961,7 +1961,7 @@ def adc_to_pressure(adc_count, range_bar=16):
 
 ## 10.1 Universal External Power Meter Interface
 
-**⚠️ KEY DESIGN: EXTERNAL MODULES - NO HIGH VOLTAGE THROUGH CONTROL PCB!**
+**⚠️ KEY DESIGN: NO HV MEASUREMENT CIRCUITRY ON PCB - EXTERNAL MODULES HANDLE METERING**
 
 The control PCB provides a universal interface for connecting external power metering modules. The external module handles its own high-voltage connections (mains L/N and CT clamp), while the control PCB provides only low-voltage communication and power.
 
@@ -2006,8 +2006,8 @@ The control PCB provides a universal interface for connecting external power met
 │       N ─────────────────────────────┼───► N Terminal                       │ │
 │                                      └──────────────────────────────────────┘ │
 │                                                                                 │
-│    ⚠️ NO 220V TRACES ON CONTROL PCB FOR POWER METERING                        │
-│    ⚠️ USER WIRES MAINS DIRECTLY TO EXTERNAL MODULE                            │
+│    ⚠️ NO HV SENSING/MEASUREMENT CIRCUITRY ON PCB - EXTERNAL MODULE HANDLES IT │
+│    ⚠️ J24 PROVIDES L/N/PE PASS-THROUGH TO METER IN EXISTING HV ZONE           │
 │                                                                                 │
 └────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -2254,7 +2254,7 @@ The control PCB provides a universal interface for connecting external power met
 ```
 ┌────────────────────────────────────────────────────────────────────────────────┐
 │                    CREEPAGE AND CLEARANCE REQUIREMENTS                          │
-│                        (Per IEC 60950-1 / IEC 62368-1)                         │
+│             (Per IEC 60950-1 / IEC 62368-1 for PCB design reference)           │
 ├────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                 │
 │    DEFINITIONS:                                                                │
@@ -2470,7 +2470,7 @@ The control PCB provides a universal interface for connecting external power met
 | ------------------- | ------- | ------------------ | -------------------------- |
 | Mains Live/Neutral  | 6A peak | 1.5mm (60 mil)     | Relay-switched loads only  |
 | Relay K2 (Pump)     | 5A peak | 1.5mm (60 mil)     | Ulka pump                  |
-| Relay K1 (LED)      | 100mA   | 0.5mm (20 mil)     | Water status LED           |
+| Relay K1 (LED)      | 100mA   | 0.5mm (20 mil)     | Mains indicator lamp       |
 | Relay K3 (Solenoid) | 0.5A    | 1.0mm (40 mil)     | 3-way solenoid valve       |
 | 5V power rail       | 1A      | 1.0mm (40 mil)     | Main distribution          |
 | 5V to Pico VSYS     | 500mA   | 0.5mm (20 mil)     |                            |
@@ -2591,6 +2591,14 @@ For the relay-switched loads (max ~6A):
 │    This causes EMI, noise, and unreliable ground reference.                   │
 │                                                                                 │
 │    Mark MH1 with "⏚" symbol on silkscreen.                                    │
+│                                                                                 │
+│    ⚠️ USB GROUND LOOP WARNING:                                                │
+│    When Pico USB is connected to an earthed PC while machine mains is on,     │
+│    a ground loop exists: PC Earth → USB GND → Pico GND → MH1 → Machine PE.    │
+│    This can cause noise on ADC readings or, in worst case, damage if there    │
+│    is a significant voltage difference between PC earth and machine PE.       │
+│    Recommendation: Use USB only for development with machine unpowered,       │
+│    or use a USB isolator for production debugging.                            │
 │                                                                                 │
 │    ─────────────────────────────────────────────────────────────────────────   │
 │                                                                                 │
@@ -2831,7 +2839,7 @@ Relay-switched loads (pump, valves) are fused and distributed via internal bus. 
 | J1-N                                                         | Mains Neutral Input | 6.3mm male    | 14 AWG     | Common neutral bus              |
 | J1-PE                                                        | Protective Earth    | 6.3mm male    | 14 AWG     | To chassis                      |
 | **220V AC Relay Outputs (All COMs internal to L_FUSED bus)** |
-| J2-NO                                                        | Relay K1 N.O.       | 6.3mm male    | 16 AWG     | Water LED output (≤100mA, 220V) |
+| J2-NO                                                        | Relay K1 N.O.       | 6.3mm male    | 16 AWG     | Mains lamp output (≤100mA, 220V)|
 | J3-NO                                                        | Relay K2 N.O.       | 6.3mm male    | 14 AWG     | Pump output (5A peak, 220V)     |
 | J4-NO                                                        | Relay K3 N.O.       | 6.3mm male    | 16 AWG     | Solenoid output (~0.5A, 220V)   |
 
@@ -2975,6 +2983,14 @@ Relay-switched loads (pump, valves) are fused and distributed via internal bus. 
 │    • Maintain >6mm creepage from LV circuits                                   │
 │    • Use 16 AWG or heavier wire for L and N                                   │
 │    • Route HV wires away from LV signal wires                                 │
+│                                                                                 │
+│    📋 PCB PLACEMENT NOTE:                                                      │
+│    ──────────────────────                                                      │
+│    J24 is located in the EXISTING HV ZONE of the PCB, adjacent to the relay   │
+│    contacts and L_FUSED bus that already carry mains voltage. This is NOT a   │
+│    new HV section - it reuses the same traces and clearances used for K1-K3.  │
+│    No additional HV measurement circuitry exists on the PCB; the external     │
+│    meter module performs all voltage/current sensing internally.               │
 │                                                                                 │
 └────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -3287,8 +3303,8 @@ The following components are **NOT** included with the PCB and must be sourced b
 │   └─────────────────┘          │  directly to mains      │    mains here   │
 │                                └─────────────────────────┘                  │
 │                                                                              │
-│   ⚠️ NO HIGH VOLTAGE flows through control PCB for power metering           │
-│   ⚠️ User wires machine mains L/N directly to external meter                │
+│   ⚠️ NO HV MEASUREMENT CIRCUITRY on control PCB - meter handles sensing     │
+│   ⚠️ J24 routes L/N/PE to meter; CT clamp wires directly to meter module    │
 │   ⚠️ CT clamp clips around machine's Live wire, connects to meter           │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -3429,7 +3445,7 @@ Deliver: Native project files, PDF schematic, Gerber files (Section 16.2), STEP 
 
 # Appendix A: Reference Documents
 
-**Safety Standards:** IEC 60950-1, IEC 62368-1, UL 60950-1
+**Safety Standards:** PCB creepage/clearance per IEC 60950-1 / IEC 62368-1. Full machine compliance to IEC 60335-x (household appliances) is at system level.
 
 **Key Datasheets:** Raspberry Pi Pico 2, RP2350, MAX31855, OPA342, TLV3201, MAX3485
 

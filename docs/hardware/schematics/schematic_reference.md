@@ -17,7 +17,7 @@
 5. **MAX3485 RS485 transceiver (U8)** - On-board with jumper-selectable 120Ω termination
 6. **JP2/JP3 NTC jumpers** - Select between 50kΩ (ECM) and 10kΩ (Rocket/Gaggia) NTC sensors
 7. **J26 reduced to 22-pos** - CT clamp pins removed (now on external module)
-8. **No HV on PCB for metering** - External modules handle their own mains connections
+8. **No HV measurement circuitry on PCB** - J24 provides L/N/PE pass-through to external meter
 9. **GPIO20 → RS485 DE/RE** - Direction control for industrial meters
 10. **Unified J26 Screw Terminal (22-pos)** - Switches, sensors, SSR outputs (no CT)
 11. **6.3mm spades retained ONLY for 220V AC**: Mains input (L, N, PE), relay outputs
@@ -345,7 +345,7 @@ critical for reliable operation inside hot espresso machine enclosures.
     Relay Contact Connections (All 220V AC - 6.3mm Spade Terminals):
     ─────────────────────────────────────────────────────────────────
 
-    K1 (Water LED):            K2 (Pump):                K3 (Solenoid):
+    K1 (Mains Lamp):           K2 (Pump):                K3 (Solenoid):
     J2-NO ── K1-NO             J3-NO ── K2-NO            J4-NO ── K3-NO
     (6.3mm spade, 220V)        (6.3mm spade, 220V 5A)    (6.3mm spade, 220V)
     COM internal to L_FUSED    COM internal to L_FUSED   COM internal to L_FUSED
@@ -1179,8 +1179,8 @@ critical for reliable operation inside hot espresso machine enclosures.
                     UNIVERSAL EXTERNAL POWER METER INTERFACE
     ════════════════════════════════════════════════════════════════════════════
 
-    ✅ NO HIGH VOLTAGE THROUGH CONTROL PCB FOR METERING!
-    ✅ External modules handle their own mains connections
+    ✅ NO HV MEASUREMENT CIRCUITRY ON CONTROL PCB - METER HANDLES SENSING
+    ✅ J24 provides L/N/PE pass-through to external meter (in existing HV zone)
     ✅ Supports TTL UART (direct) or RS485 (differential) meters
     ✅ Compatible with PZEM-004T, JSY-MK-163T/194T, Eastron SDM, and more
 
@@ -1269,9 +1269,10 @@ critical for reliable operation inside hot espresso machine enclosures.
     └────────────────────────────────────────────────────────────────────────┘
 
 
-    ⚠️  CRITICAL: NO HIGH VOLTAGE ON CONTROL PCB FOR METERING
+    ⚠️  CRITICAL: NO HV MEASUREMENT CIRCUITRY ON CONTROL PCB
     ────────────────────────────────────────────────────────────
-    • External meter module handles its own L, N, CT connections
+    • J24 routes L/N/PE to external meter (in PCB's existing HV zone)
+    • CT clamp wires directly to meter module (not via this PCB)
     • Control PCB provides ONLY 5V/3.3V power and UART/RS485 data
     • User wires machine mains directly to external module terminals
     • CT clamp connects directly to external module (not through PCB)
@@ -1420,9 +1421,9 @@ critical for reliable operation inside hot espresso machine enclosures.
     N            → J1-N (Mains Neutral)
     PE           → J1-PE (Protective Earth, to chassis)
 
-    NOTE: NO heater current or power metering HV flows through control PCB.
-    Heaters connect to external SSRs, power meters connect to mains
-    via their own terminals. PCB provides only LV control signals.
+    NOTE: No HV measurement circuitry on control PCB. Heaters connect to 
+    external SSRs. J24 provides L/N/PE pass-through to meter in existing
+    HV zone (same traces as relay L_FUSED bus). PCB provides LV control signals.
 
     RELAY OUTPUT NETS:
     ──────────────────
@@ -1464,7 +1465,7 @@ critical for reliable operation inside hot espresso machine enclosures.
 
     220V AC RELAY OUTPUTS (6.3mm Spade Terminals):
     ──────────────────────────────────────────────
-    J2-NO  → Relay K1 N.O. output (Water LED, 220V ≤100mA)
+    J2-NO  → Relay K1 N.O. output (Mains Lamp, 220V ≤100mA)
     J3-NO  → Relay K2 N.O. output (Pump, 220V 5A)
     J4-NO  → Relay K3 N.O. output (Solenoid, 220V ~0.5A)
 

@@ -1017,9 +1017,10 @@ Connect all sensors but do NOT connect mains loads. **All sensors connect to uni
 | Steam NTC         | 10, 11     | Room temp (~25°C)    | \_\_\_°C  |      |
 | Thermocouple      | 12, 13     | Room temp (~25°C)    | \_\_\_°C  |      |
 | Pressure          | 14, 15, 16 | 0 bar                | \_\_\_bar |      |
-| CT Clamp          | 17, 18     | (from PZEM J24)      |           |      |
-| SSR1 Control      | 19, 20     | 5V output            |           |      |
-| SSR2 Control      | 21, 22     | 5V output            |           |      |
+| SSR1 Control      | 17, 18     | 5V output            |           |      |
+| SSR2 Control      | 19, 20     | 5V output            |           |      |
+
+> **Note for CT Clamp:** CT clamp connects directly to the external power meter module (not via this PCB). Verify CT clamp wiring per meter module datasheet.
 
 > **Note for Steam Level Probe:** Single-wire connection on J26 Pin 5. Return path is via boiler chassis (PE/Earth connection required).
 
@@ -1032,8 +1033,8 @@ Connect all sensors but do NOT connect mains loads. **All sensors connect to uni
 | K1 - LED      | J2 (spade)    | Energize K1   | Click heard |      |
 | K2 - Pump     | J3 (spade)    | Energize K2   | Click heard |      |
 | K3 - Solenoid | J4 (spade)    | Energize K3   | Click heard |      |
-| SSR1 - Brew   | J26 Pin 19-20 | Energize SSR1 | SSR LED on  |      |
-| SSR2 - Steam  | J26 Pin 21-22 | Energize SSR2 | SSR LED on  |      |
+| SSR1 - Brew   | J26 Pin 17-18 | Energize SSR1 | SSR LED on  |      |
+| SSR2 - Steam  | J26 Pin 19-20 | Energize SSR2 | SSR LED on  |      |
 
 ---
 
