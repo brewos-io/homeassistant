@@ -3629,15 +3629,15 @@ See Section 7.2 for detailed explanation of the ground loop problem.
 
 The espresso machine environment (heat, humidity, coffee vapor) benefits from conformal coating:
 
-| Area | Coating | Notes |
-|------|---------|-------|
+| Area                            | Coating        | Notes                                         |
+| ------------------------------- | -------------- | --------------------------------------------- |
 | HV section (relays, MOVs, fuse) | ✅ Recommended | Prevents tracking from moisture/contamination |
-| Level probe trace area | ✅ Recommended | High-impedance, sensitive to moisture |
-| LV analog section | ✅ Recommended | Protects ADC inputs from drift |
-| Connectors (J15, J17, J26) | ❌ Mask off | Must remain solderable/conductive |
-| Pico module socket | ❌ Mask off | Module must be removable |
-| Relay contacts | ❌ Mask off | Internal, already sealed |
-| Test points (TP1-TP6) | ❌ Mask off | Must remain accessible |
+| Level probe trace area          | ✅ Recommended | High-impedance, sensitive to moisture         |
+| LV analog section               | ✅ Recommended | Protects ADC inputs from drift                |
+| Connectors (J15, J17, J26)      | ❌ Mask off    | Must remain solderable/conductive             |
+| Pico module socket              | ❌ Mask off    | Module must be removable                      |
+| Relay contacts                  | ❌ Mask off    | Internal, already sealed                      |
+| Test points (TP1-TP6)           | ❌ Mask off    | Must remain accessible                        |
 
 **Coating type:** Acrylic (MG Chemicals 419D) or silicone-based. Apply after all testing complete.
 

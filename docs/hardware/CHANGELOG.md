@@ -2,16 +2,16 @@
 
 ## Revision History
 
-| Rev    | Date     | Description                                                       |
-| ------ | -------- | ----------------------------------------------------------------- |
-| 2.23   | Dec 2025 | **CURRENT** - Design review action items (warnings, coating)      |
-| 2.22   | Dec 2025 | Engineering review fixes (thermal, GPIO protection)               |
-| 2.21.1 | Dec 2025 | Pico 2 compatibility fixes, power supply                          |
-| 2.21   | Dec 2025 | External power metering, multi-machine NTC support                |
-| 2.20   | Dec 2025 | Unified 22-pos screw terminal (J26)                               |
-| 2.19   | Dec 2025 | Removed spare relay K4                                            |
-| 2.17   | Nov 2025 | Brew-by-weight support (J15 8-pin)                                |
-| 2.16   | Nov 2025 | Production-ready specification                                    |
+| Rev    | Date     | Description                                                  |
+| ------ | -------- | ------------------------------------------------------------ |
+| 2.23   | Dec 2025 | **CURRENT** - Design review action items (warnings, coating) |
+| 2.22   | Dec 2025 | Engineering review fixes (thermal, GPIO protection)          |
+| 2.21.1 | Dec 2025 | Pico 2 compatibility fixes, power supply                     |
+| 2.21   | Dec 2025 | External power metering, multi-machine NTC support           |
+| 2.20   | Dec 2025 | Unified 22-pos screw terminal (J26)                          |
+| 2.19   | Dec 2025 | Removed spare relay K4                                       |
+| 2.17   | Nov 2025 | Brew-by-weight support (J15 8-pin)                           |
+| 2.16   | Nov 2025 | Production-ready specification                               |
 
 ---
 
@@ -35,6 +35,7 @@ Added detailed warning about grounding implications when using non-isolated TTL 
 #### 2. X2 Capacitor Bleed Resistor (Section 11.1)
 
 Added optional 1MΩ bleed resistor footprint (DNP) across X2 capacitor (C1):
+
 - Discharges capacitor when machine unplugged
 - Required for IEC 60950 certification compliance
 - τ = 0.1s, fully discharged in <1 second
@@ -42,6 +43,7 @@ Added optional 1MΩ bleed resistor footprint (DNP) across X2 capacitor (C1):
 #### 3. Conformal Coating Guidance (Section 16.4)
 
 Expanded from single line to detailed table specifying:
+
 - Areas to coat: HV section, level probe traces, LV analog section
 - Areas to mask: All connectors, Pico socket, relay contacts, test points
 - Recommended coating types: Acrylic (MG Chemicals 419D) or silicone
@@ -55,6 +57,7 @@ Added guidance to apply RTV silicone at module corners after testing to prevent 
 #### AC Oscillator Level Probe Validation (Section 3.4)
 
 Added Phase 2/3 test procedure for the production Wien-bridge oscillator circuit:
+
 - Oscilloscope verification of 160Hz AC output
 - Tap water vs distilled water testing
 - Sensitivity adjustment guidance (R95 value)
