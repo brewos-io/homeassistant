@@ -98,10 +98,10 @@
     C2:  470µF 6.3V Polymer (low ESR, long life in hot environment)
 ```
 
-## 1.3 5V to 3.3V Synchronous Buck Converter (v2.22 Update)
+## 1.3 5V to 3.3V Synchronous Buck Converter
 
-**⚠️ v2.22 CHANGE:** Replaced LDO (AP2112K) with synchronous buck converter (TPS563200)
-to eliminate thermal risk identified in engineering review.
+Uses a synchronous buck converter for high efficiency (>90%) and minimal heat dissipation,
+critical for reliable operation inside hot espresso machine enclosures.
 
 ```
                             3.3V SYNCHRONOUS BUCK CONVERTER
@@ -145,7 +145,7 @@ to eliminate thermal risk identified in engineering review.
     C4A: 22µF 10V X5R Ceramic, 1206 (output, parallel for ripple)
 ```
 
-## 1.4 Precision ADC Voltage Reference (v2.22 Addition)
+## 1.4 Precision ADC Voltage Reference
 
 **Purpose:** Provides stable reference for NTC measurements, eliminating supply drift errors.
 
@@ -353,15 +353,14 @@ to eliminate thermal risk identified in engineering review.
     Component Values:
     ─────────────────
     K1, K3: Panasonic APAN3105 (5V coil, 3A contacts, slim 5mm, IEC61010)
-            • K1 (Indicator Lamp): ~100mA load, 3A relay is plenty
-              ⚠️ v2.22 CLARIFICATION: Switches mains indicator lamp (low current)
+            • K1 (Indicator Lamp): Switches mains indicator lamp (~100mA load)
+              3A relay provides ample margin for this low-current application
             • K3 (Solenoid): ~0.5A load, 3A rating is plenty
     K2:     Omron G5LE-1A4 DC5 (5V coil, 16A contacts, standard size)
             • Pump motor needs robust contacts for inrush current
     D1-D3:  UF4007 (1A, 1000V, 75ns fast recovery) - DO-41
-            ⚠️ v2.22 UPGRADE: Fast recovery for snappier relay contact opening
-            • Standard 1N4007 causes slow coil decay → "lazy" contact opening
-            • UF4007 faster recovery reduces arc time at relay contacts
+            Fast recovery type ensures snappy relay contact opening
+            and reduces arc time at relay contacts
     Q1-Q3:  MMBT2222A (SOT-23)
     LED1-3: Green 0805, Vf~2.0V
     R20-22: 1kΩ 5% 0805 (transistor base)
@@ -1299,9 +1298,9 @@ to eliminate thermal risk identified in engineering review.
     Pin 6: DE/RE  → GPIO20 (RS485 direction control)
 
 
-    ⚠️ v2.22 CRITICAL FIX: 5V→3.3V LEVEL SHIFTING (PZEM RX LINE)
-    ─────────────────────────────────────────────────────────────
-    PZEM-004T outputs 5V TTL. RP2350 GPIO is NOT 5V tolerant!
+    ⚠️ CRITICAL: 5V→3.3V LEVEL SHIFTING (J17 RX LINE)
+    ─────────────────────────────────────────────────────
+    Some power meters (PZEM, JSY, etc.) output 5V TTL. RP2350 is NOT 5V tolerant!
     Without level shifting, 5V signals cause GPIO damage over time.
 
     SOLUTION: Resistive voltage divider on J17-4 (RX input):
@@ -1330,8 +1329,8 @@ to eliminate thermal risk identified in engineering review.
     U8:     MAX3485ESA+ or SP3485EN-L/TR (SOIC-8 or SOT-23-8)
     C70:    100nF 25V Ceramic, 0805 (U8 decoupling)
     R44:    33Ω 5%, 0805 (TX series protection)
-    R45:    2.2kΩ 1%, 0805 (⚠️ v2.22: RX level shift upper)
-    R45A:   3.3kΩ 1%, 0805 (⚠️ v2.22: RX level shift lower)
+    R45:    2.2kΩ 1%, 0805 (J17 RX 5V→3.3V level shift, upper)
+    R45A:   3.3kΩ 1%, 0805 (J17 RX 5V→3.3V level shift, lower)
     R45B:   33Ω 5%, 0805 (RX series after divider)
     R99:    120Ω 1%, 0805 (RS485 termination, via JP1)
     JP1:    Solder jumper for termination (default: open)

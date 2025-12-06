@@ -461,8 +461,8 @@ Use an integrated isolated AC/DC converter module for safety and simplicity.
 
 ### 5V to 3.3V Synchronous Buck Converter
 
-**⚠️ v2.22 CHANGE:** Replaced LDO (AP2112K) with synchronous buck converter (TPS563200)
-for improved thermal performance. LDO was identified as thermal risk in engineering review.
+Uses a synchronous buck converter for high efficiency and minimal heat dissipation,
+critical for reliable operation inside hot espresso machine enclosures.
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────┐
@@ -489,8 +489,8 @@ for improved thermal performance. LDO was identified as thermal risk in engineer
 │                               │                                     │         │
 │        GND                   GND                                   GND         │
 │                                                                                 │
-│    Regulator Selection (v2.22 Engineering Review Fix):                         │
-│    ───────────────────────────────────────────────────                         │
+│    Regulator Selection:                                                        │
+│    ───────────────────                                                         │
 │    Selected: TPS563200DDCR (SOT-23-6)                                         │
 │      - Topology: Synchronous Buck (integrated FETs)                           │
 │      - Efficiency: >90% (vs ~34% for LDO)                                     │
@@ -532,7 +532,7 @@ for improved thermal performance. LDO was identified as thermal risk in engineer
 └────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Precision ADC Voltage Reference (v2.22 Addition)
+### Precision ADC Voltage Reference
 
 **Purpose:** Provides stable, low-drift reference for NTC temperature measurements.
 Using 3.3V rail directly as ADC reference couples LDO/buck thermal drift into readings.
@@ -727,7 +727,7 @@ All relays use identical driver circuits with integrated indicator LEDs.
 │    ─────────────────────────                                                   │
 │    Q: MMBT2222A (SOT-23) - NPN transistor, Ic(max)=600mA, Vce(sat)<0.4V       │
 │    UF4007: Fast flyback diode, 1A, 1000V, 75ns recovery (DO-41)               │
-│           ⚠️ v2.22: Upgraded from 1N4007 for faster relay contact opening    │
+│           Fast recovery type for snappier relay contact opening               │
 │    LED: Green 0805, Vf=2.0V, If=6mA                                           │
 │    R20+n: 1kΩ 5% 0805 (base resistor)                                         │
 │    R30+n: 470Ω 5% 0805 (LED resistor - brighter than 1kΩ)                     │
@@ -736,8 +736,8 @@ All relays use identical driver circuits with integrated indicator LEDs.
 │    RELAY SELECTION (Optimized by load):                                       │
 │    ────────────────────────────────────                                       │
 │    K1 (Mains Indicator): Panasonic APAN3105 - 3A @ 250V AC, 5V coil, slim 5mm│
-│              ⚠️ v2.22 CLARIFICATION: Switches mains indicator lamp            │
-│              on machine front panel (~100mA load). 3A relay is plenty.       │
+│              Switches mains indicator lamp on machine front panel            │
+│              (~100mA load). 3A relay provides ample margin.                  │
 │    K2 (Pump): Omron G5LE-1A4 DC5 - 16A @ 250V AC, 5V coil, standard size     │
 │              DO NOT downsize - motor inrush needs robust contacts             │
 │    K3 (Solenoid): Panasonic APAN3105 - 3A @ 250V AC, 5V coil, slim 5mm       │
@@ -2047,9 +2047,9 @@ The control PCB provides a universal interface for connecting external power met
 │    │  5  │ TX    │ Output    │ GPIO6     │ Data to meter (via 33Ω)          │ │
 │    │  6  │ DE/RE │ Output    │ GPIO20    │ RS485 direction (TTL: NC)        │ │
 │                                                                                 │
-│    ⚠️ v2.22 CRITICAL FIX: 5V→3.3V LEVEL SHIFTING (PZEM RX LINE)              │
-│    ─────────────────────────────────────────────────────────────               │
-│    PZEM-004T and similar meters output 5V TTL. RP2350 is NOT 5V tolerant!    │
+│    ⚠️ CRITICAL: 5V→3.3V LEVEL SHIFTING (J17 RX LINE)                         │
+│    ─────────────────────────────────────────────────────                       │
+│    Some power meters (PZEM, JSY, etc.) output 5V TTL. RP2350 is NOT 5V tolerant!
 │    Without level shifting, 5V signals will damage GPIO7 over time.           │
 │                                                                                 │
 │    SOLUTION: Resistive voltage divider on RX input                            │
@@ -3080,26 +3080,26 @@ GPIO22 is available on **J15 Pin 8 (SPARE)** for future expansion:
 
 ## 14.1 Integrated Circuits
 
-| Qty | Ref | Description              | Part Number    | Package  | Notes                                        |
-| --- | --- | ------------------------ | -------------- | -------- | -------------------------------------------- |
-| 1   | U1  | Raspberry Pi Pico 2      | SC0942         | Module   | Or Pico 2 W (SC1632) for onboard WiFi        |
-| 1   | U2  | AC/DC Converter 5V 3A    | HLK-15M05C     | Module   | Isolated, 15W/3A (alt: Mean Well IRM-20-5)   |
-| 1   | U3  | 3.3V Sync Buck Converter | TPS563200DDCR  | SOT-23-6 | 3A, >90% eff. ⚠️ v2.22: Replaces AP2112K LDO |
-| 1   | U4  | Thermocouple Amp         | MAX31855KASA+  | SOIC-8   | K-type                                       |
-| 1   | U5  | Precision Voltage Ref    | LM4040DIM3-3.0 | SOT-23-3 | 3.0V shunt ref for ADC ⚠️ v2.22: NEW         |
-| 1   | U6  | Rail-to-Rail Op-Amp      | OPA342UA       | SOIC-8   | Level probe oscillator (alt: OPA207)         |
-| 1   | U7  | Precision Comparator     | TLV3201AIDBVR  | SOT-23-5 | Level probe detector                         |
-| 1   | U8  | RS485 Transceiver        | MAX3485ESA+    | SOIC-8   | For industrial meters (alt: SP3485EN-L/TR)   |
+| Qty | Ref | Description              | Part Number    | Package  | Notes                                      |
+| --- | --- | ------------------------ | -------------- | -------- | ------------------------------------------ |
+| 1   | U1  | Raspberry Pi Pico 2      | SC0942         | Module   | Or Pico 2 W (SC1632) for onboard WiFi      |
+| 1   | U2  | AC/DC Converter 5V 3A    | HLK-15M05C     | Module   | Isolated, 15W/3A (alt: Mean Well IRM-20-5) |
+| 1   | U3  | 3.3V Sync Buck Converter | TPS563200DDCR  | SOT-23-6 | 3A, >90% efficiency                        |
+| 1   | U4  | Thermocouple Amp         | MAX31855KASA+  | SOIC-8   | K-type                                     |
+| 1   | U5  | Precision Voltage Ref    | LM4040DIM3-3.0 | SOT-23-3 | 3.0V shunt reference for ADC               |
+| 1   | U6  | Rail-to-Rail Op-Amp      | OPA342UA       | SOIC-8   | Level probe oscillator (alt: OPA207)       |
+| 1   | U7  | Precision Comparator     | TLV3201AIDBVR  | SOT-23-5 | Level probe detector                       |
+| 1   | U8  | RS485 Transceiver        | MAX3485ESA+    | SOIC-8   | For industrial meters (alt: SP3485EN-L/TR) |
 
 ## 14.2 Transistors and Diodes
 
-| Qty | Ref     | Description        | Part Number | Package | Notes                                           |
-| --- | ------- | ------------------ | ----------- | ------- | ----------------------------------------------- |
-| 5   | Q1-Q5   | NPN Transistor     | MMBT2222A   | SOT-23  | Relay (3) + SSR (2) drivers                     |
-| 3   | D1-D3   | Fast Flyback Diode | UF4007      | DO-41   | ⚠️ v2.22: Fast recovery (75ns) for snappy relay |
-| 6   | D10-D15 | ESD Protection     | PESD5V0S1BL | SOD-323 | Sensor inputs                                   |
-| 1   | D16     | Schottky Clamp     | BAT54S      | SOT-23  | Pressure ADC overvoltage                        |
-| 1   | D20     | TVS Diode          | SMBJ5.0A    | SMB     | 5V rail protection                              |
+| Qty | Ref     | Description        | Part Number | Package | Notes                                         |
+| --- | ------- | ------------------ | ----------- | ------- | --------------------------------------------- |
+| 5   | Q1-Q5   | NPN Transistor     | MMBT2222A   | SOT-23  | Relay (3) + SSR (2) drivers                   |
+| 3   | D1-D3   | Fast Flyback Diode | UF4007      | DO-41   | Fast recovery (75ns) for snappy relay opening |
+| 6   | D10-D15 | ESD Protection     | PESD5V0S1BL | SOD-323 | Sensor inputs                                 |
+| 1   | D16     | Schottky Clamp     | BAT54S      | SOT-23  | Pressure ADC overvoltage                      |
+| 1   | D20     | TVS Diode          | SMBJ5.0A    | SMB     | 5V rail protection                            |
 
 ## 14.3 Passive Components - Resistors
 
@@ -3118,10 +3118,10 @@ GPIO22 is available on **J15 Pin 8 (SPARE)** for future expansion:
 | 2   | R34-R35 | 330Ω  | 5%        | 0805    | SSR Indicator LEDs (logic-side)                |
 | 4   | R40-R43 | 33Ω   | 5%        | 0805    | UART series (ESP32/Service)                    |
 | 1   | R44     | 33Ω   | 5%        | 0805    | PZEM TX series                                 |
-| 1   | R45     | 2.2kΩ | 1%        | 0805    | ⚠️ v2.22: PZEM RX level shifter (upper)        |
-| 1   | R45A    | 3.3kΩ | 1%        | 0805    | ⚠️ v2.22: PZEM RX level shifter (lower)        |
-| 1   | R45B    | 33Ω   | 5%        | 0805    | PZEM RX series (after divider)                 |
-| 1   | R7      | 1kΩ   | 1%        | 0805    | ⚠️ v2.22: LM4040 bias resistor                 |
+| 1   | R45     | 2.2kΩ | 1%        | 0805    | J17 RX 5V→3.3V level shifter (upper divider)   |
+| 1   | R45A    | 3.3kΩ | 1%        | 0805    | J17 RX 5V→3.3V level shifter (lower divider)   |
+| 1   | R45B    | 33Ω   | 5%        | 0805    | J17 RX series (after divider)                  |
+| 1   | R7      | 1kΩ   | 1%        | 0805    | LM4040 voltage reference bias resistor         |
 | 2   | R46-R47 | 4.7kΩ | 5%        | 0805    | I2C pull-ups (SDA, SCL)                        |
 | 1   | R48     | 330Ω  | 5%        | 0805    | Status LED                                     |
 | 1   | R49     | 100Ω  | 5%        | 0805    | Buzzer                                         |
@@ -3151,11 +3151,11 @@ GPIO22 is available on **J15 Pin 8 (SPARE)** for future expansion:
 | --- | ------- | -------- | ------- | ------------ | ------------------------------------------------------------ |
 | 1   | C1      | 100nF X2 | 275V AC | Radial       | Mains EMI filter                                             |
 | 1   | C2      | 100µF    | 16V     | Radial 6.3mm | 5V bulk, **Polymer** (low ESR, long life in hot environment) |
-| 1   | C3      | 22µF     | 25V     | 1206 Ceramic | ⚠️ v2.22: Buck input cap (X5R)                               |
-| 2   | C4,C4A  | 22µF     | 10V     | 1206 Ceramic | ⚠️ v2.22: Buck output caps (X5R, parallel)                   |
+| 1   | C3      | 22µF     | 25V     | 1206 Ceramic | Buck converter input cap (X5R)                               |
+| 2   | C4,C4A  | 22µF     | 10V     | 1206 Ceramic | Buck converter output caps (X5R, parallel)                   |
 | 1   | C5      | 100nF    | 25V     | 0805 Ceramic | 3.3V decoupling                                              |
-| 1   | C7      | 22µF     | 10V     | 1206 Ceramic | ⚠️ v2.22: ADC reference bulk cap                             |
-| 1   | C7A     | 100nF    | 25V     | 0805 Ceramic | ⚠️ v2.22: ADC reference HF decoupling                        |
+| 1   | C7      | 22µF     | 10V     | 1206 Ceramic | ADC reference bulk cap                                       |
+| 1   | C7A     | 100nF    | 25V     | 0805 Ceramic | ADC reference HF decoupling                                  |
 | 12  | C10-C21 | 100nF    | 25V     | 0805         | Decoupling (general)                                         |
 | 1   | C60     | 100nF    | 25V     | 0805         | OPA342 VCC decoupling                                        |
 | 2   | C61-C62 | 100nF    | 25V     | 0805         | Level probe Wien bridge timing                               |
@@ -3166,7 +3166,7 @@ GPIO22 is available on **J15 Pin 8 (SPARE)** for future expansion:
 | 1   | C40     | 10nF     | 50V     | 0805         | Thermocouple filter                                          |
 | 1   | C70     | 100nF    | 25V     | 0805         | RS485 transceiver (U8) decoupling                            |
 
-## 14.4a Inductors (v2.22 Addition - Buck Converter)
+## 14.4a Inductors
 
 | Qty | Ref | Value | Saturation | DCR    | Package | Notes                                |
 | --- | --- | ----- | ---------- | ------ | ------- | ------------------------------------ |
