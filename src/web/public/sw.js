@@ -1,10 +1,12 @@
 // Service Worker for BrewOS PWA
 //
-// IMPORTANT: CACHE_VERSION is auto-injected during build by vite.config.ts
-// Format: "{version}-{timestamp}" e.g., "0.2.0-2024-01-15T12-30-45-123Z"
-// This ensures cache is invalidated on every deployment.
+// IMPORTANT: CACHE_VERSION and IS_DEV_MODE are auto-injected by vite.config.ts
+// - CACHE_VERSION format: "{version}-{timestamp}" e.g., "0.2.0-2024-01-15T12-30-45-123Z"
+// - IS_DEV_MODE is true during dev server, false for production builds
+// This ensures cache is invalidated on every deployment and during development.
 //
-const CACHE_VERSION = "dev";
+const CACHE_VERSION = "dev-2025-12-07T07-12-15-376Z";
+const IS_DEV_MODE = true;
 const STATIC_CACHE_NAME = `brewos-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE_NAME = `brewos-runtime-${CACHE_VERSION}`;
 
@@ -19,12 +21,25 @@ const APP_SHELL = [
 ];
 
 // Patterns for different caching strategies
+// In dev mode: use network-first for JS/CSS to always get fresh code
+// In prod: use cache-first for performance
 const CACHE_FIRST_PATTERNS = [
-  /\.(?:js|css|woff2?|ttf|eot|ico|svg|png|jpg|jpeg|webp)$/,
+  /\.(?:woff2?|ttf|eot|ico|svg|png|jpg|jpeg|webp)$/, // Fonts and images only
   /^https:\/\/fonts\.(?:googleapis|gstatic)\.com/,
 ];
 
-const NETWORK_FIRST_PATTERNS = [/\/api\//, /\/ws/];
+const NETWORK_FIRST_PATTERNS = [
+  /\/api\//,
+  /\/ws/,
+  // In dev: always fetch JS/CSS fresh to avoid stale code
+  ...(IS_DEV_MODE ? [/\.(?:js|css)$/] : []),
+];
+
+// In production, also cache JS/CSS with cache-first for performance
+const PROD_CACHE_FIRST_PATTERNS = [
+  ...CACHE_FIRST_PATTERNS,
+  ...(!IS_DEV_MODE ? [/\.(?:js|css)$/] : []),
+];
 
 // Install event - cache app shell
 self.addEventListener("install", (event) => {
@@ -85,8 +100,8 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Cache-first for static assets (JS, CSS, fonts, images)
-  if (CACHE_FIRST_PATTERNS.some((pattern) => pattern.test(url.href))) {
+  // Cache-first for static assets (fonts, images, and in prod: JS/CSS)
+  if (PROD_CACHE_FIRST_PATTERNS.some((pattern) => pattern.test(url.href))) {
     event.respondWith(cacheFirst(request));
     return;
   }

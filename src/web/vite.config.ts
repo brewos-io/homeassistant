@@ -26,50 +26,75 @@ import fs from "fs";
  * Plugin to inject build version into service worker
  * This ensures the service worker cache is invalidated on every new build,
  * preventing stale JavaScript from being served.
+ * 
+ * For builds: Injects version at closeBundle
+ * For dev: Injects version on server start and updates public/sw.js directly
  */
-function serviceWorkerVersionPlugin(version: string): Plugin {
+function serviceWorkerVersionPlugin(version: string, isDev: boolean): Plugin {
+  const generateCacheVersion = () => {
+    const buildTime = new Date().toISOString().replace(/[:.]/g, "-");
+    return `${version}-${buildTime}`;
+  };
+
+  const injectVersion = (swPath: string) => {
+    if (!fs.existsSync(swPath)) {
+      console.warn("[SW Plugin] sw.js not found, skipping version injection");
+      return;
+    }
+
+    const cacheVersion = generateCacheVersion();
+    let content = fs.readFileSync(swPath, "utf-8");
+    
+    // Replace the placeholder with actual version
+    content = content.replace(
+      /const CACHE_VERSION = "[^"]+";/,
+      `const CACHE_VERSION = "${cacheVersion}";`
+    );
+    
+    // Mark dev mode in the SW
+    if (isDev) {
+      content = content.replace(
+        /const IS_DEV_MODE = [^;]+;/,
+        `const IS_DEV_MODE = true;`
+      );
+    }
+
+    fs.writeFileSync(swPath, content);
+    console.log(`[SW Plugin] Injected cache version: ${cacheVersion} (dev: ${isDev})`);
+  };
+
   return {
     name: "sw-version-inject",
-    apply: "build",
-    closeBundle() {
-      const outDir = this.meta?.watchMode ? "dist" : "dist"; // Always dist for cloud
-      const swPath = path.resolve(__dirname, outDir, "sw.js");
-
-      if (!fs.existsSync(swPath)) {
-        console.warn("[SW Plugin] sw.js not found in output, skipping version injection");
-        return;
+    apply: isDev ? undefined : "build", // Run in both dev and build
+    
+    // For dev server: update on start
+    configureServer(server) {
+      if (isDev) {
+        const swPath = path.resolve(__dirname, "public", "sw.js");
+        injectVersion(swPath);
+        
+        // Watch for changes to sw.js and re-inject (useful during SW development)
+        server.watcher.on('change', (file) => {
+          if (file.endsWith('sw.js')) {
+            setTimeout(() => injectVersion(swPath), 100);
+          }
+        });
       }
-
-      // Generate unique cache version: version + build timestamp
-      const buildTime = new Date().toISOString().replace(/[:.]/g, "-");
-      const cacheVersion = `${version}-${buildTime}`;
-
-      let content = fs.readFileSync(swPath, "utf-8");
-      
-      // Replace the placeholder with actual version
-      content = content.replace(
-        /const CACHE_VERSION = "[^"]+";/,
-        `const CACHE_VERSION = "${cacheVersion}";`
-      );
-      
-      // Also update console logs
-      content = content.replace(
-        /\[SW\] Installing v\d+\.\.\./g,
-        `[SW] Installing ${cacheVersion}...`
-      );
-      content = content.replace(
-        /\[SW\] Activating v\d+\.\.\./g,
-        `[SW] Activating ${cacheVersion}...`
-      );
-
-      fs.writeFileSync(swPath, content);
-      console.log(`[SW Plugin] Injected cache version: ${cacheVersion}`);
+    },
+    
+    // For builds: inject at closeBundle
+    closeBundle() {
+      if (!isDev) {
+        const swPath = path.resolve(__dirname, "dist", "sw.js");
+        injectVersion(swPath);
+      }
     },
   };
 }
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, command }) => {
   const isEsp32 = mode === "esp32";
+  const isDev = command === "serve";
   const env = loadEnv(mode, process.cwd(), "");
 
   // Version from RELEASE_VERSION env var (set by CI) or 'dev' for local builds
@@ -79,8 +104,8 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [
       react(),
-      // Inject version into service worker (cloud builds only)
-      !isEsp32 && serviceWorkerVersionPlugin(version),
+      // Inject version into service worker (all modes except ESP32)
+      !isEsp32 && serviceWorkerVersionPlugin(version, isDev),
     ].filter(Boolean),
     resolve: {
       alias: {
