@@ -83,7 +83,6 @@
 | Test leads with clips            | 10       | Connections           |
 | Breadboard (830 point)           | 2        | Circuit prototyping   |
 | Jumper wires                     | 50       | Connections           |
-| K-type thermocouple              | 1        | MAX31855 testing      |
 | LED (any color)                  | 5        | Output indication     |
 | 1kW resistive load (heater/lamp) | 1        | High current testing  |
 | Thermometer (digital)            | 1        | Reference temperature |
@@ -534,116 +533,7 @@ Verify the voltage divider correctly scales the YD4060's 0.5-4.5V output to **0.
 
 ---
 
-## 3.6 MAX31855 Thermocouple Test
-
-### Purpose
-
-Verify SPI communication and temperature reading accuracy.
-
-### Required
-
-- Raspberry Pi Pico 2 (or Pico 2 W)
-- MAX31855 breakout board (or MAX31855KASA+ with supporting components)
-- K-type thermocouple
-
-### Wiring
-
-| MAX31855 Pin | Pico GPIO | Notes                 |
-| ------------ | --------- | --------------------- |
-| VCC          | 3V3       | 3.3V power            |
-| GND          | GND       | Ground                |
-| DO           | GPIO16    | SPI MISO              |
-| CS           | GPIO17    | Chip Select           |
-| CLK          | GPIO18    | SPI Clock             |
-| T+           | TC+       | Thermocouple positive |
-| T-           | TC-       | Thermocouple negative |
-
-### Test Firmware (MicroPython)
-
-```python
-from machine import Pin, SPI
-import time
-
-# Initialize SPI
-spi = SPI(0, baudrate=5000000, polarity=0, phase=0,
-          sck=Pin(18), mosi=Pin(19), miso=Pin(16))
-cs = Pin(17, Pin.OUT)
-cs.value(1)
-
-def read_max31855():
-    cs.value(0)
-    time.sleep_us(1)
-    data = spi.read(4)
-    cs.value(1)
-
-    # Convert to 32-bit value
-    raw = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3]
-
-    # Check for faults
-    if raw & 0x7:
-        fault = raw & 0x7
-        if fault & 0x1:
-            return "FAULT: Open circuit"
-        if fault & 0x2:
-            return "FAULT: Short to GND"
-        if fault & 0x4:
-            return "FAULT: Short to VCC"
-
-    # Extract thermocouple temperature (bits 31-18, signed)
-    tc_temp = (raw >> 18) & 0x3FFF
-    if tc_temp & 0x2000:  # Negative
-        tc_temp = tc_temp - 16384
-    tc_temp = tc_temp * 0.25
-
-    # Extract cold junction temperature (bits 15-4, signed)
-    cj_temp = (raw >> 4) & 0xFFF
-    if cj_temp & 0x800:  # Negative
-        cj_temp = cj_temp - 4096
-    cj_temp = cj_temp * 0.0625
-
-    return f"TC: {tc_temp:.2f}°C, CJ: {cj_temp:.2f}°C"
-
-# Main loop
-print("MAX31855 Thermocouple Test")
-print("-" * 40)
-while True:
-    result = read_max31855()
-    print(result)
-    time.sleep(1)
-```
-
-### Test Procedure
-
-| Step | Action                       | Expected Result                       | ✓   |
-| ---- | ---------------------------- | ------------------------------------- | --- |
-| 1    | Upload test firmware to Pico | No errors                             |     |
-| 2    | Connect MAX31855, no TC      | "FAULT: Open circuit"                 |     |
-| 3    | Connect K-type TC            | Temperature reading                   |     |
-| 4    | TC at room temperature       | 20-28°C (verify with ref thermometer) |     |
-| 5    | TC in ice water              | 0°C ±2°C                              |     |
-| 6    | TC in boiling water          | 100°C ±2°C (altitude dependent)       |     |
-| 7    | Short TC+ to TC-             | "FAULT: Short to GND/VCC"             |     |
-| 8    | Cold junction temp           | Should match room temp                |     |
-
-### Results Log
-
-| Test Condition | Reference Temp | MAX31855 Reading | Error    | Pass |
-| -------------- | -------------- | ---------------- | -------- | ---- |
-| Room temp      | \_\_\_°C       | \_\_\_°C         | \_\_\_°C |      |
-| Ice water      | 0°C            | \_\_\_°C         | \_\_\_°C |      |
-| Hot water      | \_\_\_°C       | \_\_\_°C         | \_\_\_°C |      |
-| Cold junction  | \_\_\_°C       | \_\_\_°C         | \_\_\_°C |      |
-
-### Pass Criteria
-
-- [ ] SPI communication works (valid readings)
-- [ ] Open circuit fault detected correctly
-- [ ] Temperature readings within ±2°C of reference
-- [ ] No erratic readings or noise
-
----
-
-## 3.7 ESP32 Interface Test
+## 3.6 ESP32 Interface Test
 
 ### Purpose
 
@@ -779,7 +669,6 @@ while True:
 | All SMD components placed correctly  | No tombstoning              |      |
 | **Component Orientation**            |                             |      |
 | Pico module (if socketed)            | Pin 1 aligned               |      |
-| MAX31855 IC                          | Pin 1 dot aligned           |      |
 | HLW8012 IC                           | Pin 1 aligned               |      |
 | All diodes                           | Cathode band correct        |      |
 | Electrolytic capacitors              | Polarity correct            |      |
@@ -1081,7 +970,7 @@ ONLY proceed if:
 | Original control board removed                   | Documented wire positions  |      |
 | All machine wires labeled                        | Photos taken               |      |
 | New board PE connected                           | Continuity to chassis      |      |
-| **LV Wiring:** Wires stripped 6mm or ferrules    | Visual (J26 - all 22 pins) |      |
+| **LV Wiring:** Wires stripped 6mm or ferrules    | Visual (J26 - all 18 pins) |      |
 | **HV Wiring:** Spade connectors crimped properly | Tug test (J1, J2, J3, J4)  |      |
 
 ---
@@ -1098,13 +987,12 @@ Connect all sensors but do NOT connect mains loads. **All sensors connect to uni
 | Brew Handle       | 6, 7       | HIGH (handle down)   |           |      |
 | Brew NTC          | 8, 9       | Room temp (~25°C)    | \_\_\_°C  |      |
 | Steam NTC         | 10, 11     | Room temp (~25°C)    | \_\_\_°C  |      |
-| Thermocouple      | 12, 13     | Room temp (~25°C)    | \_\_\_°C  |      |
 | Pressure          | 14, 15, 16 | 0 bar                | \_\_\_bar |      |
 | SSR1 Control      | 17, 18     | 5V output            |           |      |
 | SSR2 Control      | 19, 20     | 5V output            |           |      |
 | Spare GND         | 21, 22     | 0V (GND)             |           |      |
 
-> **J26 Terminal Block:** Phoenix MKDS 1/22-5.08 (22-position, 5.08mm pitch). Pins 21-22 are spare GND terminals for convenience wiring.
+> **J26 Terminal Block:** Phoenix MKDS 1/18-5.08 (18-position, 5.08mm pitch).
 
 > **Note for CT Clamp:** CT clamp connects directly to the external power meter module (not via this PCB). Verify CT clamp wiring per meter module datasheet.
 
@@ -1181,7 +1069,6 @@ Connect all sensors but do NOT connect mains loads. **All sensors connect to uni
 | Risk             | Mitigation                     | Verified |
 | ---------------- | ------------------------------ | -------- |
 | ADC noise        | Analog ground isolation        |          |
-| Thermocouple EMI | Traces away from relays        |          |
 | UART corruption  | Series resistors installed     |          |
 | ESD damage       | ESD clamps on external signals |          |
 
@@ -1198,7 +1085,6 @@ Connect all sensors but do NOT connect mains loads. **All sensors connect to uni
 | 1.3 SSR Driver           | **_/_**/\_\_\_ | **\_\_\_** | Pass / Fail |
 | 1.4 Level Probe          | **_/_**/\_\_\_ | **\_\_\_** | Pass / Fail |
 | 1.5 Pressure             | **_/_**/\_\_\_ | **\_\_\_** | Pass / Fail |
-| 1.6 Thermocouple         | **_/_**/\_\_\_ | **\_\_\_** | Pass / Fail |
 | 1.7 ESP32 Interface      | **_/_**/\_\_\_ | **\_\_\_** | Pass / Fail |
 | 2.1 Visual Inspection    | **_/_**/\_\_\_ | **\_\_\_** | Pass / Fail |
 | 2.2 Pre-Power Tests      | **_/_**/\_\_\_ | **\_\_\_** | Pass / Fail |

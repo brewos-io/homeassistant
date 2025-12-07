@@ -18,6 +18,144 @@
 
 ---
 
+## v2.24.3 (December 7, 2025) - ⚠️ PRODUCTION READINESS ECO
+
+**Engineering Change Orders based on comprehensive production readiness review**
+
+### Critical Issues Addressed
+
+| Severity | Component         | Issue                    | Fix Applied                           | Impact                        |
+| -------- | ----------------- | ------------------------ | ------------------------------------- | ----------------------------- |
+| CRITICAL | F2                | Fuse undersized          | 500mA → **2A**                        | Prevents nuisance tripping    |
+| CRITICAL | MH1/TC            | Thermocouple ground loop | Documentation + isolation requirement | Prevents MAX31855 faults      |
+| HIGH     | R20-R22, R24-R25  | Relay saturation         | 1kΩ → **470Ω**                        | Guarantees relay pull-in      |
+| MEDIUM   | R11-R15, R19, R73 | RP2350 errata E9         | 10kΩ → **4.7kΩ**                      | Prevents GPIO latch-up        |
+| MEDIUM   | R93-R94           | RS485 failsafe (missing) | **Added** 20kΩ biasing resistors      | Idle bus noise immunity       |
+| MEDIUM   | D23-D24           | Service port protection  | **Added** 3.3V zener clamps           | Protects from 5V TTL adapters |
+
+### Component Value Changes
+
+| Ref | v2.24.2 | v2.24.3       | Reason                                    |
+| --- | ------- | ------------- | ----------------------------------------- |
+| F2  | 500mA   | **2A**        | HLK module can source 3A; 500mA too tight |
+| R11 | 10kΩ    | **4.7kΩ**     | RP2350 E9: 10kΩ marginal for 200µA leak   |
+| R12 | 10kΩ    | **4.7kΩ**     | RP2350 E9: 10kΩ marginal for 200µA leak   |
+| R13 | 10kΩ    | **4.7kΩ**     | RP2350 E9: 10kΩ marginal for 200µA leak   |
+| R14 | 10kΩ    | **4.7kΩ**     | RP2350 E9: 10kΩ marginal for 200µA leak   |
+| R15 | 10kΩ    | **4.7kΩ**     | RP2350 E9: 10kΩ marginal for 200µA leak   |
+| R19 | 10kΩ    | **4.7kΩ**     | RP2350 E9: 10kΩ marginal for 200µA leak   |
+| R20 | 1kΩ     | **470Ω**      | Forced β=30→14.5 for hard saturation      |
+| R21 | 1kΩ     | **470Ω**      | Forced β=30→14.5 for hard saturation      |
+| R22 | 1kΩ     | **470Ω**      | Forced β=30→14.5 for hard saturation      |
+| R24 | 1kΩ     | **470Ω**      | Forced β=30→14.5 for hard saturation      |
+| R25 | 1kΩ     | **470Ω**      | Forced β=30→14.5 for hard saturation      |
+| R73 | 10kΩ    | **4.7kΩ**     | RP2350 E9: 10kΩ marginal for 200µA leak   |
+| R93 | (none)  | **20kΩ**      | RS485 A line failsafe pull-up (NEW)       |
+| R94 | (none)  | **20kΩ**      | RS485 B line failsafe pull-down (NEW)     |
+| D23 | (none)  | **BZT52C3V3** | Service port TX 3.3V clamp (NEW)          |
+| D24 | (none)  | **BZT52C3V3** | Service port RX 3.3V clamp (NEW)          |
+
+### Technical Analysis
+
+#### 1. Fuse F2 Undersizing (CRITICAL)
+
+**Problem:** F2 rated at 500mA, but combined load approaches 1A during startup:
+
+- ESP32 WiFi burst: 500mA
+- Pico + peripherals: 300mA
+- Relay coils (simultaneous): 200mA
+- **Total: ~1A peak, ~700mA steady-state**
+
+**Fix:** Increased to 2A slow-blow. HLK-15M05C can deliver 3A (15W), so 2A provides protection while allowing normal operation.
+
+#### 2. Thermocouple Ground Loop (CRITICAL - PRODUCTION BLOCKER)
+
+**Problem:** MH1 connects PCB GND to Protective Earth. ECM Synchronika uses grounded-junction thermocouples (TC tip welded to M6 sheath, which contacts boiler body, which is grounded to PE). This creates:
+
+```
+Boiler → PE → MH1 → PCB GND → MAX31855 T- pin → Thermocouple
+```
+
+MAX31855 T- pin is internally biased to VCC/2 and must NOT be shorted to ground. Result: "Short to GND" fault, NaN readings.
+
+**Solutions:**
+
+1. **Digital Isolation** (professional): Add ADuM1201 + isolated DC-DC for MAX31855 circuit
+2. **Ungrounded TC Only** (operational restriction): Specify insulated-junction probes only
+3. **Float Logic GND** (not recommended): Remove MH1-PE connection (safety/EMI risk)
+
+**Action Taken:** Added critical warning in documentation. Recommend Solution 1 before production.
+
+#### 3. Relay Driver Saturation (HIGH)
+
+**Problem:** 1kΩ base resistors provide only 2.6mA base current from 3.3V GPIO:
+
+- Coil current (K2): 80mA
+- Forced β = 80mA / 2.6mA ≈ 30
+- MMBT2222A specs require β ≤ 10 for hard saturation (<0.1V Vce(sat))
+
+At β=30, transistor operates in linear region (Vce ≈ 0.3-0.6V), reducing relay coil voltage to ~4.5V. This marginally meets "Must Operate" spec (75% of 5V = 3.75V) but reduces reliability.
+
+**Fix:** 470Ω provides 5.5mA base current → forced β ≈ 14.5 → hard saturation → Vce(sat) < 0.2V → relay sees 4.8V.
+
+#### 4. RP2350 GPIO Latch-Up Errata E9 (MEDIUM)
+
+**Problem:** RP2350 silicon erratum where GPIO inputs with internal pull-downs can latch at ~2.1V due to pad leakage current (120-200µA typ). A 10kΩ resistor with 200µA develops 2.0V, failing to hold logic low (threshold typically 0.3×Vcc = 0.99V).
+
+**Fix:** 4.7kΩ resistors ensure even worst-case 200µA creates only 0.94V, recognized as valid logic low.
+
+**Affected Pins:** R11-R15 (relay/SSR drivers), R19 (RS485 control), R73 (WEIGHT_STOP).
+
+#### 5. RS485 Failsafe Biasing (MEDIUM)
+
+**Problem:** Industrial RS485 best practice requires pull-up on A and pull-down on B to define idle bus state when no driver active. Without bias, floating lines can pick up noise (pump motors, SSR switching) and be misinterpreted as data.
+
+**Fix:** Added R93 (20kΩ to +3.3V) on A line, R94 (20kΩ to GND) on B line.
+
+#### 6. Service Port Input Protection (MEDIUM)
+
+**Problem:** J16 debug port shares GPIO0/1 with ESP32. If technician connects 5V TTL USB-serial adapter, 5V directly applied to RP2350 pins (only 3.3V tolerant with active IOVDD). Series resistors R42/R43 (33Ω) provide virtually no overvoltage protection.
+
+**Fix:** Added D23/D24 (BZT52C3V3) 3.3V zener clamps on TX/RX lines.
+
+### Design Simplification
+
+**Thermocouple Removed (v2.24.3):**
+
+- Eliminated external K-type thermocouple support (U4, D22, C10, C40-C42)
+- Freed GPIO16/17/18 (SPI pins) for future expansion
+- J26 pins 12-13 now NC (not connected)
+- **Rationale**: Boiler NTC sensors provide sufficient temperature control; thermocouple required $5-7 isolation circuit to avoid ground loop; pressure profiling more valuable than group temp monitoring
+
+### BOM Impact
+
+| Change Type        | Count  | Est. Cost Impact   |
+| ------------------ | ------ | ------------------ |
+| Value changes only | 13     | $0 (same parts)    |
+| New components     | 4      | ~$0.50             |
+| Removed components | 5      | **-$3.50**         |
+| **Total BOM Δ**    | **12** | **-$3.00 savings** |
+
+### Production Status
+
+**DO NOT FABRICATE v2.24.2 without these fixes applied.**
+
+- **F2 fix:** Mandatory (prevents field failures)
+- **Relay driver fix:** Mandatory (reliability)
+- **RP2350 errata fix:** Strongly recommended (silicon-dependent)
+- **Thermocouple isolation:** Critical for grounded TC machines (ECM Synchronika)
+- **RS485/Service port:** Recommended for production robustness
+
+**Next Steps:**
+
+1. Update schematic with component value changes
+2. Implement thermocouple isolation circuit (ADuM1201 + B0505S)
+3. Generate new Gerbers from v2.24.3 design files
+4. Order prototype with all ECOs applied
+5. Validate fixes before production run
+
+---
+
 ## v2.24.2 (December 7, 2025) - 🔴 SAFETY COMPLIANCE FIXES
 
 **Corrects calculation error and safety violations in v2.24.1**

@@ -2,7 +2,7 @@
 
 Custom control PCB for ECM Synchronika dual-boiler espresso machine.
 
-**Current Version:** 2.24.2 (December 2025)
+**Current Version:** 2.24.3 (December 2025)
 
 ---
 
@@ -26,7 +26,7 @@ Custom control PCB for ECM Synchronika dual-boiler espresso machine.
 
 Plug & play replacement for the factory GICAR control board and PID controller:
 
-- **Temperature Control:** Dual PID for brew and steam boilers (NTC + thermocouple)
+- **Temperature Control:** Dual PID for brew and steam boilers (NTC sensors)
 - **Pressure Monitoring:** Real-time brew pressure via 0.5-4.5V transducer
 - **Power Metering:** External module support (PZEM, JSY, Eastron)
 - **Smart Features:** Brew-by-weight, shot timers, profiles via ESP32 display
@@ -57,7 +57,7 @@ Plug & play replacement for the factory GICAR control board and PID controller:
 
 | Connector | Type                  | Function                                           |
 | --------- | --------------------- | -------------------------------------------------- |
-| J26       | Screw Terminal 22-pos | All sensors & SSR control                          |
+| J26       | Screw Terminal 18-pos | All sensors & SSR control                          |
 | J15       | JST-XH 8-pin          | ESP32 display + brew-by-weight + expansion (Pin 8) |
 | J17       | JST-XH 6-pin          | Power meter UART/RS485                             |
 
@@ -87,7 +87,6 @@ See [Specification.md Section 14](Specification.md#14-bill-of-materials) for com
 | Item            | Specification                | Notes                          |
 | --------------- | ---------------------------- | ------------------------------ |
 | NTC Sensors     | 50kΩ @ 25°C (or 10kΩ)        | Machine-dependent, see JP2/JP3 |
-| Thermocouple    | **Type-K only**              | M6 thread for E61 group head   |
 | Pressure Sensor | **0.5-4.5V ratiometric**     | G1/4" or 1/8" NPT thread       |
 | Power Meter     | PZEM-004T, JSY-MK-163T, etc. | External module with CT clamp  |
 | SSRs            | 40A solid state relay × 2    | For brew and steam heaters     |

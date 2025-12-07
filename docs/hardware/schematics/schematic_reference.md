@@ -4,7 +4,7 @@
 
 **Board Size:** 130mm × 80mm (2-layer, 2oz copper)  
 **Enclosure:** 150mm × 100mm mounting area  
-**Revision:** v2.24.2  
+**Revision:** v2.24.3  
 **Date:** December 2025
 
 ---
@@ -14,7 +14,7 @@
 1. Universal external power metering interface (J17 LV + J24 HV)
 2. Multi-machine NTC compatibility via JP1/JP2 jumpers (50kΩ or 10kΩ)
 3. RS485 and TTL UART support via on-board MAX3485 transceiver
-4. Unified 22-position low-voltage terminal block (J26)
+4. Unified 18-position low-voltage terminal block (J26)
 5. OPA342 + TLV3201 AC-excited level probe (prevents electrolysis)
 6. Buffered precision ADC reference (LM4040 + OPA2342)
 7. HLK-15M05C isolated power supply (5V 3A)
@@ -53,6 +53,7 @@
     Component Values:
     ─────────────────
     F1:  Littelfuse 0218010.MXP, 10A 250V, 5x20mm, Slow-blow (relay loads only ~6A)
+    F2:  Littelfuse 0218002.MXP, 2A 250V, 5x20mm, Slow-blow
     RV1: Epcos S14K275 or Littelfuse V275LA20AP, 275VAC, 14mm disc
     C1:  TDK B32922C3104M, 100nF, 275VAC, X2 Safety Rated
 ```
@@ -385,12 +386,12 @@ The LM4040 is buffered by an op-amp to drive the NTC pull-up network without vol
                                   │    C    │                      │
                                   │  Q1/2/3 │  MMBT2222A           │
                                   │   NPN   │  SOT-23              │
-    GPIO (10/11/12) ────[1kΩ]────►│    B    │                      │
+    GPIO (10/11/12) ────[470Ω]───►│    B    │                      │
                         R20+n     │    E    ├──────────────────────┘
                            │      └────┬────┘
                       ┌────┴────┐      │
-                      │  10kΩ   │     ─┴─
-                      │  R10+n  │     GND
+                      │  4.7kΩ  │     ─┴─
+                      │  R11+n  │     GND
                       │ Pull-dn │
                       └────┬────┘
                           ─┴─
@@ -426,9 +427,9 @@ The LM4040 is buffered by an op-amp to drive the NTC pull-up network without vol
             and reduces arc time at relay contacts
     Q1-Q3:  MMBT2222A (SOT-23)
     LED1-3: Green 0805, Vf~2.0V
-    R20-22: 1kΩ 5% 0805 (transistor base)
+    R20-22: 470Ω 5% 0805 (transistor base)
     R30-32: 470Ω 5% 0805 (LED current limit - gives 6.4mA)
-    R10-12: 10kΩ 5% 0805 (pull-down, ensures relay off at boot)
+    R11-13: 4.7kΩ 5% 0805 (pull-down per RP2350 errata E9)
 
     ═══════════════════════════════════════════════════════════════════════════
     MOV ARC SUPPRESSION (Inductive Load Protection)
@@ -536,10 +537,10 @@ The LM4040 is buffered by an op-amp to drive the NTC pull-up network without vol
              └───────────────────────────────────────────────►│    E    │
                                                               └────┬────┘
                                                                    │
-    GPIO (13/14) ───────[1kΩ R24/25]──────────────────────────────►B
+    GPIO (13/14) ───────[470Ω R24/25]─────────────────────────────►B
                                   │                                │
                              ┌────┴────┐                          ─┴─
-                             │  10kΩ   │                          GND
+                             │  4.7kΩ  │                          GND
                              │ R14/15  │
                              └────┬────┘
                                  ─┴─
@@ -575,9 +576,9 @@ The LM4040 is buffered by an op-amp to drive the NTC pull-up network without vol
     Component Values:
     ─────────────────
     External SSRs: KS15 D-24Z25-LQ (25A, 4-32V DC input, 24-280V AC output)
-    R24-25: 1kΩ 5% 0805 (transistor base drive, ~3mA)
+    R24-25: 470Ω 5% 0805 (transistor base drive)
     R34-35: 330Ω 5% 0805 (LED current limit, ~8mA brighter indicator)
-    R14-15: 10kΩ 5% 0805 (pull-down, keeps SSR OFF at boot)
+    R14-15: 4.7kΩ 5% 0805 (pull-down per RP2350 errata E9)
     Q5-Q6:  MMBT2222A (SOT-23), Vce(sat) < 0.3V @ 100mA
     LED5-6: Orange 0805, Vf~2.0V
 ```
@@ -662,113 +663,7 @@ The LM4040 is buffered by an op-amp to drive the NTC pull-up network without vol
     • Steam (135°C): ~25 ADC counts/°C → 0.04°C resolution
 ```
 
-## 5.2 K-Type Thermocouple Input
-
-**Sensor Requirement:** MAX31855K supports Type-K thermocouples only.
-
-- Type-K (Chromel/Alumel) - Standard for E61 group head thermometers
-- Type-J, Type-T, PT100/RTD require different amplifier chips
-
-**Thermocouple Junction:** Use ungrounded (insulated) junction thermocouples to avoid
-ground loops through the boiler PE connection. See Specification §7.2 for details.
-
-```
-                   K-TYPE THERMOCOUPLE INPUT
-                      with ESD Protection & Common-Mode Filter
-    ════════════════════════════════════════════════════════════════════════════
-
-                                    +3.3V
-                                      │
-                                 ┌────┴────┐
-                                 │  100nF  │ C10 (MAX31855 decoupling)
-                                 └────┬────┘
-                                      │
-                                      │           U4: MAX31855KASA+
-                                      │          ┌─────────────────────────┐
-                                      │          │                         │
-    J26-12 ──┬──────────┬─────────────┼──────────┤ T+   (1)        VCC (8) ├── +3.3V
-    (TC+)    │          │             │          │                         │
-             │          │             │          │                         │
-           ┌─┴─┐    ┌───┴───┐     ┌───┴───┐     │                         │
-           │D22│    │ C41   │     │ C40   │     │                         │
-           │ESD│    │ 1nF   │     │ 10nF  │     │                         │
-           │TVS│    │ (CM)  │     │(Diff) │     │                         │
-           └─┬─┘    └───┬───┘     └───┬───┘     │                         │
-             │          │             │          │                         │
-    J26-13 ──┴──────────┼─────────────┼──────────┤ T-   (2)        SCK (7) ├── GPIO18
-    (TC-)               │             │          │                         │
-                    ┌───┴───┐         │          │                         │
-                    │ C42   │         │      NC──┤ NC   (3)         CS (6) ├── GPIO17
-                    │ 1nF   │         │          │                         │
-                    │ (CM)  │         │          │                         │
-                    └───┬───┘         │     GND──┤ GND  (4)         DO (5) ├── GPIO16
-                        │             │          │                         │
-                       ─┴─           ─┴─         └─────────────────────────┘
-                       GND           GND
-
-
-    PROTECTION STAGES:
-    ──────────────────────────
-
-    1. ESD PROTECTION (D22: TPD2E001DRLR) - Place CLOSEST to J26 connector
-       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-       - Dual-line bidirectional TVS diode
-       - ±15kV HBM ESD protection
-       - Ultra-low capacitance: <0.5pF (won't affect µV-level TC signal)
-       - Protects MAX31855 from static discharge during installation
-
-    2. COMMON-MODE FILTER (C41, C42: 1nF) - Between ESD and differential filter
-       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-       - Shunts common-mode RF/EMI to ground
-       - Small value (1nF) doesn't affect TC response time
-       - Protects against chassis-coupled interference from pump motor
-
-    3. DIFFERENTIAL FILTER (C40: 10nF) - Place CLOSEST to MAX31855
-       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-       - Filters differential noise between T+ and T-
-       - Standard recommended filter for MAX31855
-
-    Component Values:
-    ─────────────────
-    U4:  MAX31855KASA+, SOIC-8 (K-type thermocouple specific)
-    D22: TPD2E001DRLR, SOT-553 (dual-line ESD, <0.5pF, ±15kV HBM)
-    C40: 10nF 50V Ceramic, 0805 (differential filter)
-    C41: 1nF 50V Ceramic, 0805 (T+ common-mode filter)
-    C42: 1nF 50V Ceramic, 0805 (T- common-mode filter)
-    C10: 100nF 25V Ceramic, 0805 (VCC decoupling)
-
-    Thermocouple Connector:
-    ───────────────────────
-    J26-12/13: Thermocouple connections (part of unified 22-pos terminal)
-    Pin 12: TC+ (Yellow for K-type, or check thermocouple wire color code)
-    Pin 13: TC- (Red for K-type)
-
-    PCB LAYOUT ORDER (signal flow from connector to IC):
-    ────────────────────────────────────────────────────
-    J26 → D22 (ESD) → C41/C42 (CM) → C40 (Diff) → MAX31855
-
-    NOTE: Use proper K-type thermocouple connectors if available
-
-    Component Values:
-    ─────────────────
-    U4:  MAX31855KASA+, SOIC-8, K-type specific
-    C40: 10nF 50V Ceramic, 0805 (differential noise filter)
-    C10: 100nF 25V Ceramic, 0805 (VCC decoupling)
-
-    PCB Layout Notes:
-    ─────────────────
-    • Keep T+ and T- traces short and symmetric
-    • Route away from power traces and relay coils
-    • Add ground guard ring around thermocouple traces
-
-    ⚠️ GROUND LOOP WARNING:
-    ───────────────────────
-    Grounded junction thermocouples (TC junction welded to sheath) create a
-    ground loop: Boiler → PE → MH1 → PCB GND → MAX31855 GND → T- → Boiler.
-    This causes "Short to GND" fault. MUST use UNGROUNDED (insulated) TC!
-```
-
-## 5.3 Pressure Transducer Input (J26 Pin 14-16 - Amplified 0.5-4.5V)
+## 5.2 Pressure Transducer Input (J26 Pin 14-16 - Amplified 0.5-4.5V)
 
 **⚠️ SENSOR RESTRICTION:** Circuit designed for **0.5-4.5V ratiometric ONLY**.
 
@@ -840,7 +735,7 @@ ground loops through the boiler PE connection. See Specification §7.2 for detai
     - Wiring: Red=5V, Black=GND, Yellow=Signal
 ```
 
-## 5.4 Digital Switch Inputs (J26 - Low Voltage Only)
+## 5.3 Digital Switch Inputs (J26 - Low Voltage Only)
 
 ```
                         DIGITAL SWITCH INPUTS
@@ -908,7 +803,7 @@ ground loops through the boiler PE connection. See Specification §7.2 for detai
                             │
                      VCC────┤
                             │ U6: OPA342
-    ┌────[R91 10kΩ]─────────┤-  (Op-Amp)  ├──┬───────────► AC_OUT
+    ┌────[R81 10kΩ]─────────┤-  (Op-Amp)  ├──┬───────────► AC_OUT
     │                  ┌────┤+             │  │              (to probe)
     │                  │    │     GND      │  │
     │                  │    └──────┬───────┘  │
@@ -916,7 +811,7 @@ ground loops through the boiler PE connection. See Specification §7.2 for detai
     │                  │          ─┴─         │
     │                  │          GND         │
     │             ┌────┴────┐                 │
-    │             │  4.7kΩ  │ R91A            │
+    │             │  4.7kΩ  │ R82             │
     │             │   1%    │ (Gain setting)  │
     │             └────┬────┘                 │
     │                  │                      │
@@ -925,7 +820,7 @@ ground loops through the boiler PE connection. See Specification §7.2 for detai
     │                  │                      │
     │             ┌────┴────┐           ┌────┴────┐
     │             │  10kΩ   │           │  10kΩ   │
-    │             │  R92    │           │  R93    │
+    │             │  R83    │           │  R84    │
     │             └────┬────┘           └────┬────┘
     │                  │                     │
     │                  ├─────────────────────┤
@@ -943,7 +838,7 @@ ground loops through the boiler PE connection. See Specification §7.2 for detai
     STAGE 2: PROBE & SIGNAL CONDITIONING                                     │
     ────────────────────────────────────                                      │
                                                                               │
-    AC_OUT ───[100Ω R94]───┬────────────────────► J26 Pin 5 (Level Probe S3) │
+    AC_OUT ───[100Ω R85]───┬────────────────────► J26 Pin 5 (Level Probe S3) │
            (current limit) │                      Screw terminal (LV)         │
                            │                           │                      │
                       ┌────┴────┐                 ┌────┴────┐                 │
@@ -968,7 +863,7 @@ ground loops through the boiler PE connection. See Specification §7.2 for detai
                                    │
                               VCC──┤
                                    │ U7: TLV3201
-    AC_SENSE ────[10kΩ R95]───┬────┤+  (Comparator) ├───────────► GPIO4
+    AC_SENSE ────[10kΩ R86]───┬────┤+  (Comparator) ├───────────► GPIO4
                               │    │                 │
                          ┌────┴────┐    VREF ────────┤-
                          │  100nF  │    (1.65V)      │
@@ -979,11 +874,11 @@ ground loops through the boiler PE connection. See Specification §7.2 for detai
                              ─┴─            GND
                              GND
 
-    VREF Divider:   +3.3V ──[100kΩ R96]──┬──[100kΩ R97]── GND
-                                          │
-                                          └──► VREF (~1.65V)
+    VREF Divider:   +3.3V ──[100kΩ R87]──┬──[100kΩ R88]── GND
+                                         │
+                                         └──► VREF (~1.65V)
 
-    Hysteresis:     GPIO4 ────[1MΩ R98]────► + input (TLV3201)
+    Hysteresis:     GPIO4 ────[1MΩ R89]────► + input (TLV3201)
 
     Logic States:
     ─────────────
@@ -995,22 +890,22 @@ ground loops through the boiler PE connection. See Specification §7.2 for detai
     U6:   OPA342UA (SOIC-8) or OPA2342UA (use one section)
           Alt: OPA207 for lower noise
     U7:   TLV3201AIDBVR (SOT-23-5)
-    R91:  10kΩ 1%, 0805 (oscillator feedback)
-    R91A: 4.7kΩ 1%, 0805 (gain setting resistor to GND, sets A_CL=3.13)
-    R92:  10kΩ 1%, 0805 (Wien bridge)
-    R93:  10kΩ 1%, 0805 (Wien bridge)
-    R94:  100Ω 5%, 0805 (probe current limit)
-    R95:  10kΩ 5%, 0805 (AC bias)
-    R96:  100kΩ 1%, 0805 (reference divider)
-    R97:  100kΩ 1%, 0805 (reference divider)
-    R98:  1MΩ 5%, 0805 (hysteresis)
+    R81:  10kΩ 1%, 0805 (oscillator feedback)
+    R82:  4.7kΩ 1%, 0805 (gain setting resistor to GND, sets A_CL=3.13)
+    R83:  10kΩ 1%, 0805 (Wien bridge)
+    R84:  10kΩ 1%, 0805 (Wien bridge)
+    R85:  100Ω 5%, 0805 (probe current limit)
+    R86:  10kΩ 5%, 0805 (AC bias)
+    R87:  100kΩ 1%, 0805 (reference divider upper)
+    R88:  100kΩ 1%, 0805 (reference divider lower)
+    R89:  1MΩ 5%, 0805 (hysteresis)
     C60:  100nF 25V, 0805 (OPA342 decoupling)
     C61:  10nF 50V, 0805 (Wien bridge timing - 1.6kHz for probe longevity)
     C62:  10nF 50V, 0805 (Wien bridge timing - 1.6kHz for probe longevity)
 
     Oscillator Gain Calculation:
     ────────────────────────────
-    A_CL = 1 + (R91/R91A) = 1 + (10kΩ/4.7kΩ) = 3.13
+    A_CL = 1 + (R81/R82) = 1 + (10kΩ/4.7kΩ) = 3.13
     Loop gain = A_CL × β = 3.13 × (1/3) = 1.043 > 1 ✓
 
     Barkhausen Criterion Satisfied: Loop gain >1 ensures robust oscillation startup
@@ -1045,8 +940,8 @@ ground loops through the boiler PE connection. See Specification §7.2 for detai
     ─────────────────────────────
     • Uses commonly available, modern components
     • AC excitation prevents electrolysis and probe corrosion
-    • Adjustable threshold via R96/R97 ratio
-    • Clean hysteresis via R98
+    • Adjustable threshold via R87/R88 ratio
+    • Clean hysteresis via R89
     • Low power consumption (<1mA)
 
     Other Switches (unchanged):
@@ -1213,7 +1108,7 @@ ground loops through the boiler PE connection. See Specification §7.2 for detai
     ─────────────────
     R40-41: 33Ω 5%, 0805 (UART series protection)
     R71-72: 10kΩ 5%, 0805 (RUN/BOOTSEL pull-ups)
-    R73:    10kΩ 5%, 0805 (WEIGHT_STOP pull-down)
+    R73:    4.7kΩ 5%, 0805 (WEIGHT_STOP pull-down, RP2350 E9)
     C13:    100µF 10V, Electrolytic (ESP32 power decoupling)
 ```
 
@@ -1237,13 +1132,27 @@ ground loops through the boiler PE connection. See Specification §7.2 for detai
 
                                     ┌────┐
     GPIO0 ──────────────────────────┤ 33Ω├──┬──────────────── J15 Pin 3 (ESP32 RX)
-    (UART0_TX)                      │R40 │  │
-                                    └────┘  └──────────────── J16 Pin 3 (Service TX)
+    (UART0_TX)                      │R42 │  │
+                                    └────┘  ├──────────────── J16 Pin 3 (Service TX)
+                                            │
+                                       ┌────┴────┐
+                                       │  D23    │  3.3V Zener
+                                       │BZT52C3V3│
+                                       └────┬────┘
+                                           ─┴─
+                                           GND
 
                                     ┌────┐
     GPIO1 ◄─────────────────────────┤ 33Ω├──┬──────────────── J15 Pin 4 (ESP32 TX)
-    (UART0_RX)                      │R41 │  │
-                                    └────┘  └──────────────── J16 Pin 4 (Service RX)
+    (UART0_RX)                      │R43 │  │
+                                    └────┘  ├──────────────── J16 Pin 4 (Service RX)
+                                            │
+                                       ┌────┴────┐
+                                       │  D24    │  3.3V Zener
+                                       │BZT52C3V3│
+                                       └────┬────┘
+                                           ─┴─
+                                           GND
 
     I2C ACCESSORY PORT (J23) - GPIO8/9:
     ────────────────────────────────────
@@ -1261,6 +1170,13 @@ ground loops through the boiler PE connection. See Specification §7.2 for detai
     Configuration:
     ──────────────
     Default baud rate: 115200, 8N1
+
+    Component Values:
+    ─────────────────
+    R42:  33Ω 5%, 0805 (Service TX series)
+    R43:  33Ω 5%, 0805 (Service RX series)
+    D23:  BZT52C3V3 3.3V Zener, SOD-123 (TX overvoltage clamp)
+    D24:  BZT52C3V3 3.3V Zener, SOD-123 (RX overvoltage clamp)
 
     Silkscreen: "3V3 GND TX RX" or "DEBUG"
 ```
@@ -1395,10 +1311,17 @@ ground loops through the boiler PE connection. See Specification §7.2 for detai
     │                                ─┴─                                     │
     │                                GND                                     │
     │                                                                        │
-    │   TERMINATION (Jumper Selectable):                                     │
-    │   ─────────────────────────────────                                    │
-    │   RS485 differential bus (A/B) - no termination resistor                 │
-    │   (Not required for short cable runs inside machine enclosure)         │
+    │   FAILSAFE BIASING:                                                      │
+    │   ──────────────────                                                   │
+    │   R93: 20kΩ pull-up on A line (to +3.3V)                               │
+    │   R94: 20kΩ pull-down on B line (to GND)                               │
+    │                                                                        │
+    │   Defines bus idle state when no driver active, prevents noise         │
+    │   from being interpreted as data in electrically noisy environment.    │
+    │                                                                        │
+    │   TERMINATION:                                                         │
+    │   ─────────────                                                        │
+    │   No termination resistor (not required for short cable runs)          │
     │                                                                        │
     └────────────────────────────────────────────────────────────────────────┘
 
@@ -1495,6 +1418,8 @@ ground loops through the boiler PE connection. See Specification §7.2 for detai
     R45:    2.2kΩ 1%, 0805 (J17 RX 5V→3.3V level shift, upper)
     R45A:   3.3kΩ 1%, 0805 (J17 RX 5V→3.3V level shift, lower)
     R45B:   33Ω 5%, 0805 (RX series after divider)
+    R93:    20kΩ 5%, 0805 (RS485 failsafe bias - A line pull-up)
+    R94:    20kΩ 5%, 0805 (RS485 failsafe bias - B line pull-down)
 
     ⚠️ RS485 SURGE PROTECTION (D21):
     ─────────────────────────────────
@@ -1608,7 +1533,7 @@ ground loops through the boiler PE connection. See Specification §7.2 for detai
     ───────────
     +5V          → Pico VSYS, Relay coils, SSR drivers, ESP32 (J15-1), LED anodes
     +3.3V        → Pico 3V3, Digital I/O, pull-ups, MAX3485 (U8)
-    +3.3V_ANALOG → ADC reference, NTC dividers, MAX31855
+    +3.3V_ANALOG → ADC reference, NTC dividers
     GND          → System ground (isolated from mains PE)
 
     HIGH VOLTAGE NETS (⚠️ MAINS):
@@ -1646,9 +1571,9 @@ ground loops through the boiler PE connection. See Specification §7.2 for detai
     GPIO13 → SSR1_DRIVE
     GPIO14 → SSR2_DRIVE
     GPIO15 → STATUS_LED
-    GPIO16 → SPI_MISO (MAX31855 DO)
-    GPIO17 → SPI_CS (MAX31855 CS)
-    GPIO18 → SPI_SCK (MAX31855 CLK)
+    GPIO16 → SPARE (SPI0 MISO)
+    GPIO17 → SPARE (SPI0 CS)
+    GPIO18 → SPARE (SPI0 SCK)
     GPIO19 → BUZZER
     GPIO20 → RS485_DE_RE (MAX3485 direction control, J17-6)
     GPIO21 → WEIGHT_STOP (J15-7, ESP32 brew-by-weight signal)
@@ -1685,7 +1610,7 @@ ground loops through the boiler PE connection. See Specification §7.2 for detai
           and are NOT available on the 40-pin header.
           For expansion, use GPIO22 via J15 Pin 8 (SPARE).
 
-    J26 UNIFIED LOW-VOLTAGE TERMINAL BLOCK (22-pos):
+    J26 UNIFIED LOW-VOLTAGE TERMINAL BLOCK (18-pos):
     ─────────────────────────────────────────────────
     J26-1  (S1)    → Water Reservoir Switch Signal → GPIO2
     J26-2  (S1-G)  → Water Reservoir Switch GND
@@ -1698,17 +1623,13 @@ ground loops through the boiler PE connection. See Specification §7.2 for detai
     J26-9  (T1-G)  → Brew NTC GND
     J26-10 (T2)    → Steam NTC Signal → ADC1 via divider
     J26-11 (T2-G)  → Steam NTC GND
-    J26-12 (TC+)   → Thermocouple + → MAX31855
-    J26-13 (TC-)   → Thermocouple - → MAX31855
-    J26-14 (P-5V)  → Pressure transducer 5V
-    J26-15 (P-GND) → Pressure transducer GND
-    J26-16 (P-SIG) → Pressure signal → ADC2 via divider
-    J26-17 (SSR1+) → +5V (Brew heater SSR power)
-    J26-18 (SSR1-) → SSR1_NEG (Brew heater SSR trigger)
-    J26-19 (SSR2+) → +5V (Steam heater SSR power)
-    J26-20 (SSR2-) → SSR2_NEG (Steam heater SSR trigger)
-    J26-21 (GND)   → Spare ground
-    J26-22 (GND)   → Spare ground
+    J26-12 (P-5V)  → Pressure transducer 5V
+    J26-13 (P-GND) → Pressure transducer GND
+    J26-14 (P-SIG) → Pressure signal → ADC2 via divider
+    J26-15 (SSR1+) → +5V (Brew heater SSR power)
+    J26-16 (SSR1-) → SSR1_NEG (Brew heater SSR trigger)
+    J26-17 (SSR2+) → +5V (Steam heater SSR power)
+    J26-18 (SSR2-) → SSR2_NEG (Steam heater SSR trigger)
 
     ⚠️ CT CLAMP: Connects directly to external power meter module (not on J26)
 

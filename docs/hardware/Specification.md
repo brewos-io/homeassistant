@@ -101,7 +101,7 @@ This specification defines a custom control PCB to replace the factory GICAR con
 │   ┌─────────────────┐     ┌─────────────────────────────────────────────────┐  │
 │   │  MACHINE LOADS  │     │  SENSORS                                        │  │
 │   │  • Pump Motor   │     │  • NTC Thermistors (Brew/Steam boilers)        │  │
-│   │  • 3-Way Valve  │     │  • K-Type Thermocouple (Brew head)             │  │
+│   │  • 3-Way Valve  │     │  • (future expansion)                          │  │
 │   │  • Brew Heater  │     │  • Pressure Transducer (0.5-4.5V)              │  │
 │   │  • Steam Heater │     │  • Water Level Switches                         │  │
 │   │  • Mains Lamp   │     │  • Steam Boiler Level Probe                     │  │
@@ -162,13 +162,11 @@ This specification defines a custom control PCB to replace the factory GICAR con
 | S4  | Brew Handle Switch           | SPST N.O./N.C.        | Digital, Active Low | J26 Pin 6-7   |
 | T1  | Brew Boiler Temp             | NTC 50kΩ @ 25°C       | Analog (ADC)        | J26 Pin 8-9   |
 | T2  | Steam Boiler Temp            | NTC 50kΩ @ 25°C       | Analog (ADC)        | J26 Pin 10-11 |
-| T3  | Brew Head Temp               | K-Type Thermocouple   | SPI (MAX31855K)     | J26 Pin 12-13 |
 | P1  | Pressure Transducer (YD4060) | 0.5-4.5V, 0-16 bar    | Analog (ADC)        | J26 Pin 14-16 |
 
 **⚠️ SENSOR COMPATIBILITY NOTES:**
 
 - **NTC:** Default configured for 50kΩ @ 25°C. Use JP2/JP3 solder jumpers to switch to 10kΩ (see Section 7.1).
-- **Thermocouple:** MAX31855**K** = Type-K **ONLY**. Cannot use Type-J, Type-T, or PT100 RTD.
 - **Pressure:** 0.5-4.5V ratiometric only. Cannot use 4-20mA current loop sensors.
 
 ## 3.2 Outputs (Actuators)
@@ -238,10 +236,10 @@ This specification defines a custom control PCB to replace the factory GICAR con
 │  └─────────────────────────────────────────────────────────────────────────┘  │
 │                                                                                 │
 │  ┌─────────────────────────────────────────────────────────────────────────┐  │
-│  │  SPI BUS (Thermocouple Amplifier)                                        │  │
-│  │  ├── GPIO16 (SPI0 RX/MISO) ─── MAX31855 DO (Data Out)                   │  │
-│  │  ├── GPIO17 (SPI0 CSn) ─────── MAX31855 CS (Chip Select)                │  │
-│  │  └── GPIO18 (SPI0 SCK) ─────── MAX31855 CLK (Clock)                     │  │
+│  │  EXPANSION GPIOs (Available for Future Features)                        │  │
+│  │  ├── GPIO16 ─── SPARE (SPI0 MISO)                                       │  │
+│  │  ├── GPIO17 ─── SPARE (SPI0 CS)                                         │  │
+│  │  └── GPIO18 ─── SPARE (SPI0 SCK)                                        │  │
 │  └─────────────────────────────────────────────────────────────────────────┘  │
 │                                                                                 │
 │  ┌─────────────────────────────────────────────────────────────────────────┐  │
@@ -416,7 +414,7 @@ Use an integrated isolated AC/DC converter module for safety and simplicity.
 | ESP32 module        | 150mA      | 500mA      | **WiFi TX spikes!**        |
 | Indicator LEDs (×6) | 30mA       | 60mA       | 3 relay + 2 SSR + 1 status |
 | Buzzer              | 5mA        | 30mA       | When active                |
-| 3.3V Buck load      | 30mA       | 100mA      | Sensors, MAX31855, margin  |
+| 3.3V Buck load      | 30mA       | 100mA      | Sensors, margin            |
 | **TOTAL**           | **~355mA** | **~910mA** |                            |
 
 **Minimum: 1.5A, Selected: Hi-Link HLK-15M05C (3A/15W)** - 3× headroom over 1A peak
@@ -472,7 +470,7 @@ Use an integrated isolated AC/DC converter module for safety and simplicity.
 │    Component Details:                                                          │
 │    ─────────────────                                                           │
 │    F1: Fuse, 10A 250V, 5x20mm glass, slow-blow (relay-switched loads only)   │
-│    F2: Fuse, 500mA 250V, 5x20mm, slow-blow (HLK module only - fusing hierarchy)│
+│    F2: Fuse, 2A 250V, 5x20mm, slow-blow (HLK module protection)               │
 │    RV1: MOV/Varistor, 275V AC, 14mm disc (surge protection)                   │
 │    C1: X2 safety capacitor, 100nF 275V AC (EMI filter)                        │
 │                                                                                 │
@@ -583,7 +581,6 @@ critical for reliable operation inside hot espresso machine enclosures.
 │    Load Budget (3.3V Rail - Entire System):                                    │
 │    ─────────────────────────────────────────                                   │
 │    RP2350 (Pico 2): ~50mA typical, 100mA peak (with PIO active)              │
-│    MAX31855: ~1mA                                                              │
 │    NTC dividers: ~1mA brew (3.3kΩ), ~3mA steam (1.2kΩ)                       │
 │    MAX3485 RS485: ~1mA                                                         │
 │    TLV3201 comparator: ~1mA                                                    │
@@ -732,7 +729,7 @@ Using 3.3V rail directly as ADC reference couples LDO/buck thermal drift into re
 │         │    │                                                            ││  │
 │         │    │   NTC Thermistors ─────────────────────► ADC0, ADC1       ││  │
 │         │    │   Pressure Transducer ─────────────────► ADC2             ││  │
-│         │    │   MAX31855 ────────────────────────────► SPI              ││  │
+│         │    │   (SPI reserved for future expansion)                      ││  │
 │         │    │                                                            ││  │
 │        GND   │                                                            ││  │
 │         │    └────────────────────────────────────────────────────────────┘│  │
@@ -765,7 +762,6 @@ Using 3.3V rail directly as ADC reference couples LDO/buck thermal drift into re
 | 5V at each relay driver | 100nF     | Ceramic (0805)   | Suppress switching noise |
 | 3.3V LDO output (U3)    | 47µF      | Tantalum/Ceramic | For sensors, low ESR     |
 | 3.3V Pico output (3V3)  | 100nF     | Ceramic (0805)   | Pico internal rail only  |
-| 3.3V at MAX31855        | 100nF     | Ceramic (0805)   | Adjacent to VCC pin      |
 | 3.3V at each ADC input  | 100nF     | Ceramic (0603)   | Filter network           |
 | AGND/DGND star point    | 10µF      | Ceramic          | Optional, reduces noise  |
 
@@ -831,7 +827,7 @@ All relays use identical driver circuits with integrated indicator LEDs.
 │    UF4007: Fast flyback diode, 1A, 1000V, 75ns recovery (DO-41)               │
 │           Fast recovery type for snappier relay contact opening               │
 │    LED: Green 0805, Vf=2.0V, If=6mA                                           │
-│    R20+n: 1kΩ 5% 0805 (base resistor)                                         │
+│    R20+n: 470Ω 5% 0805 (base resistor)                                        │
 │    R30+n: 470Ω 5% 0805 (LED resistor - brighter than 1kΩ)                     │
 │    R10+n: 10kΩ 5% 0805 (pull-down)                                            │
 │                                                                                 │
@@ -1016,8 +1012,8 @@ Solution: NPN transistor as low-side switch provides full 5V to SSR.
 │    Component Values:                                                           │
 │    ─────────────────                                                           │
 │    Q5-Q6:   MMBT2222A (SOT-23), Vce(sat) < 0.3V @ 100mA                       │
-│    R24-25:  1kΩ 5% 0805 (base drive, ~3mA)                                    │
-│    R14-15:  10kΩ 5% 0805 (pull-down, keeps SSR OFF at boot)                   │
+│    R24-25:  470Ω 5% 0805 (base drive, ~6mA for hard saturation)               │
+│    R14-15:  4.7kΩ 5% 0805 (pull-down per RP2350 errata E9)                    │
 │    R34-35:  330Ω 5% 0805 (indicator LED, ~4mA - brighter)                     │
 │    LED5-6:  Orange 0805, Vf~2.0V                                              │
 │                                                                                 │
@@ -1190,166 +1186,7 @@ Different espresso machine brands use different NTC sensor values. **Solder jump
 └────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## 7.2 K-Type Thermocouple Interface
-
-**⚠️ SENSOR RESTRICTION:** MAX31855**K** is hard-wired for **Type-K thermocouples ONLY**.
-
-- ✅ Type-K (Chromel/Alumel) - Standard for E61 group head thermometers
-- ❌ Type-J, Type-T, or other thermocouple types (readings will be incorrect)
-- ❌ PT100/RTD sensors (require different chip: MAX31865)
-
-```
-┌────────────────────────────────────────────────────────────────────────────────┐
-│                      K-TYPE THERMOCOUPLE INTERFACE                              │
-│              (MAX31855K SPI Amplifier with ESD & CM Protection)                │
-├────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                 │
-│    K-Type                    ESD & FILTER NETWORK                              │
-│  Thermocouple                                                                  │
-│  (From brew head)                                                              │
-│        ║                                                                       │
-│        ║          D22: TPD2E001           C40 (10nF)                          │
-│     (+)╠════════╦═══════════════╦═════════╦═══════════╦══════► TC_POS         │
-│        ║        ║    ESD TVS    ║         ║           ║                        │
-│        ║        ║ (±15kV HBM)   ║       C41║        C40║        MAX31855       │
-│        ║        ╠═══════════════╣       1nF║       10nF║       ┌──────────┐   │
-│        ║        ║               ║          ║           ║    1  │          │ 8 │
-│     (-)╠════════╩═══════════════╩══════════╩═══════════╬══════►│ T+   Vcc ├──► 3.3V
-│        ║                        ║          ║           ║    2  │          │ 7 │
-│                            D22 GND    C42 1nF      Diff.╠══════►│ T-   SCK ├──► GPIO18
-│                                 ║          ║           ║    3  │          │ 6 │
-│                                 ╚══════════╬═══════════╝   NC──│ NC    CS ├──► GPIO17
-│                                            ║            4  │          │ 5 │
-│                                           GND      GND ────│ GND   DO ├──► GPIO16
-│                                                            └──────────┘   │
-│                                                                                 │
-│    PROTECTION STAGES:                                                         │
-│    ──────────────────────────                                                  │
-│                                                                                 │
-│    1. ESD PROTECTION (D22: TPD2E001DRLR)                                      │
-│       - Dual-line bidirectional TVS                                           │
-│       - ±15kV HBM ESD protection                                              │
-│       - Ultra-low capacitance: <0.5pF (won't affect µV TC signal)            │
-│       - Place close to J26 connector (Pin 12-13)                              │
-│                                                                                 │
-│    2. COMMON-MODE FILTER (C41, C42: 1nF)                                      │
-│       - Shunts common-mode RF/EMI to ground                                   │
-│       - Small value (1nF) doesn't affect TC response time                     │
-│       - Protects against chassis-coupled interference                         │
-│                                                                                 │
-│    3. DIFFERENTIAL FILTER (C40: 10nF)                                         │
-│       - Filters differential noise between T+ and T-                          │
-│       - Place close to MAX31855 pins                                          │
-│                                                                                 │
-│    Component: MAX31855KASA+ (SOIC-8) - K-TYPE ONLY                            │
-│    ────────────────────────────────────────────────                           │
-│    - K-type thermocouple specific (NOT configurable)                          │
-│    - 14-bit, 0.25°C resolution                                                │
-│    - Range: -200°C to +1350°C                                                 │
-│    - Accuracy: ±2°C (-20°C to +125°C ambient)                                │
-│    - Cold junction compensation included                                       │
-│    - SPI interface (read-only, 32-bit frame)                                  │
-│    - Fault detection (open, short to GND, short to VCC)                       │
-│                                                                                 │
-│    Component Values:                                                           │
-│    ─────────────────                                                           │
-│    U4:  MAX31855KASA+, SOIC-8 (K-type only)                                   │
-│    D22: TPD2E001DRLR, SOT-553 (dual-line ESD, <0.5pF)                         │
-│    C40: 10nF 50V Ceramic, 0805 (differential filter)                          │
-│    C41: 1nF 50V Ceramic, 0805 (T+ common-mode filter)                         │
-│    C42: 1nF 50V Ceramic, 0805 (T- common-mode filter)                         │
-│    C10: 100nF 25V Ceramic, 0805 (VCC decoupling)                              │
-│                                                                                 │
-│    PCB Layout Notes:                                                           │
-│    ──────────────────                                                          │
-│    - Place D22 (ESD) as close to J26 connector as possible                    │
-│    - Place C41/C42 (CM filter) between D22 and C40                            │
-│    - Place C40 (differential) close to MAX31855                               │
-│    - Place MAX31855 near thermocouple connector                               │
-│    - Keep T+ and T- traces short and symmetric                                │
-│    - Guard ring around T+ and T- (connected to GND)                           │
-│    - Use shielded cable for thermocouple wires                                │
-│    - Ground shield at PCB end only (avoid ground loops)                       │
-│    - Keep away from power traces and relay coils                              │
-│                                                                                 │
-│    Thermocouple Connector: 2-pin screw terminal (+ and -)                     │
-│    Use proper thermocouple connector if long cable run is needed              │
-│                                                                                 │
-└────────────────────────────────────────────────────────────────────────────────┘
-```
-
-### Thermocouple Ground Loop Considerations
-
-```
-┌────────────────────────────────────────────────────────────────────────────────┐
-│             ⚠️⚠️⚠️ GROUNDED JUNCTION THERMOCOUPLE WARNING ⚠️⚠️⚠️              │
-├────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                 │
-│   🔴 REQUIREMENT: USE UNGROUNDED (INSULATED) THERMOCOUPLES ONLY! 🔴           │
-│                                                                                 │
-│   THE GROUND LOOP PROBLEM:                                                     │
-│   ────────────────────────                                                     │
-│                                                                                 │
-│   Espresso machine thermocouples are often "grounded junction" - the TC        │
-│   junction is welded to the stainless steel probe sheath for fast response.    │
-│   The sheath is screwed into the boiler, which is bonded to Protective Earth.  │
-│                                                                                 │
-│       ┌─────────────────────────────────────────────────────────────────┐      │
-│       │                    THE GROUND LOOP                              │      │
-│       │                                                                 │      │
-│       │    Boiler ────┬──── PE (chassis) ────┬──── MH1 ──── PCB GND    │      │
-│       │               │                      │                          │      │
-│       │    TC Sheath ─┘                      └──── MAX31855 GND        │      │
-│       │        │                                       │                │      │
-│       │        └───────────────────────────────────────┘                │      │
-│       │                     GROUND LOOP!                                │      │
-│       └─────────────────────────────────────────────────────────────────┘      │
-│                                                                                 │
-│   WHY THIS BREAKS THE MAX31855:                                                │
-│   ─────────────────────────────                                                │
-│   The MAX31855 internally biases T- to detect open-circuit faults.             │
-│   Shorting T- to GND (via the PE loop) overrides this internal bias.           │
-│                                                                                 │
-│   CONSEQUENCES:                                                                 │
-│   • "Short to GND" fault (Fault Bit D2) - chip returns 0.0 or NaN             │
-│   • AC noise from heater switching circulates through the ground loop          │
-│   • nV-level thermocouple signal buried in mV-level noise                     │
-│   • PID control becomes unstable or inoperative                                │
-│                                                                                 │
-│   ─────────────────────────────────────────────────────────────────────────    │
-│                                                                                 │
-│   ✅ SOLUTION: UNGROUNDED (INSULATED) THERMOCOUPLE                            │
-│   ─────────────────────────────────────────────────                            │
-│   The junction is electrically isolated from the sheath by MgO (magnesium     │
-│   oxide) insulation. This breaks the ground loop at the sensor end.            │
-│                                                                                 │
-│   WHEN ORDERING, SPECIFY:                                                      │
-│   • "Ungrounded junction" or "Insulated junction"                             │
-│   • NOT "grounded junction" or "exposed junction"                             │
-│                                                                                 │
-│   Example specifications:                                                       │
-│   • M6 threaded, K-type, UNGROUNDED, 50mm insertion length                    │
-│   • 1/8" NPT, K-type, INSULATED junction, stainless steel sheath              │
-│                                                                                 │
-│   ─────────────────────────────────────────────────────────────────────────    │
-│                                                                                 │
-│   ❌ IF GROUNDED THERMOCOUPLES MUST BE USED (not recommended):                │
-│   ───────────────────────────────────────────────────────────                  │
-│   The MAX31855 circuit requires galvanic isolation:                            │
-│   • Digital isolator (e.g., ISO7741) on SPI bus                               │
-│   • Isolated DC/DC converter (e.g., 1W module) for MAX31855 power             │
-│   • Completely separate ground plane for isolated section                      │
-│   This adds ~$10-15 and significant PCB complexity - NOT recommended.         │
-│                                                                                 │
-│   ─────────────────────────────────────────────────────────────────────────    │
-│                                                                                 │
-│   DIAGNOSTIC: If you see "Short to GND" fault or erratic readings,            │
-│   the thermocouple is likely grounded junction. Replace with ungrounded.      │
-│                                                                                 │
-└────────────────────────────────────────────────────────────────────────────────┘
-```
-
-## 7.3 Pressure Transducer Interface
+## 7.2 Pressure Transducer Interface
 
 **⚠️ SENSOR RESTRICTION:** Circuit designed for **0.5-4.5V ratiometric output ONLY**.
 
@@ -1647,7 +1484,7 @@ def adc_to_pressure(adc_count, range_bar=16):
 │    │    │         │                 │                                        │  │
 │    │    │    ┌────┴────┐       ┌────┴────┐                                   │  │
 │    │    │    │   10kΩ  │       │   10kΩ  │                                   │  │
-│    │    │    │   R92   │       │   R93   │                                   │  │
+│    │    │    │   R83   │       │   R84   │                                   │  │
 │    │    │    └────┬────┘       └────┬────┘                                   │  │
 │    │    │         │                 │                                        │  │
 │    │    │         ├─────────────────┤                                        │  │
@@ -1679,7 +1516,7 @@ def adc_to_pressure(adc_count, range_bar=16):
 │    │    STAGE 2: PROBE & SIGNAL CONDITIONING                                 ││
 │    │    ─────────────────────────────────────────                            ││
 │    │                                                                          ││
-│    │    AC_OUT ───[100Ω R94]───┬────────────────► J26 Pin 5 (Level Probe)    ││
+│    │    AC_OUT ───[100Ω R85]───┬────────────────► J26 Pin 5 (Level Probe)    ││
 │    │           (current limit) │                  Screw terminal             ││
 │    │                           │                       │                     ││
 │    │                      ┌────┴────┐             ┌────┴────┐                ││
@@ -1794,12 +1631,15 @@ def adc_to_pressure(adc_count, range_bar=16):
 │    U6:  OPA342UA (SOIC-8) or OPA2342UA (dual, use one section)              │
 │         Alt: OPA207 (lower noise, higher precision)                          │
 │    U7:  TLV3201AIDBVR (SOT-23-5) - rail-to-rail comparator                  │
-│    R91: 10kΩ 1% 0805 (oscillator feedback)                                   │
-│    R92: 10kΩ 1% 0805 (Wien bridge)                                           │
-│    R93: 10kΩ 1% 0805 (Wien bridge)                                           │
-│    R94: 100Ω 5% 0805 (probe current limit)                                   │
-│    R95: 10kΩ 5% 0805 (AC bias)                                               │
-│    R96: 100kΩ 1% 0805 (reference divider)                                    │
+│    R81: 10kΩ 1% 0805 (oscillator feedback)                                   │
+│    R82: 4.7kΩ 1% 0805 (Wien bridge gain)                                     │
+│    R83: 10kΩ 1% 0805 (Wien bridge)                                           │
+│    R84: 10kΩ 1% 0805 (Wien bridge)                                           │
+│    R85: 100Ω 5% 0805 (probe current limit)                                   │
+│    R86: 10kΩ 5% 0805 (AC bias)                                               │
+│    R87: 100kΩ 1% 0805 (reference divider upper)                              │
+│    R88: 100kΩ 1% 0805 (reference divider lower)                              │
+│    R89: 1MΩ 5% 0805 (comparator hysteresis)                                  │
 │    R97: 100kΩ 1% 0805 (reference divider)                                    │
 │    R98: 1MΩ 5% 0805 (hysteresis)                                             │
 │    C60: 100nF 25V ceramic 0805 (OPA342 VCC decoupling)                       │
@@ -2552,8 +2392,8 @@ The control PCB provides a universal interface for connecting external power met
 │                   ├───────────────────────► To K1, K2, K3 relay COMs          │
 │                   │                                                            │
 │              ┌────┴────┐                                                       │
-│              │  F2     │  ← Fuse: 500mA slow-blow, 5x20mm glass               │
-│              │ 500mA   │    (HLK AC/DC module only - fusing hierarchy)        │
+│              │  F2     │  ← Fuse: 2A slow-blow, 5x20mm glass                  │
+│              │  2A     │    (HLK AC/DC module only - fusing hierarchy)        │
 │              │ 250V    │                                                       │
 │              └────┬────┘                                                       │
 │                   │ (L_HLK)                                                    │
@@ -2588,8 +2428,8 @@ The control PCB provides a universal interface for connecting external power met
 │         Fuse: Littelfuse 0218010.MXP or equivalent                            │
 │         Holder: Littelfuse 01000056Z (PCB mount clips with cover)            │
 │                                                                                │
-│    F2:  Fuse, 500mA/250V, 5x20mm, slow-blow (HLK module only)                │
-│         Fuse: Littelfuse 0218.500MXP or equivalent                            │
+│    F2:  Fuse, 2A/250V, 5x20mm, slow-blow (HLK module only)                   │
+│         Fuse: Littelfuse 0218002.MXP or equivalent                            │
 │         Holder: Littelfuse 01000056Z (PCB mount clips with cover)            │
 │         Purpose: Fusing hierarchy - protects HLK module and its PCB traces   │
 │         independently from relay loads. If HLK fails, only F2 blows.         │
@@ -2741,7 +2581,7 @@ The control PCB provides a universal interface for connecting external power met
 │    • Protects against lightning-induced surges and motor switching noise     │
 │    • Place close to J17 connector                                             │
 │                                                                                 │
-│    R19 (10kΩ pull-down on GPIO20/DE): Ensures transceiver defaults to        │
+│    R19 (4.7kΩ pull-down on GPIO20/DE): Ensures transceiver defaults to       │
 │    receive mode during boot, preventing bus contention on startup.            │
 │                                                                                 │
 │    5V RAIL TRANSIENT SUPPRESSION:                                             │
@@ -3061,10 +2901,10 @@ For the relay-switched loads (max ~6A):
 │    │  │  └────────────┘  └────────┘  │ ║ │  └─────────────────────────┘ ││   │
 │    │  │                              │ S │                              ││   │
 │    │  │  ┌──────┐┌──────┐┌──────┐   │ L │  ┌─────────┐  ┌──────────┐   ││   │
-│    │  │  │ K1   ││ K2   ││ K3   │   │ O │  │ LDO 3.3V│  │ MAX31855 │   ││   │
-│    │  │  │Relay ││Relay ││Relay │   │ T │  │         │  │Thermo-   │   ││   │
-│    │  │  └──────┘└──────┘└──────┘   │   │  └─────────┘  │couple    │   ││   │
-│    │  │                              │ ║ │              └──────────┘   ││   │
+│    │  │  │ K1   ││ K2   ││ K3   │   │ O │  │ LDO 3.3V│  │ (spare)  │   ││   │
+│    │  │  │Relay ││Relay ││Relay │   │ T │  │         │  │          │   ││   │
+│    │  │  └──────┘└──────┘└──────┘   │   │  └─────────┘  └──────────┘   ││   │
+│    │  │                              │ ║ │                             ││   │
 │    │  │  ┌────────────────────────┐  │ ║ │  ┌─────────────────────────┐ ││   │
 │    │  │  │ Level Probe Circuit    │  │ ║ │  │   Sensor Input Section │ ││   │
 │    │  │  │ (OPA342 + TLV3201)     │  │ ║ │  │   NTC, Pressure, etc.  │ ││   │
@@ -3132,7 +2972,7 @@ For the relay-switched loads (max ~6A):
 │    │             │                                              │            ││
 │    │ - Pico GND  │                                              │ - ADC GND  ││
 │    │ - Relays    │    Star ground connection point              │ - NTC GND  ││
-│    │ - LEDs      │◄──────────────────────────────────────────── │ - MAX31855 ││
+│    │ - LEDs      │◄──────────────────────────────────────────── │ - Pressure ││
 │    │ - Buzzer    │    (single point near Pico ADC_GND pin)      │            ││
 │    │ - UART      │                                              │            ││
 │    └─────────────┘                                              └────────────┘│
@@ -3259,9 +3099,9 @@ Relay-switched loads (pump, valves) are fused and distributed via internal bus. 
 - PCB Mount: Keystone 1285 or TE 63951-1 (6.3mm blade)
 - Use vertical or right-angle spade terminals depending on enclosure
 
-## 13.1a Unified Low-Voltage Screw Terminal Block (J26 - 22 Position)
+## 13.1a Unified Low-Voltage Screw Terminal Block (J26 - 18 Position)
 
-**ALL low-voltage connections are consolidated into a single 22-position screw terminal block.**
+**ALL low-voltage connections are consolidated into a single 18-position screw terminal block.**
 
 **⚠️ J26 is for LOW VOLTAGE ONLY! 220V AC relay outputs (K1, K2, K3) use 6.3mm spade terminals.**
 
@@ -3269,22 +3109,22 @@ Relay-switched loads (pump, valves) are fused and distributed via internal bus. 
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                    UNIFIED LOW-VOLTAGE SCREW TERMINAL BLOCK (J26 - 22 Position)                      │
-│                              Phoenix MKDS 1/22-5.08 (5.08mm pitch)                                   │
+│                    UNIFIED LOW-VOLTAGE SCREW TERMINAL BLOCK (J26 - 18 Position)                      │
+│                              Phoenix MKDS 1/18-5.08 (5.08mm pitch)                                   │
 │                                    ⚠️ LOW VOLTAGE ONLY ⚠️                                            │
 ├──────────────────────────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                                      │
 │  SECTION A: SWITCHES     SECTION B: ANALOG SENSORS              SECTION C: SSR OUTPUTS       SPARE  │
 │  ────────────────────    ─────────────────────────────────────  ───────────────────────────  ─────  │
 │                                                                                                      │
-│  ┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐          │
-│  │ 1 │ 2 │ 3 │ 4 │ 5 │ 6 │ 7 │ 8 │ 9 │10 │11 │12 │13 │14 │15 │16 │17 │18 │19 │20 │21 │22 │          │
-│  │S1 │S1G│S2 │S2G│S3 │S4 │S4G│T1 │T1G│T2 │T2G│TC+│TC-│P5V│PGD│PSG│SR+│SR-│SR+│SR-│GND│GND│          │
-│  └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘          │
-│   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │                  │
-│   └─S1─┘   └─S2─┘  S3  └─S4─┘   └─T1──┘   └─T2──┘ └─TC──┘ └──Pressure──┘ └SSR1─┘ └SSR2─┘ Spare       │
-│   Water    Tank   Lvl  Brew     Brew     Steam   Thermo    Transducer   Brew    Steam                │
-│   Res.     Level  Prb  Handle   NTC      NTC     couple    (YD4060)     Heater  Heater               │
+│  ┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐                          │
+│  │ 1 │ 2 │ 3 │ 4 │ 5 │ 6 │ 7 │ 8 │ 9 │10 │11 │12 │13 │14 │15 │16 │17 │18 │                          │
+│  │S1 │S1G│S2 │S2G│S3 │S4 │S4G│T1 │T1G│T2 │T2G│P5V│PGD│PSG│SR+│SR-│SR+│SR-│                          │
+│  └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘                          │
+│   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │                                  │
+│   └─S1─┘   └─S2─┘  S3  └─S4─┘   └─T1──┘   └─T2──┘ └──Pressure──┘ └SSR1─┘ └SSR2─┘                    │
+│   Water    Tank   Lvl  Brew     Brew     Steam       Transducer   Brew    Steam                    │
+│   Res.     Level  Prb  Handle   NTC      NTC         (YD4060)     Heater  Heater                   │
 │                                                                                                      │
 ├──────────────────────────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                                      │
@@ -3304,27 +3144,21 @@ Relay-switched loads (pump, valves) are fused and distributed via internal bus. 
 │  │  9  │ T1-G  │ Brew NTC GND                │ 22 AWG │ GND         │ Sensor return               │ │
 │  │ 10  │ T2    │ Steam NTC Signal            │ 22 AWG │ NTC2_SIG    │ To ADC via divider          │ │
 │  │ 11  │ T2-G  │ Steam NTC GND               │ 22 AWG │ GND         │ Sensor return               │ │
-│  │ 12  │ TC+   │ Thermocouple +              │ 22 AWG │ TC_POS      │ K-type to MAX31855          │ │
-│  │ 13  │ TC-   │ Thermocouple -              │ 22 AWG │ TC_NEG      │ K-type to MAX31855          │ │
-│  │ 14  │ P-5V  │ Pressure Transducer +5V     │ 22 AWG │ +5V         │ Power for YD4060            │ │
-│  │ 15  │ P-GND │ Pressure Transducer GND     │ 22 AWG │ GND         │ Sensor return               │ │
-│  │ 16  │ P-SIG │ Pressure Transducer Signal  │ 22 AWG │ PRESS_SIG   │ 0.5-4.5V to ADC divider     │ │
-│  │ 17  │ SSR1+ │ SSR1 Control +5V            │ 22 AWG │ +5V         │ Brew heater SSR power       │ │
-│  │ 18  │ SSR1- │ SSR1 Control -              │ 22 AWG │ SSR1_NEG    │ Brew heater SSR trigger     │ │
-│  │ 19  │ SSR2+ │ SSR2 Control +5V            │ 22 AWG │ +5V         │ Steam heater SSR power      │ │
-│  │ 20  │ SSR2- │ SSR2 Control -              │ 22 AWG │ SSR2_NEG    │ Steam heater SSR trigger    │ │
-│  │ 21  │ GND   │ Spare Ground                │ 22 AWG │ GND         │ Extra GND terminal          │ │
-│  │ 22  │ GND   │ Spare Ground                │ 22 AWG │ GND         │ Extra GND terminal          │ │
+│  │ 12  │ P-5V  │ Pressure Transducer +5V     │ 22 AWG │ +5V         │ Power for YD4060            │ │
+│  │ 13  │ P-GND │ Pressure Transducer GND     │ 22 AWG │ GND         │ Sensor return               │ │
+│  │ 14  │ P-SIG │ Pressure Transducer Signal  │ 22 AWG │ PRESS_SIG   │ 0.5-4.5V to ADC divider     │ │
+│  │ 15  │ SSR1+ │ SSR1 Control +5V            │ 22 AWG │ +5V         │ Brew heater SSR power       │ │
+│  │ 16  │ SSR1- │ SSR1 Control -              │ 22 AWG │ SSR1_NEG    │ Brew heater SSR trigger     │ │
+│  │ 17  │ SSR2+ │ SSR2 Control +5V            │ 22 AWG │ +5V         │ Steam heater SSR power      │ │
+│  │ 18  │ SSR2- │ SSR2 Control -              │ 22 AWG │ SSR2_NEG    │ Steam heater SSR trigger    │ │
 │                                                                                                      │
 │  WIRING NOTES:                                                                                       │
 │  ─────────────                                                                                       │
 │  • SWITCHES (Pin 1-7): N.O. switches connect between signal and adjacent GND pin                    │
 │  • S3 (Pin 5): Level probe single wire, ground return via boiler body (PE connection)               │
 │  • NTCs (Pin 8-11): 2-wire thermistors, polarity doesn't matter                                     │
-│  • TC (Pin 12-13): OBSERVE POLARITY - red wire = TC-, yellow wire = TC+                             │
-│  • PRESSURE (Pin 14-16): 3-wire transducer: +5V (red), GND (black), Signal (yellow/white)           │
-│  • SSRs (Pin 17-20): Connect to SSR DC input terminals (+5V to SSR+, SSR- to SSR DC-)               │
-│  • SPARE GND (Pin 21-22): Extra ground terminals for convenience                                     │
+│  • PRESSURE (Pin 12-14): 3-wire transducer: +5V (red), GND (black), Signal (yellow/white)           │
+│  • SSRs (Pin 15-18): Connect to SSR DC input terminals (+5V to SSR+, SSR- to SSR DC-)               │
 │                                                                                                      │
 │  ⚠️ CT CLAMP: Connect directly to external power meter module (not through this PCB)                │
 │                                                                                                      │
@@ -3333,8 +3167,8 @@ Relay-switched loads (pump, valves) are fused and distributed via internal bus. 
 
 **Screw Terminal Part Number:**
 
-- Phoenix Contact MKDS 1/22-5.08 (22-position, 5.08mm pitch)
-- Alternative: 2× Phoenix MKDS 1/11-5.08 ganged together, or custom arrangement
+- Phoenix Contact MKDS 1/18-5.08 (18-position, 5.08mm pitch)
+- Alternative: 2× Phoenix MKDS 1/9-5.08 ganged together
 
 ## 13.2 Pin Headers and JST Connectors
 
@@ -3453,7 +3287,7 @@ GPIO22 is available on **J15 Pin 8 (SPARE)** for future expansion:
 │   │  └───────────┘  │                      │                 │    ┌─────────┐  │
 │   │                 │                      │                 │    │  BREW   │  │
 │   │  ┌───────────┐  │                      │   AC Load 1   ──┼───►│ HEATER  │  │
-│   │  │ J26:21-22 │  │                      │                 │    │ 1400W   │  │
+│   │  │ J26:17-18 │  │                      │                 │    │ 1400W   │  │
 │   │  │  SSR2+  ──┼──┼───► (to SSR2)        │   AC Load 2   ◄─┼────┤         │  │
 │   │  │  SSR2-  ──┼──┼───► (to SSR2)        │                 │    └─────────┘  │
 │   │  └───────────┘  │                      └────────┬────────┘         ▲       │
@@ -3485,8 +3319,8 @@ GPIO22 is available on **J15 Pin 8 (SPARE)** for future expansion:
 │   ─────────────────────                                                          │
 │   │ Connection      │ Source           │ Type       │ Voltage │                 │
 │   │─────────────────│──────────────────│────────────│─────────│                 │
-│   │ Control DC+     │ J26 Pin 19/21    │ Screw term │ 5V DC   │                 │
-│   │ Control DC-     │ J26 Pin 20/22    │ Screw term │ GND     │                 │
+│   │ Control DC+     │ J26 Pin 15/17    │ Screw term │ 5V DC   │                 │
+│   │ Control DC-     │ J26 Pin 16/18    │ Screw term │ Trigger │                 │
 │   │ Mains Live In   │ Machine wiring   │ Existing   │ 220V AC │ ← NOT from PCB │
 │   │ Load Output     │ SSR AC terminal  │ Existing   │ 220V AC │                 │
 │   │ Neutral         │ Machine wiring   │ Existing   │ 220V AC │                 │
@@ -3510,7 +3344,6 @@ GPIO22 is available on **J15 Pin 8 (SPARE)** for future expansion:
 | 1   | U1  | Raspberry Pi Pico 2      | SC0942         | Module   | Or Pico 2 W (SC1632) for onboard WiFi      |
 | 1   | U2  | AC/DC Converter 5V 3A    | HLK-15M05C     | Module   | Isolated, 15W/3A (alt: Mean Well IRM-20-5) |
 | 1   | U3  | 3.3V Sync Buck Converter | TPS563200DDCR  | SOT-23-6 | 3A, >90% efficiency                        |
-| 1   | U4  | Thermocouple Amp         | MAX31855KASA+  | SOIC-8   | K-type                                     |
 | 1   | U5  | Precision Voltage Ref    | LM4040DIM3-3.0 | SOT-23-3 | 3.0V shunt reference for ADC               |
 | 1   | U6  | Rail-to-Rail Op-Amp      | OPA342UA       | SOIC-8   | Level probe oscillator (alt: OPA207)       |
 | 1   | U7  | Precision Comparator     | TLV3201AIDBVR  | SOT-23-5 | Level probe detector                       |
@@ -3519,54 +3352,61 @@ GPIO22 is available on **J15 Pin 8 (SPARE)** for future expansion:
 
 ## 14.2 Transistors and Diodes
 
-| Qty | Ref     | Description        | Part Number  | Package | Notes                                         |
-| --- | ------- | ------------------ | ------------ | ------- | --------------------------------------------- |
-| 5   | Q1-Q5   | NPN Transistor     | MMBT2222A    | SOT-23  | Relay (3) + SSR (2) drivers                   |
-| 3   | D1-D3   | Fast Flyback Diode | UF4007       | DO-41   | Fast recovery (75ns) for snappy relay opening |
-| 6   | D10-D15 | ESD Protection     | PESD5V0S1BL  | SOD-323 | Sensor inputs                                 |
-| 1   | D16     | Schottky Clamp     | BAT54S       | SOT-23  | Pressure ADC overvoltage                      |
-| 1   | D20     | TVS Diode          | SMBJ5.0A     | SMB     | 5V rail protection                            |
-| 1   | D21     | RS485 TVS          | SM712        | SOT-23  | RS485 A/B line surge protection (-7V/+12V)    |
-| 1   | D22     | Thermocouple ESD   | TPD2E001DRLR | SOT-553 | TC dual-line ESD (<0.5pF, ±15kV)              |
+| Qty | Ref     | Description        | Part Number | Package | Notes                                         |
+| --- | ------- | ------------------ | ----------- | ------- | --------------------------------------------- |
+| 5   | Q1-Q5   | NPN Transistor     | MMBT2222A   | SOT-23  | Relay (3) + SSR (2) drivers                   |
+| 3   | D1-D3   | Fast Flyback Diode | UF4007      | DO-41   | Fast recovery (75ns) for snappy relay opening |
+| 6   | D10-D15 | ESD Protection     | PESD5V0S1BL | SOD-323 | Sensor inputs                                 |
+| 1   | D16     | Schottky Clamp     | BAT54S      | SOT-23  | Pressure ADC overvoltage                      |
+| 1   | D20     | TVS Diode          | SMBJ5.0A    | SMB     | 5V rail protection                            |
+| 1   | D21     | RS485 TVS          | SM712       | SOT-23  | RS485 A/B line surge protection (-7V/+12V)    |
 
 ## 14.3 Passive Components - Resistors
 
-| Qty | Ref     | Value | Tolerance | Package | Notes                                                         |
-| --- | ------- | ----- | --------- | ------- | ------------------------------------------------------------- |
-| 1   | R1      | 3.3kΩ | 1%        | 0805    | Brew NTC pull-up (always populated)                           |
-| 1   | R1A     | 1.5kΩ | 1%        | 0805    | Brew NTC parallel (via JP2, for 10kΩ NTC)                     |
-| 1   | R2      | 1.2kΩ | 1%        | 0805    | Steam NTC pull-up (always populated)                          |
-| 1   | R2A     | 680Ω  | 1%        | 0805    | Steam NTC parallel (via JP3, for 10kΩ NTC)                    |
-| 2   | R5-R6   | 1kΩ   | 1%        | 0805    | NTC ADC series protection                                     |
-| 1   | R3      | 10kΩ  | 1%        | 0805    | Pressure divider (to GND)                                     |
-| 1   | R4      | 5.6kΩ | 1%        | 0805    | Pressure divider (series) - prevents saturation with 3.0V ref |
-| 10  | R10-R19 | 10kΩ  | 5%        | 0805    | Pull-ups/pull-downs                                           |
-| 5   | R20-R24 | 1kΩ   | 5%        | 0805    | Transistor base (3 relay + 2 SSR)                             |
-| 3   | R30-R32 | 470Ω  | 5%        | 0805    | Relay Indicator LEDs (K1, K2, K3)                             |
-| 2   | R34-R35 | 330Ω  | 5%        | 0805    | SSR Indicator LEDs (logic-side)                               |
-| 4   | R40-R43 | 33Ω   | 5%        | 0805    | UART series (ESP32/Service)                                   |
-| 1   | R44     | 33Ω   | 5%        | 0805    | J17 TX series (power meter)                                   |
-| 1   | R45     | 2.2kΩ | 1%        | 0805    | J17 RX 5V→3.3V level shifter (upper divider)                  |
-| 1   | R45A    | 3.3kΩ | 1%        | 0805    | J17 RX 5V→3.3V level shifter (lower divider)                  |
-| 1   | R45B    | 33Ω   | 5%        | 0805    | J17 RX series (after divider)                                 |
-| 1   | R7      | 1kΩ   | 1%        | 0805    | LM4040 voltage reference bias resistor                        |
-| 1   | R_ISO   | 47Ω   | 1%        | 0805    | ADC VREF buffer isolation (U9A output stability)              |
-| 2   | R_FB1   | 33kΩ  | 1%        | 0805    | TPS563200 feedback upper (sets 3.3V output)                   |
-| 1   | R_FB2   | 10kΩ  | 1%        | 0805    | TPS563200 feedback lower (to GND)                             |
-| 2   | R46-R47 | 4.7kΩ | 5%        | 0805    | I2C pull-ups (SDA, SCL)                                       |
-| 1   | R48     | 330Ω  | 5%        | 0805    | Status LED                                                    |
-| 1   | R49     | 100Ω  | 5%        | 0805    | Buzzer                                                        |
-| 2   | R71-R72 | 10kΩ  | 5%        | 0805    | Pico RUN/BOOTSEL pull-ups (J15 Pin 5/6)                       |
-| 1   | R73     | 10kΩ  | 5%        | 0805    | WEIGHT_STOP pull-down (J15 Pin 7)                             |
-| 1   | R91     | 10kΩ  | 1%        | 0805    | Level probe oscillator feedback                               |
-| 1   | R91A    | 4.7kΩ | 1%        | 0805    | Wien bridge gain resistor (A_CL=3.13, ensures oscillation)    |
-| 2   | R92-R93 | 10kΩ  | 1%        | 0805    | Level probe Wien bridge                                       |
-| 1   | R94     | 100Ω  | 5%        | 0805    | Level probe current limit                                     |
-| 1   | R95     | 10kΩ  | 5%        | 0805    | Level probe AC bias                                           |
-| 2   | R96-R97 | 100kΩ | 1%        | 0805    | Level probe threshold divider                                 |
-| 1   | R98     | 1MΩ   | 5%        | 0805    | Level probe hysteresis                                        |
-| 1   | R100    | 10kΩ  | 1%        | 0805    | 5V monitor upper divider (ratiometric pressure compensation)  |
-| 1   | R101    | 5.6kΩ | 1%        | 0805    | 5V monitor lower divider (ratiometric pressure compensation)  |
+| Qty | Ref         | Value | Tolerance | Package | Notes                                                         |
+| --- | ----------- | ----- | --------- | ------- | ------------------------------------------------------------- |
+| 1   | R1          | 3.3kΩ | 1%        | 0805    | Brew NTC pull-up (always populated)                           |
+| 1   | R1A         | 1.5kΩ | 1%        | 0805    | Brew NTC parallel (via JP2, for 10kΩ NTC)                     |
+| 1   | R2          | 1.2kΩ | 1%        | 0805    | Steam NTC pull-up (always populated)                          |
+| 1   | R2A         | 680Ω  | 1%        | 0805    | Steam NTC parallel (via JP3, for 10kΩ NTC)                    |
+| 2   | R5-R6       | 1kΩ   | 1%        | 0805    | NTC ADC series protection                                     |
+| 1   | R3          | 10kΩ  | 1%        | 0805    | Pressure divider (to GND)                                     |
+| 1   | R4          | 5.6kΩ | 1%        | 0805    | Pressure divider (series) - prevents saturation with 3.0V ref |
+| 5   | R16-R18     | 10kΩ  | 5%        | 0805    | Switch pull-ups (Water, Tank, Brew)                           |
+| 2   | R71-R72     | 10kΩ  | 5%        | 0805    | Pico RUN/BOOTSEL pull-ups                                     |
+| 6   | R11-R15,R19 | 4.7kΩ | 5%        | 0805    | Driver pull-downs (RP2350 errata E9)                          |
+| 1   | R73         | 4.7kΩ | 5%        | 0805    | WEIGHT_STOP pull-down (RP2350 errata E9)                      |
+| 5   | R20-R24     | 470Ω  | 5%        | 0805    | Transistor base (3 relay + 2 SSR)                             |
+| 3   | R30-R32     | 470Ω  | 5%        | 0805    | Relay Indicator LEDs (K1, K2, K3)                             |
+| 2   | R34-R35     | 330Ω  | 5%        | 0805    | SSR Indicator LEDs (logic-side)                               |
+| 4   | R40-R43     | 33Ω   | 5%        | 0805    | UART series (ESP32/Service)                                   |
+| 1   | R44         | 33Ω   | 5%        | 0805    | J17 TX series (power meter)                                   |
+| 1   | R45         | 2.2kΩ | 1%        | 0805    | J17 RX 5V→3.3V level shifter (upper divider)                  |
+| 1   | R45A        | 3.3kΩ | 1%        | 0805    | J17 RX 5V→3.3V level shifter (lower divider)                  |
+| 1   | R45B        | 33Ω   | 5%        | 0805    | J17 RX series (after divider)                                 |
+| 1   | R7          | 1kΩ   | 1%        | 0805    | LM4040 voltage reference bias resistor                        |
+| 1   | R_ISO       | 47Ω   | 1%        | 0805    | ADC VREF buffer isolation (U9A output stability)              |
+| 2   | R_FB1       | 33kΩ  | 1%        | 0805    | TPS563200 feedback upper (sets 3.3V output)                   |
+| 1   | R_FB2       | 10kΩ  | 1%        | 0805    | TPS563200 feedback lower (to GND)                             |
+| 2   | R46-R47     | 4.7kΩ | 5%        | 0805    | I2C pull-ups (SDA, SCL)                                       |
+| 1   | R48         | 330Ω  | 5%        | 0805    | Status LED                                                    |
+| 1   | R49         | 100Ω  | 5%        | 0805    | Buzzer                                                        |
+| 2   | R71-R72     | 10kΩ  | 5%        | 0805    | Pico RUN/BOOTSEL pull-ups (J15 Pin 5/6)                       |
+| 1   | R73         | 4.7kΩ | 5%        | 0805    | WEIGHT_STOP pull-down (RP2350 errata E9)                      |
+| 1   | R81         | 10kΩ  | 1%        | 0805    | Level probe oscillator feedback                               |
+| 1   | R82         | 4.7kΩ | 1%        | 0805    | Wien bridge gain resistor (A_CL=3.13, ensures oscillation)    |
+| 2   | R83-R84     | 10kΩ  | 1%        | 0805    | Level probe Wien bridge                                       |
+| 1   | R85         | 100Ω  | 5%        | 0805    | Level probe current limit                                     |
+| 1   | R86         | 10kΩ  | 5%        | 0805    | Level probe AC bias                                           |
+| 2   | R87-R88     | 100kΩ | 1%        | 0805    | Level probe threshold divider                                 |
+| 1   | R89         | 1MΩ   | 5%        | 0805    | Level probe comparator hysteresis                             |
+| 1   | R91         | 10kΩ  | 1%        | 0805    | 5V monitor divider (upper)                                    |
+| 1   | R92         | 5.6kΩ | 1%        | 0805    | 5V monitor divider (lower)                                    |
+| 1   | R93         | 20kΩ  | 5%        | 0805    | RS485 failsafe bias (A line pull-up)                          |
+| 1   | R94         | 20kΩ  | 5%        | 0805    | RS485 failsafe bias (B line pull-down)                        |
+| 1   | R98         | 1MΩ   | 5%        | 0805    | Level probe hysteresis                                        |
+| 1   | R100        | 10kΩ  | 1%        | 0805    | 5V monitor upper divider (ratiometric pressure compensation)  |
+| 1   | R101        | 5.6kΩ | 1%        | 0805    | 5V monitor lower divider (ratiometric pressure compensation)  |
 
 ## 14.3a Solder Jumpers
 
@@ -3608,8 +3448,6 @@ GPIO22 is available on **J15 Pin 8 (SPARE)** for future expansion:
 | 1   | C64     | 1µF      | 25V     | 0805         | Level probe AC coupling                                      |
 | 1   | C65     | 100nF    | 25V     | 0805         | Level probe sense filter                                     |
 | 4   | C30-C33 | 100pF    | 50V     | 0603         | UART/ADC filter                                              |
-| 1   | C40     | 10nF     | 50V     | 0805         | Thermocouple differential filter                             |
-| 2   | C41-C42 | 1nF      | 50V     | 0805         | Thermocouple common-mode filter                              |
 | 1   | C70     | 100nF    | 25V     | 0805         | RS485 transceiver (U8) decoupling                            |
 | 1   | C80     | 100nF    | 25V     | 0805         | OPA2342 (U9) VCC decoupling                                  |
 | 1   | C81     | 100nF    | 25V     | 0805         | 5V monitor filter (ratiometric pressure compensation)        |
@@ -3627,7 +3465,7 @@ GPIO22 is available on **J15 Pin 8 (SPARE)** for future expansion:
 | 2   | K1,K3   | Relay 5V 3A SPST-NO  | Panasonic APAN3105      | Slim 5mm, K1=Indicator lamp, K3=Solenoid   |
 | 1   | K2      | Relay 5V 16A SPST-NO | Omron G5LE-1A4-E DC5    | Standard size, Pump motor (**-E** = 16A!)  |
 | 1   | F1      | Fuse 10A + Holder    | 0218010.MXP + 01000056Z | 5×20mm slow, PCB mount with cover (relays) |
-| 1   | F2      | Fuse 500mA + Holder  | 0218.500MXP + 01000056Z | 5×20mm slow, HLK module fusing hierarchy   |
+| 1   | F2      | Fuse 2A + Holder     | 0218002.MXP + 01000056Z | 5×20mm slow, HLK module fusing hierarchy   |
 | 1   | RV1     | Varistor 275V        | S14K275                 | 14mm disc, mains surge protection          |
 | 2   | RV2-RV3 | Varistor 275V        | S10K275                 | 10mm disc, K2/K3 arc suppression           |
 | 2   | SW1-SW2 | Tactile Switch       | EVQP7A01P               | SMD 6×6mm                                  |
@@ -3646,7 +3484,7 @@ GPIO22 is available on **J15 Pin 8 (SPARE)** for future expansion:
 | Qty | Ref     | Description               | Part Number                | Notes                                          |
 | --- | ------- | ------------------------- | -------------------------- | ---------------------------------------------- |
 | 6   | J1-J4   | 6.3mm Spade Terminal      | Keystone 1285              | Mains (L,N,PE) + 220V relay outputs (K1,K2,K3) |
-| 1   | **J26** | **Screw Terminal 22-pos** | **Phoenix MKDS 1/22-5.08** | **ALL LV connections - see 13.1a**             |
+| 1   | **J26** | **Screw Terminal 18-pos** | **Phoenix MKDS 1/18-5.08** | **ALL LV connections - see 13.1a**             |
 | 1   | J15     | JST-XH 8-pin Header       | B8B-XH-A                   | ESP32 display + brew-by-weight                 |
 | 1   | J16     | Pin Header 1×4 2.54mm     | -                          | Service/debug (shared with J15)                |
 | 1   | J17     | JST-XH 6-pin Header       | B6B-XH-A                   | Power Meter: 3V3, 5V, GND, RX, TX, DE/RE       |
@@ -3674,7 +3512,6 @@ The following components are **NOT** included with the PCB and must be sourced b
 | Sensor              | Type Required                    | Constraint                              | Recommended Part                     |
 | ------------------- | -------------------------------- | --------------------------------------- | ------------------------------------ |
 | Brew/Steam NTC      | **50kΩ @ 25°C** (B25/85 ≈ 3950K) | R1/R2 optimized for 50kΩ (see 7.1)      | ECM OEM sensor or Semitec 503ET-4    |
-| Thermocouple        | **Type-K ONLY** (Chromel/Alumel) | MAX31855**K** is K-type specific        | M6 threaded probe for E61 mushroom   |
 | Pressure Transducer | **0.5-4.5V ratiometric**, 3-wire | Circuit is voltage divider (not 4-20mA) | YD4060 (0-16 bar), G1/4" or 1/8" NPT |
 
 ### NTC Sensor Selection by Machine Brand (Jumper Selectable)
@@ -3687,21 +3524,6 @@ The following components are **NOT** included with the PCB and must be sourced b
 | Lelit (50kΩ)      | 50kΩ             | OPEN       | OPEN        | 3.3kΩ / 1.2kΩ |
 
 **Configuration:** Use **solder jumpers JP2/JP3** to switch between NTC types - no resistor swapping required.
-
-### Thermocouple Specifications
-
-| Parameter    | Requirement                           | Notes                                         |
-| ------------ | ------------------------------------- | --------------------------------------------- |
-| Type         | **K-Type ONLY**                       | J/T/PT100 will NOT work with MAX31855K        |
-| **Junction** | **🔴 UNGROUNDED (INSULATED) ONLY 🔴** | Grounded junction causes ground loop → FAULT! |
-| Thread       | M6 or as machine requires             | For E61 group head mushroom bolt              |
-| Sheath       | Stainless steel                       | Food-safe, corrosion resistant                |
-| Cable        | Shielded 2-wire                       | Shield grounded at PCB end only               |
-| Accuracy     | ±2°C typical                          | Adequate for brew head monitoring             |
-
-Use ungrounded (insulated) junction thermocouples. Grounded junction types create
-a ground loop through the boiler PE connection, causing MAX31855 faults.
-See Section 7.2 for details.
 
 ### Pressure Transducer Specifications
 
@@ -3864,7 +3686,7 @@ Hardware interfaces the firmware must support:
 
 - UART0 (GPIO0/1): ESP32 communication @ 115200 baud
 - UART1 (GPIO6/7): Power meter @ configurable baud (9600/4800/2400)
-- SPI0 (GPIO16-18): MAX31855 thermocouple
+- SPI0 (GPIO16-18): Reserved for future expansion
 - ADC (GPIO26-28): NTC thermistors, pressure transducer
 - GPIO20: RS485 DE/RE direction control
 
@@ -3902,7 +3724,7 @@ Deliver: Native project files, PDF schematic, Gerber files (Section 16.2), STEP 
 
 **Safety Standards:** PCB creepage/clearance per IEC 60950-1 / IEC 62368-1. Full machine compliance to IEC 60335-x (household appliances) is at system level.
 
-**Key Datasheets:** Raspberry Pi Pico 2, RP2350, MAX31855, OPA342, TLV3201, MAX3485
+**Key Datasheets:** Raspberry Pi Pico 2, RP2350, OPA342, TLV3201, MAX3485
 
 **Machine Reference:** ECM Synchronika Service Manual, Parts Diagram
 
