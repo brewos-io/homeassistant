@@ -211,9 +211,39 @@ MOVs are placed across **LOADS** (not across relay contacts):
 
 ## Test Points
 
-| TP | Signal | Purpose | Expected Value |
-|----|--------|---------|----------------|
-| TP1 | GPIO20 | RS485 DE/RE verification | 0V or 3.3V |
-| TP2 | ADC_VREF | Reference calibration | 3.00V ±0.5% |
-| TP3 | 5V_DIV | 5V monitor / ratiometric cal | ~1.8V |
+Test points enable systematic board verification during commissioning and field debugging.
+
+### Power Rail Verification
+
+| TP | Signal | Purpose | Expected Value | Tolerance |
+|----|--------|---------|----------------|-----------|
+| TP1 | GND | Ground reference | 0V | — |
+| TP2 | 5V | Main power rail | 5.00V | ±5% (4.75–5.25V) |
+| TP3 | 3.3V | Logic power rail | 3.30V | ±3% (3.20–3.40V) |
+| TP4 | 5V_MON | 5V divider output | 1.79V | ±2% |
+
+### Analog Signal Verification
+
+| TP | Signal | Purpose | Expected Value | Notes |
+|----|--------|---------|----------------|-------|
+| TP5 | ADC_VREF | Reference calibration | 3.00V ±0.5% | Critical for NTC accuracy |
+| TP6 | ADC0 | Brew NTC signal | 0.5–2.5V | Varies with temperature |
+| TP7 | ADC1 | Steam NTC signal | 0.5–2.5V | Varies with temperature |
+| TP8 | ADC2 | Pressure signal | 0.32–2.88V | 0 bar = 0.32V, 16 bar = 2.88V |
+
+### Communication Verification
+
+| TP | Signal | Purpose | Expected Value | Notes |
+|----|--------|---------|----------------|-------|
+| TP9 | UART0_TX | Serial debug output | 3.3V idle | Scope for TX activity |
+| TP10 | UART0_RX | Serial debug input | 3.3V idle | Scope for RX activity |
+| TP11 | RS485_DE | Direction control | 0V (RX) / 3.3V (TX) | Verify bus direction |
+
+### Commissioning Checklist
+
+1. **Power-up sequence:** Verify TP2 (5V) → TP3 (3.3V) → TP5 (ADC_VREF)
+2. **Analog calibration:** Measure TP5 with 4.5-digit DMM, record for firmware offset
+3. **Sensor verification:** Compare TP6/TP7 readings against reference thermometer
+4. **Communication test:** Verify UART activity on TP9/TP10 during ESP32 handshake
+5. **RS485 verification:** Monitor TP11 during meter polling (should toggle)
 

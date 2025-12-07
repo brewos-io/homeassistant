@@ -168,11 +168,33 @@
 
 ## Test Points
 
-| Qty | Ref | Signal | Notes |
-|-----|-----|--------|-------|
-| 1 | TP1 | GPIO20 | RS485 DE/RE |
-| 1 | TP2 | ADC_VREF | 3.0V reference |
-| 1 | TP3 | 5V_DIV | 5V monitor |
+Test points are organized by function for systematic board bring-up and debugging.
+
+### Power Rails
+
+| Qty | Ref | Signal | Location | Notes |
+|-----|-----|--------|----------|-------|
+| 1 | TP1 | GND | Near Pico | Ground reference for all measurements |
+| 1 | TP2 | 5V | Near HLK output | Main 5V rail verification |
+| 1 | TP3 | 3.3V | Near Pico | Logic rail verification |
+| 1 | TP4 | 5V_MON | Near R91/R92 | 5V monitor divider (~1.8V) |
+
+### Analog Signals
+
+| Qty | Ref | Signal | Location | Notes |
+|-----|-----|--------|----------|-------|
+| 1 | TP5 | ADC_VREF | Near U9 output | 3.0V reference calibration |
+| 1 | TP6 | ADC0 | Near GPIO26 | Brew NTC signal |
+| 1 | TP7 | ADC1 | Near GPIO27 | Steam NTC signal |
+| 1 | TP8 | ADC2 | Near GPIO28 | Pressure transducer signal |
+
+### Communication
+
+| Qty | Ref | Signal | Location | Notes |
+|-----|-----|--------|----------|-------|
+| 1 | TP9 | UART0_TX | Near J15 | Debug/ESP32 TX (GPIO0) |
+| 1 | TP10 | UART0_RX | Near J15 | Debug/ESP32 RX (GPIO1) |
+| 1 | TP11 | RS485_DE | Near U8 | RS485 direction control (GPIO20) |
 
 ## Mounting Hardware
 
