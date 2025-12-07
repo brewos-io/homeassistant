@@ -45,7 +45,7 @@
 | Input Voltage | 100-240V AC, 50/60Hz         |
 | Output Rails  | 5V DC (3A), 3.3V DC (500mA)  |
 | Isolation     | 3000V AC (reinforced)        |
-| PCB Size      | 130mm × 80mm, 2-layer        |
+| PCB Size      | **80mm × 80mm** (target), 2-layer |
 | MCU           | Raspberry Pi Pico 2 (RP2350) |
 
 ### Interfaces
@@ -67,6 +67,7 @@
 3. **Power metering HV does NOT flow through PCB** (external modules handle their own mains)
 4. **Fused live bus** (10A) feeds relay COMs only
 5. **6mm creepage/clearance** required between HV and LV sections
+6. **All connectors on bottom edge** (enclosure opens from bottom only to prevent water ingress)
 
 ---
 
