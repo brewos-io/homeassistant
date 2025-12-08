@@ -10,6 +10,12 @@
   "scope": "/",
   "id": "brewos-pwa",
   "prefer_related_applications": false,
+  "handle_links": "preferred",
+  "url_handlers": [
+    {
+      "origin": "https://cloud.brewos.io"
+    }
+  ],
   "related_applications": [
     {
       "platform": "webapp",
