@@ -310,7 +310,6 @@ Create environment named `staging`:
 
 - **No protection rules** (auto-deploy on push)
 - **Secrets required:**
-  - `STAGING_SERVER_HOST` - Staging server hostname/IP
   - `STAGING_SERVER_SSH_KEY` - SSH private key for deployment
   - `GOOGLE_CLIENT_ID` - Google OAuth client ID
 
@@ -323,7 +322,6 @@ Create environment named `production`:
   - ✓ Wait timer: 0 minutes
   - ✓ Deployment branches: Only `v*` tags
 - **Secrets required:**
-  - `SERVER_HOST` - Production server hostname/IP
   - `SERVER_SSH_KEY` - SSH private key for deployment
   - `GOOGLE_CLIENT_ID` - Google OAuth client ID
 

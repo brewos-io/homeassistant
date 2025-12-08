@@ -234,7 +234,7 @@ jobs:
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           RELEASE_VERSION: ${{ needs.build.outputs.version }}
         with:
-          host: ${{ secrets.SERVER_HOST }}
+          host: cloud.brewos.io
           username: root
           key: ${{ secrets.SERVER_SSH_KEY }}
           envs: GOOGLE_CLIENT_ID,RELEASE_VERSION

@@ -6,9 +6,9 @@ on:
   push:
     branches: [main]
     paths:
-      - 'src/cloud/**'
-      - 'src/web/**'
-      - '.github/workflows/deploy.yml'
+      - "src/cloud/**"
+      - "src/web/**"
+      - ".github/workflows/deploy.yml"
 
 # Only allow one deploy at a time - cancel older runs
 concurrency:
@@ -26,8 +26,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "npm"
           cache-dependency-path: |
             src/web/package-lock.json
             src/cloud/package-lock.json
@@ -58,7 +58,7 @@ jobs:
         env:
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
         with:
-          host: ${{ secrets.STAGING_SERVER_HOST }}
+          host: staging.brewos.io
           username: root
           key: ${{ secrets.STAGING_SERVER_SSH_KEY }}
           envs: GOOGLE_CLIENT_ID
@@ -66,47 +66,47 @@ jobs:
           script: |
             set -e
             cd /root/brewos
-            
+
             # Reset to match repo exactly (avoid conflicts from manual edits)
             git fetch origin main
             git reset --hard origin/main
             git clean -fd
-            
+
             # Create .env for web build (Vite needs these at build time)
             cat > src/web/.env << EOF
             VITE_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
             VITE_CLOUD_WS_URL=wss://staging.brewos.io/ws
             VITE_ENVIRONMENT=staging
             EOF
-            
+
             # Create .env for cloud service
             cat > src/cloud/.env << EOF
             GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
             PORT=3001
             DATA_DIR=/data
             EOF
-            
+
             # Rebuild web UI (fail fast on errors)
             cd src/web
             npm ci
             # Increase Node.js memory limit for Vite build
             NODE_OPTIONS="--max-old-space-size=4096" npm run build
-            
+
             # Copy built web UI to cloud service
             cp -r dist ../cloud/web
-            
+
             # Build new container without stopping old one
             cd ../cloud
             docker compose build
-            
+
             # Only restart after successful build
             docker compose down
             docker compose up -d
-            
+
             # Wait for service to be healthy
             echo "Waiting for service to start..."
             sleep 5
-            
+
             # Health check
             for i in 1 2 3 4 5; do
               if curl -sf http://localhost:3001/api/health > /dev/null; then
@@ -121,7 +121,7 @@ jobs:
               echo "Waiting... ($i/5)"
               sleep 3
             done
-            
+
             echo "✗ Health check failed!"
             docker compose logs --tail=50
             exit 1
