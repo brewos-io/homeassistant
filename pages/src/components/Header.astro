@@ -520,19 +520,34 @@ const navLinks = [
   const mobileMenuBtn = document.getElementById('mobileMenuBtn');
   const mobileMenu = document.getElementById('mobileMenu');
   const mobileOverlay = document.getElementById('mobileOverlay');
+  let scrollPosition = 0;
 
   function openMobileMenu() {
+    // Save scroll position and lock body
+    scrollPosition = window.scrollY;
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollPosition}px`;
+    document.body.style.left = '0';
+    document.body.style.right = '0';
+    document.body.style.overflow = 'hidden';
+    
     mobileMenu?.classList.add('active');
     mobileOverlay?.classList.add('active');
     mobileMenuBtn?.classList.add('active');
-    document.body.style.overflow = 'hidden';
   }
 
   function closeMobileMenu() {
     mobileMenu?.classList.remove('active');
     mobileOverlay?.classList.remove('active');
     mobileMenuBtn?.classList.remove('active');
+    
+    // Restore scroll position and unlock body
+    document.body.style.position = '';
+    document.body.style.top = '';
+    document.body.style.left = '';
+    document.body.style.right = '';
     document.body.style.overflow = '';
+    window.scrollTo(0, scrollPosition);
   }
 
   mobileMenuBtn?.addEventListener('click', openMobileMenu);
