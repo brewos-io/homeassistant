@@ -25,7 +25,7 @@ Tracks the overall firmware release version. Both Pico and ESP32 firmware share 
 
 ### Protocol Version
 
-Tracked separately in `src/shared/protocol_defs.h` as `ECM_PROTOCOL_VERSION`. Incremented only for breaking protocol changes.
+Tracked separately in `src/shared/protocol_defs.h` as `PROTOCOL_VERSION`. Incremented only for breaking protocol changes.
 
 **Relationship:**
 
@@ -133,7 +133,7 @@ The version script automatically updates:
    - `ESP32_VERSION` (string)
 
 3. **Protocol**: `src/shared/protocol_defs.h`
-   - `ECM_PROTOCOL_VERSION`
+   - `PROTOCOL_VERSION`
 
 ## GitHub Workflows
 

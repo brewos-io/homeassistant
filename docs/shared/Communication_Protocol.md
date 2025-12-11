@@ -942,11 +942,11 @@ After all chunks are sent, ESP32 sends an end marker:
 
 ### Protocol Versioning
 
-The protocol uses a version number (`ECM_PROTOCOL_VERSION`) defined in `protocol_defs.h` to track protocol compatibility. Currently set to version 1.
+The protocol uses a version number (`PROTOCOL_VERSION`) defined in `protocol_defs.h` to track protocol compatibility. Currently set to version 1.
 
 **Version Components:**
 
-- **Protocol Version** (`ECM_PROTOCOL_VERSION`): Defines the binary protocol format
+- **Protocol Version** (`PROTOCOL_VERSION`): Defines the binary protocol format
 - **Firmware Version** (in `MSG_BOOT`): Tracks individual device firmware versions
 
 ### Breaking Changes Policy
@@ -1022,7 +1022,7 @@ For breaking protocol changes, both devices **must be updated together** using a
 **Version Checking:**
 
 - ESP32 should parse `MSG_BOOT` to read Pico firmware version
-- ESP32 should check `ECM_PROTOCOL_VERSION` compatibility
+- ESP32 should check `PROTOCOL_VERSION` compatibility
 - Mismatched versions should trigger update sequence or show warning
 
 ### Non-Breaking Changes
@@ -1038,7 +1038,7 @@ For non-breaking changes (new features, bug fixes):
 1. **Always update both devices** when protocol version changes
 2. **Test updates** in development before deploying
 3. **Maintain changelog** documenting protocol version changes
-4. **Increment protocol version** (`ECM_PROTOCOL_VERSION`) for breaking changes
+4. **Increment protocol version** (`PROTOCOL_VERSION`) for breaking changes
 5. **Document migration path** for major protocol updates
 
 ### Version Management

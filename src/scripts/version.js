@@ -137,7 +137,7 @@ function writeVersionFile(firmwareVersion, protocolVersion) {
 # PATCH: Bug fixes (backward compatible)
 #
 # Protocol version is tracked separately in src/shared/protocol_defs.h
-# Increment ECM_PROTOCOL_VERSION for breaking protocol changes
+# Increment PROTOCOL_VERSION for breaking protocol changes
 
 FIRMWARE_VERSION=${firmwareVersion}
 PROTOCOL_VERSION=${protocolVersion}
@@ -322,8 +322,8 @@ function updateProtocolDefs(protocolVersion) {
   let content = fs.readFileSync(PROTOCOL_DEFS, "utf8");
 
   content = content.replace(
-    /#define ECM_PROTOCOL_VERSION\s+\d+/,
-    `#define ECM_PROTOCOL_VERSION    ${protocolVersion}`
+    /#define PROTOCOL_VERSION\s+\d+/,
+    `#define PROTOCOL_VERSION    ${protocolVersion}`
   );
 
   fs.writeFileSync(PROTOCOL_DEFS, content);

@@ -536,7 +536,7 @@ void WebServer::setupRoutes() {
         // Component versions
         doc["firmwareVersion"] = ESP32_VERSION;
         doc["webVersion"] = ESP32_VERSION;  // Web UI bundled with this firmware
-        doc["protocolVersion"] = ECM_PROTOCOL_VERSION;
+        doc["protocolVersion"] = PROTOCOL_VERSION;
         
         // Pico version (if connected) - with safety check
         if (_picoUart.isConnected()) {

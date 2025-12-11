@@ -21,7 +21,7 @@ extern "C" {
 // =============================================================================
 // Protocol version - increment for breaking changes
 // See docs/shared/Communication_Protocol.md for update strategy
-#define ECM_PROTOCOL_VERSION    1
+#define PROTOCOL_VERSION    1
 
 // =============================================================================
 // UART Configuration
