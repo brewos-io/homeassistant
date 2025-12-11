@@ -1,5 +1,5 @@
 /**
- * ECM Coffee Machine Controller - Shared Protocol Definitions
+ * Coffee Machine Controller - Shared Protocol Definitions
  * 
  * This file is shared between ESP32 and Pico firmware.
  * Any changes here must be compatible with both platforms.

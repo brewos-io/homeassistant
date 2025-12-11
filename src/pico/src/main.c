@@ -1,5 +1,5 @@
 /**
- * ECM Coffee Machine Controller - Pico Firmware
+ * Coffee Machine Controller - Pico Firmware
  * 
  * Main entry point for the RP2040-based control board.
  * 
