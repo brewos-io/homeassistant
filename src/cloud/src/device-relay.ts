@@ -8,11 +8,13 @@ interface DeviceConnection {
   deviceId: string;
   connectedAt: Date;
   lastSeen: Date;
-  isAlive: boolean;
+  missedPings: number;  // Track consecutive missed pings
 }
 
 // Ping interval for keep-alive (30 seconds)
 const PING_INTERVAL_MS = 30000;
+// Disconnect after this many missed pings
+const MAX_MISSED_PINGS = 2;
 
 /**
  * Device Relay
@@ -41,15 +43,17 @@ export class DeviceRelay {
    */
   private pingAllDevices(): void {
     this.devices.forEach((connection, deviceId) => {
-      if (!connection.isAlive) {
-        // Device didn't respond to last ping - disconnect
-        console.log(`[Device] ${deviceId} ping timeout - disconnecting`);
+      // Increment missed pings counter (reset on pong)
+      connection.missedPings++;
+      
+      if (connection.missedPings > MAX_MISSED_PINGS) {
+        // Device missed too many pings - disconnect
+        console.log(`[Device] ${deviceId} ping timeout (${connection.missedPings} missed) - disconnecting`);
         connection.ws.terminate();
         return;
       }
 
-      // Mark as not alive until we receive pong
-      connection.isAlive = false;
+      // Send ping
       connection.ws.ping();
     });
   }
@@ -103,7 +107,7 @@ export class DeviceRelay {
       deviceId,
       connectedAt: new Date(),
       lastSeen: new Date(),
-      isAlive: true,
+      missedPings: 0,
     };
 
     this.devices.set(deviceId, connection);
@@ -111,7 +115,7 @@ export class DeviceRelay {
 
     // Handle pong responses for keep-alive
     ws.on("pong", () => {
-      connection.isAlive = true;
+      connection.missedPings = 0;  // Reset missed pings counter
       connection.lastSeen = new Date();
     });
 
@@ -125,7 +129,7 @@ export class DeviceRelay {
     // Handle messages from device
     ws.on("message", (data: RawData) => {
       connection.lastSeen = new Date();
-      connection.isAlive = true; // Any message means device is alive
+      connection.missedPings = 0;  // Any message means device is alive
       try {
         const message: DeviceMessage = JSON.parse(data.toString());
         this.handleDeviceMessage(deviceId, message);

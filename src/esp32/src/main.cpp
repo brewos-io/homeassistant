@@ -1255,9 +1255,10 @@ void loop() {
     // =========================================================================
     
     // Cloud connection (handles WebSocket to cloud server)
-    // Throttle to every 50ms to reduce CPU load from SSL processing
+    // Throttle to every 200ms to reduce CPU load from SSL processing
+    // This gives more CPU time to local web server and other tasks
     static unsigned long lastCloudLoop = 0;
-    if (cloudConnection && millis() - lastCloudLoop >= 50) {
+    if (cloudConnection && millis() - lastCloudLoop >= 200) {
         lastCloudLoop = millis();
         cloudConnection->loop();
     }
