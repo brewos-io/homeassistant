@@ -14,9 +14,9 @@
 // -----------------------------------------------------------------------------
 #define ESP32_VERSION_MAJOR     0
 #define ESP32_VERSION_MINOR     7
-#define ESP32_VERSION_PATCH     2
+#define ESP32_VERSION_PATCH     3
 #define ESP32_VERSION_PRERELEASE "beta.1"  // Empty string "" for stable releases
-#define ESP32_VERSION           "0.7.2"
+#define ESP32_VERSION           "0.7.3"
 
 // Update channel: "stable" or "beta"
 // Users on "stable" only get released versions (no pre-release suffix)
