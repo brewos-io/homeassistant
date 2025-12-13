@@ -647,7 +647,9 @@ void control_set_setpoint(uint8_t target, int16_t temp) {
 
 int16_t control_get_setpoint(uint8_t target) {
     pid_state_t* pid = (target == 0) ? &g_brew_pid : &g_steam_pid;
-    return (int16_t)(pid->setpoint * 10);
+    // Return the target setpoint (what user set), not the ramping intermediate value
+    // This ensures status messages report the user's desired temperature
+    return (int16_t)(pid->setpoint_target * 10);
 }
 
 // =============================================================================

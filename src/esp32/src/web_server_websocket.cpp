@@ -181,10 +181,14 @@ void WebServer::processCommand(JsonDocument& doc) {
                 machineState.brew_setpoint = temp;
             }
             
-            uint8_t payload[5];
-            payload[0] = (boiler == "steam") ? 0x02 : 0x01;
-            memcpy(&payload[1], &temp, sizeof(float));
-            if (_picoUart.sendCommand(MSG_CMD_SET_TEMP, payload, 5)) {
+            // Pico expects: [target:1][temperature:int16] where temperature is Celsius * 10
+            // Note: Pico (RP2040) is little-endian, so send LSB first
+            uint8_t payload[3];
+            payload[0] = (boiler == "steam") ? 0x01 : 0x00;  // 0=brew, 1=steam
+            int16_t tempScaled = (int16_t)(temp * 10.0f);  // Convert to 0.1°C units
+            payload[1] = tempScaled & 0xFF;         // LSB first (little-endian)
+            payload[2] = (tempScaled >> 8) & 0xFF;  // MSB second
+            if (_picoUart.sendCommand(MSG_CMD_SET_TEMP, payload, 3)) {
                 // Pre-format message to avoid String.c_str() issues
                 char tempMsg[64];
                 snprintf(tempMsg, sizeof(tempMsg), "%s temp saved: %.1f°C", boiler.c_str(), temp);

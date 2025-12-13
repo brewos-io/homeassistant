@@ -1377,10 +1377,14 @@ void WebServer::setupRoutes() {
             }
             
             // Send to Pico
-            uint8_t payload[5];
-            payload[0] = 0x01;  // Brew boiler ID
-            memcpy(&payload[1], &temp, sizeof(float));
-            if (_picoUart.sendCommand(MSG_CMD_SET_TEMP, payload, 5)) {
+            // Pico expects: [target:1][temperature:int16] where temperature is Celsius * 10
+            // Note: Pico (RP2040) is little-endian, so send LSB first
+            uint8_t payload[3];
+            payload[0] = 0x00;  // 0=brew
+            int16_t tempScaled = (int16_t)(temp * 10.0f);
+            payload[1] = tempScaled & 0xFF;         // LSB first
+            payload[2] = (tempScaled >> 8) & 0xFF;  // MSB second
+            if (_picoUart.sendCommand(MSG_CMD_SET_TEMP, payload, 3)) {
                 broadcastLog("Brew temp set to %.1f°C", temp);
                 request->send(200, "application/json", "{\"status\":\"ok\"}");
             } else {
@@ -1406,10 +1410,14 @@ void WebServer::setupRoutes() {
             }
             
             // Send to Pico
-            uint8_t payload[5];
-            payload[0] = 0x02;  // Steam boiler ID
-            memcpy(&payload[1], &temp, sizeof(float));
-            if (_picoUart.sendCommand(MSG_CMD_SET_TEMP, payload, 5)) {
+            // Pico expects: [target:1][temperature:int16] where temperature is Celsius * 10
+            // Note: Pico (RP2040) is little-endian, so send LSB first
+            uint8_t payload[3];
+            payload[0] = 0x01;  // 1=steam
+            int16_t tempScaled = (int16_t)(temp * 10.0f);
+            payload[1] = tempScaled & 0xFF;         // LSB first
+            payload[2] = (tempScaled >> 8) & 0xFF;  // MSB second
+            if (_picoUart.sendCommand(MSG_CMD_SET_TEMP, payload, 3)) {
                 broadcastLog("Steam temp set to %.1f°C", temp);
                 request->send(200, "application/json", "{\"status\":\"ok\"}");
             } else {

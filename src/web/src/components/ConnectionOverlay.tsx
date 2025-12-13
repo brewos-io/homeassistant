@@ -41,7 +41,7 @@ export function ConnectionOverlay() {
   // but the physical machine is unreachable.
   const isDeviceOffline = machineState === "offline";
   const isUpdating = ota.isUpdating || ota.stage === "complete";
-  
+
   // Track stable overlay state with debouncing to prevent flickering
   const [overlayState, setOverlayState] = useState<OverlayState>(() => {
     if (isUpdating) return "updating";
@@ -49,7 +49,7 @@ export function ConnectionOverlay() {
     if (!isConnected) return "connecting";
     return "hidden";
   });
-  
+
   // Track when we entered offline state to enforce minimum display time
   const offlineEnteredAt = useRef<number | null>(null);
   const pendingStateChange = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -72,33 +72,33 @@ export function ConnectionOverlay() {
   // Stabilized state transition logic
   useEffect(() => {
     const targetState = getTargetState();
-    
+
     // Clear any pending state change
     if (pendingStateChange.current) {
       clearTimeout(pendingStateChange.current);
       pendingStateChange.current = null;
     }
-    
+
     // OTA always takes priority immediately
     if (targetState === "updating") {
       setOverlayState("updating");
       return;
     }
-    
+
     // If entering offline state, record the time
     if (targetState === "offline" && overlayState !== "offline") {
       offlineEnteredAt.current = Date.now();
       setOverlayState("offline");
       return;
     }
-    
+
     // If leaving offline state, enforce minimum display time
     if (overlayState === "offline" && targetState !== "offline") {
-      const elapsed = offlineEnteredAt.current 
-        ? Date.now() - offlineEnteredAt.current 
+      const elapsed = offlineEnteredAt.current
+        ? Date.now() - offlineEnteredAt.current
         : OFFLINE_STABLE_MS;
       const remainingTime = Math.max(0, OFFLINE_STABLE_MS - elapsed);
-      
+
       if (remainingTime > 0) {
         // Wait before transitioning away from offline
         pendingStateChange.current = setTimeout(() => {
@@ -120,7 +120,7 @@ export function ConnectionOverlay() {
       }
       offlineEnteredAt.current = null;
     }
-    
+
     // Transitioning to hidden (connected and online) - add delay
     if (targetState === "hidden") {
       pendingStateChange.current = setTimeout(() => {
@@ -128,7 +128,7 @@ export function ConnectionOverlay() {
       }, HIDE_DELAY_MS);
       return;
     }
-    
+
     // For connecting state, debounce to prevent rapid flickering
     if (targetState === "connecting" && overlayState === "hidden") {
       pendingStateChange.current = setTimeout(() => {
@@ -136,10 +136,10 @@ export function ConnectionOverlay() {
       }, STATE_DEBOUNCE_MS);
       return;
     }
-    
+
     // Direct transition for other cases
     setOverlayState(targetState);
-    
+
     return () => {
       if (pendingStateChange.current) {
         clearTimeout(pendingStateChange.current);
@@ -212,7 +212,11 @@ export function ConnectionOverlay() {
   // This ensures the UI matches the debounced overlay state
   const getStatus = () => {
     // OTA in progress - show simple animation without progress bar
-    if (overlayState === "updating" || ota.isUpdating || ota.stage === "complete") {
+    if (
+      overlayState === "updating" ||
+      ota.isUpdating ||
+      ota.stage === "complete"
+    ) {
       return {
         icon: <Download className="w-16 h-16 text-accent" />,
         title: "Updating BrewOS...",
@@ -269,9 +273,11 @@ export function ConnectionOverlay() {
 
   // Lower z-index when device is offline so header (z-50) remains accessible
   const zIndex = status.isDeviceOffline ? "z-[40]" : "z-[60]";
-  
+
   return (
-    <div className={`fixed inset-0 ${zIndex} flex items-center justify-center p-6 bg-theme/95 backdrop-blur-md overflow-hidden touch-none overscroll-none`}>
+    <div
+      className={`fixed inset-0 ${zIndex} flex items-center justify-center p-6 bg-theme/95 backdrop-blur-md overflow-hidden touch-none overscroll-none`}
+    >
       {/* Dev mode bypass button */}
       {DEV_MODE && (
         <button
