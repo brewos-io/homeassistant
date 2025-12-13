@@ -524,14 +524,20 @@ const PowerControls = memo(function PowerControls({
         {/* Secondary button - 30% - Change Strategy */}
         <button
           onClick={onOpenStrategyModal}
+          disabled={!canTurnOn}
           className={cn(
             "flex-[3] px-3 py-4 transition-colors duration-200",
             "flex items-center justify-center",
+            !canTurnOn && "opacity-50 cursor-not-allowed",
             isOnActive
               ? "nav-active rounded-r-xl"
               : "bg-theme-secondary text-theme-secondary hover:bg-theme-tertiary"
           )}
-          title="Change heating strategy"
+          title={
+            !canTurnOn
+              ? "Machine must be in IDLE, READY, or ECO state to turn on"
+              : "Change heating strategy"
+          }
         >
           <ChevronDown className="w-5 h-5" />
         </button>
