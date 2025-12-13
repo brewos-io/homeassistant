@@ -9,14 +9,11 @@ const DEV_MODE = import.meta.env.DEV;
 const DEV_BYPASS_KEY = "brewos-dev-bypass-overlay";
 
 // Debounce time before hiding overlay after connection
-const HIDE_DELAY_MS = 800;
+const HIDE_DELAY_MS = 1000;
 
-// Minimum time to show offline state before allowing transitions
-// This prevents flickering between "connecting" and "offline"
-const OFFLINE_STABLE_MS = 2000;
-
-// Debounce time for state transitions to prevent flickering
-const STATE_DEBOUNCE_MS = 500;
+// Minimum time to show any overlay state before allowing transitions
+// This prevents rapid flickering between states
+const STATE_STABLE_MS = 3000;
 
 // Key to track OTA in progress across page reloads (shared with store.ts)
 const OTA_IN_PROGRESS_KEY = "brewos-ota-in-progress";
@@ -50,9 +47,11 @@ export function ConnectionOverlay() {
     return "hidden";
   });
 
-  // Track when we entered offline state to enforce minimum display time
-  const offlineEnteredAt = useRef<number | null>(null);
+  // Track when we entered current overlay state to enforce minimum display time
+  const stateEnteredAt = useRef<number>(Date.now());
   const pendingStateChange = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Track if device has been confirmed offline (persists across cloud reconnects)
+  const deviceConfirmedOffline = useRef<boolean>(false);
 
   // Track OTA state in localStorage so store.ts can detect it after reconnect
   useEffect(() => {
@@ -61,13 +60,38 @@ export function ConnectionOverlay() {
     }
   }, [ota.isUpdating]);
 
+  // Track device offline state - once confirmed offline, stay that way until device comes back
+  useEffect(() => {
+    if (isDeviceOffline) {
+      deviceConfirmedOffline.current = true;
+    } else if (isConnected && !isDeviceOffline && machineState !== "unknown") {
+      // Device is confirmed online with valid state - clear the offline flag
+      deviceConfirmedOffline.current = false;
+    }
+  }, [isDeviceOffline, isConnected, machineState]);
+
   // Determine the target state based on current conditions
   const getTargetState = useCallback((): OverlayState => {
     if (isUpdating) return "updating";
+
+    // If device was confirmed offline, keep showing offline even if cloud reconnects/disconnects
+    // This prevents flickering to "connecting" when the device is actually offline
+    if (deviceConfirmedOffline.current) {
+      return "offline";
+    }
+
+    // Device is offline (cloud connected but device unreachable)
     if (isDeviceOffline && isConnected) return "offline";
+
+    // Machine state is unknown (connection lost, waiting for status)
+    // Show connecting while we wait for the machine to report its state
+    if (machineState === "unknown" && isConnected) return "connecting";
+
+    // Not connected to server
     if (!isConnected) return "connecting";
+
     return "hidden";
-  }, [isUpdating, isDeviceOffline, isConnected]);
+  }, [isUpdating, isDeviceOffline, isConnected, machineState]);
 
   // Stabilized state transition logic
   useEffect(() => {
@@ -81,63 +105,55 @@ export function ConnectionOverlay() {
 
     // OTA always takes priority immediately
     if (targetState === "updating") {
-      setOverlayState("updating");
-      return;
-    }
-
-    // If entering offline state, record the time
-    if (targetState === "offline" && overlayState !== "offline") {
-      offlineEnteredAt.current = Date.now();
-      setOverlayState("offline");
-      return;
-    }
-
-    // If leaving offline state, enforce minimum display time
-    if (overlayState === "offline" && targetState !== "offline") {
-      const elapsed = offlineEnteredAt.current
-        ? Date.now() - offlineEnteredAt.current
-        : OFFLINE_STABLE_MS;
-      const remainingTime = Math.max(0, OFFLINE_STABLE_MS - elapsed);
-
-      if (remainingTime > 0) {
-        // Wait before transitioning away from offline
-        pendingStateChange.current = setTimeout(() => {
-          // Re-check if we should still transition
-          const newTarget = getTargetState();
-          if (newTarget !== "offline") {
-            offlineEnteredAt.current = null;
-            if (newTarget === "hidden") {
-              // Add extra delay before hiding
-              pendingStateChange.current = setTimeout(() => {
-                setOverlayState("hidden");
-              }, HIDE_DELAY_MS);
-            } else {
-              setOverlayState(newTarget);
-            }
-          }
-        }, remainingTime);
-        return;
+      if (overlayState !== "updating") {
+        stateEnteredAt.current = Date.now();
+        setOverlayState("updating");
       }
-      offlineEnteredAt.current = null;
+      return;
+    }
+
+    // If already in target state, nothing to do
+    if (targetState === overlayState) {
+      return;
     }
 
     // Transitioning to hidden (connected and online) - add delay
     if (targetState === "hidden") {
+      // Enforce minimum time in current state before hiding
+      const elapsed = Date.now() - stateEnteredAt.current;
+      const remainingTime = Math.max(0, STATE_STABLE_MS - elapsed);
+
       pendingStateChange.current = setTimeout(() => {
-        setOverlayState("hidden");
-      }, HIDE_DELAY_MS);
+        // Re-check conditions before transitioning
+        if (
+          !deviceConfirmedOffline.current &&
+          connectionState === "connected"
+        ) {
+          setOverlayState("hidden");
+        }
+      }, remainingTime + HIDE_DELAY_MS);
       return;
     }
 
-    // For connecting state, debounce to prevent rapid flickering
-    if (targetState === "connecting" && overlayState === "hidden") {
+    // For any other transition, enforce minimum display time
+    const elapsed = Date.now() - stateEnteredAt.current;
+    const remainingTime = Math.max(0, STATE_STABLE_MS - elapsed);
+
+    if (remainingTime > 0 && overlayState !== "hidden") {
+      // Wait before transitioning
       pendingStateChange.current = setTimeout(() => {
-        setOverlayState("connecting");
-      }, STATE_DEBOUNCE_MS);
+        // Re-check conditions
+        const newTarget = getTargetState();
+        if (newTarget !== overlayState) {
+          stateEnteredAt.current = Date.now();
+          setOverlayState(newTarget);
+        }
+      }, remainingTime);
       return;
     }
 
-    // Direct transition for other cases
+    // Direct transition
+    stateEnteredAt.current = Date.now();
     setOverlayState(targetState);
 
     return () => {
@@ -145,7 +161,15 @@ export function ConnectionOverlay() {
         clearTimeout(pendingStateChange.current);
       }
     };
-  }, [isConnected, isUpdating, isDeviceOffline, overlayState, getTargetState]);
+  }, [
+    isConnected,
+    isUpdating,
+    isDeviceOffline,
+    overlayState,
+    getTargetState,
+    connectionState,
+    machineState,
+  ]);
 
   // Derived visibility from overlay state
   const isVisible = overlayState !== "hidden";

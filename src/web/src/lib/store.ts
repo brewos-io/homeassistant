@@ -498,7 +498,26 @@ export const useStore = create<BrewOSState>()(
     preferences: loadPreferencesFromStorage(),
 
     // Actions
-    setConnectionState: (state) => set({ connectionState: state }),
+    setConnectionState: (newState) => {
+      set((prevState) => {
+        // When disconnecting, reset machine state to prevent showing stale data
+        if (newState === "disconnected" || newState === "error") {
+          return {
+            connectionState: newState,
+            machine: {
+              ...prevState.machine,
+              // Keep the offline state if it was set, otherwise mark as unknown
+              state:
+                prevState.machine.state === "offline" ? "offline" : "unknown",
+              isHeating: false,
+              isBrewing: false,
+            },
+            pico: { ...prevState.pico, connected: false },
+          };
+        }
+        return { connectionState: newState };
+      });
+    },
 
     processMessage: (message) => {
       const { type, ...data } = message;
