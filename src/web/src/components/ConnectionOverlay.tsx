@@ -149,11 +149,14 @@ export function ConnectionOverlay() {
       const remainingTime = Math.max(0, STATE_STABLE_MS - elapsed);
 
       pendingStateChange.current = setTimeout(() => {
-        // Re-check conditions before transitioning
-        if (
-          !deviceConfirmedOffline.current &&
-          connectionState === "connected"
-        ) {
+        // Re-check conditions before transitioning - use current store state
+        // not the ref, as the ref might be stale due to React batching
+        const currentMachineState = useStore.getState().machine.state;
+        const currentConnectionState = useStore.getState().connectionState;
+        const isStillOffline = currentMachineState === "offline";
+        
+        if (!isStillOffline && currentConnectionState === "connected") {
+          deviceConfirmedOffline.current = false; // Sync the ref
           setOverlayState("hidden");
         }
       }, remainingTime + HIDE_DELAY_MS);
@@ -167,10 +170,34 @@ export function ConnectionOverlay() {
     if (remainingTime > 0 && overlayState !== "hidden") {
       // Wait before transitioning
       pendingStateChange.current = setTimeout(() => {
-        // Re-check conditions
-        const newTarget = getTargetState();
+        // Re-check conditions using current store state (not stale closure values)
+        const currentState = useStore.getState();
+        const currentMachineState = currentState.machine.state;
+        const currentConnectionState = currentState.connectionState;
+        const currentOta = currentState.ota;
+        
+        const isCurrentlyOffline = currentMachineState === "offline";
+        const isCurrentlyConnected = currentConnectionState === "connected";
+        const isCurrentlyUpdating = currentOta.isUpdating || 
+          (localStorage.getItem(OTA_IN_PROGRESS_KEY) === "true" && (!isCurrentlyConnected || isCurrentlyOffline));
+        
+        // Determine current target state
+        let newTarget: OverlayState;
+        if (isCurrentlyUpdating) {
+          newTarget = "updating";
+        } else if (isCurrentlyOffline && isCurrentlyConnected) {
+          newTarget = "offline";
+        } else if (!isCurrentlyConnected) {
+          newTarget = deviceConfirmedOffline.current ? "offline" : "connecting";
+        } else {
+          newTarget = "hidden";
+        }
+        
         if (newTarget !== overlayState) {
           stateEnteredAt.current = Date.now();
+          if (newTarget === "hidden") {
+            deviceConfirmedOffline.current = false; // Sync the ref
+          }
           setOverlayState(newTarget);
         }
       }, remainingTime);
