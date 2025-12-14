@@ -163,6 +163,15 @@ export function Schedules() {
   );
 
   const saveAutoPowerOff = useCallback(async () => {
+    // Check against store state to prevent infinite loop
+    if (
+      !isDemo &&
+      localAutoPowerOff.enabled === storeAutoPowerOff.enabled &&
+      localAutoPowerOff.minutes === storeAutoPowerOff.minutes
+    ) {
+      return;
+    }
+
     // Demo mode: just show success
     if (isDemo) {
       success("Auto power-off settings saved");
@@ -176,7 +185,7 @@ export function Schedules() {
       console.error("Failed to save auto power-off:", err);
       error("Failed to save auto power-off settings.");
     }
-  }, [isDemo, localAutoPowerOff, sendCommand, success, error]);
+  }, [isDemo, localAutoPowerOff, storeAutoPowerOff, sendCommand, success, error]);
 
   const editSchedule = useCallback((schedule: Schedule) => {
     setIsEditing(schedule.id);

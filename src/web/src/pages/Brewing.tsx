@@ -65,6 +65,12 @@ export function Brewing() {
     // Don't save if values are invalid
     if (!isBBWValid) return;
 
+    // Don't save if form matches store (prevents loop)
+    // Use JSON.stringify for deep comparison to ensure we catch all fields
+    if (JSON.stringify(formState) === JSON.stringify(bbw)) {
+      return;
+    }
+
     const timer = setTimeout(() => {
       sendCommand("set_bbw", { ...formState });
     }, 500);
@@ -89,6 +95,12 @@ export function Brewing() {
 
     // Don't save if values are invalid
     if (!isPreinfusionValid) return;
+
+    // Don't save if form matches store (prevents loop)
+    // Use JSON.stringify for deep comparison to ensure we catch all fields
+    if (JSON.stringify(preinfusionForm) === JSON.stringify(preinfusion)) {
+      return;
+    }
 
     const timer = setTimeout(() => {
       sendCommand("set_preinfusion", {
