@@ -37,6 +37,7 @@ void BrewSettings::toJson(JsonObject& obj) const {
     obj["autoTare"] = autoTare;
     obj["preinfusionTime"] = preinfusionTime;
     obj["preinfusionPressure"] = preinfusionPressure;
+    obj["preinfusionPauseMs"] = preinfusionPauseMs;
 }
 
 bool BrewSettings::fromJson(JsonObjectConst obj) {
@@ -47,6 +48,7 @@ bool BrewSettings::fromJson(JsonObjectConst obj) {
     if (obj["autoTare"].is<bool>()) autoTare = obj["autoTare"];
     if (obj["preinfusionTime"].is<uint16_t>()) preinfusionTime = obj["preinfusionTime"];
     if (obj["preinfusionPressure"].is<float>()) preinfusionPressure = obj["preinfusionPressure"];
+    if (obj["preinfusionPauseMs"].is<uint16_t>()) preinfusionPauseMs = obj["preinfusionPauseMs"];
     return true;
 }
 

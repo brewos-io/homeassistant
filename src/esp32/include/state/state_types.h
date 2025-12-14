@@ -27,8 +27,9 @@ struct BrewSettings {
     float targetWeight = 36.0f;        // Target output (g)
     float stopOffset = 2.0f;           // Stop before target (g)
     bool autoTare = true;              // Auto-tare on portafilter
-    float preinfusionTime = 0.0f;      // Pre-infusion seconds
-    float preinfusionPressure = 2.0f;  // Pre-infusion bar
+    float preinfusionTime = 0.0f;      // Pre-infusion seconds (on time)
+    float preinfusionPressure = 2.0f;  // Pre-infusion bar (used as enabled flag if > 0)
+    uint16_t preinfusionPauseMs = 5000; // Pre-infusion soak/pause time (ms)
     
     void toJson(JsonObject& obj) const;
     bool fromJson(JsonObjectConst obj);

@@ -517,7 +517,7 @@ void WebServer::broadcastDeviceInfo() {
     // preinfusionPressure > 0 is used as the enabled flag (legacy compatibility)
     doc["preinfusionEnabled"] = brewSettings.preinfusionPressure > 0;
     doc["preinfusionOnMs"] = (uint16_t)(brewSettings.preinfusionTime * 1000);  // Convert seconds to ms
-    doc["preinfusionPauseMs"] = (uint16_t)(brewSettings.preinfusionPressure > 0 ? 5000 : 0);  // Default pause
+    doc["preinfusionPauseMs"] = brewSettings.preinfusionPauseMs;  // Use saved value
     
     // Include user preferences (synced across devices)
     JsonObject preferences = doc["preferences"].to<JsonObject>();
@@ -532,6 +532,49 @@ void WebServer::broadcastDeviceInfo() {
     const auto& scheduleSettings = State.settings().schedule;
     JsonObject scheduleObj = doc["schedule"].to<JsonObject>();
     scheduleSettings.toJson(scheduleObj);
+    
+    // Allocate JSON buffer in internal RAM (not PSRAM) to avoid crashes
+    size_t jsonSize = measureJson(doc) + 1;
+    char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    if (!jsonBuffer) {
+        jsonBuffer = (char*)malloc(jsonSize);
+    }
+    
+    if (jsonBuffer) {
+        serializeJson(doc, jsonBuffer, jsonSize);
+        _ws.textAll(jsonBuffer);
+        
+        // Also send to cloud - use jsonBuffer directly to avoid String allocation
+        if (_cloudConnection) {
+            _cloudConnection->send(jsonBuffer);
+        }
+        
+        free(jsonBuffer);
+    }
+}
+
+void WebServer::broadcastBBWSettings() {
+    // Skip during OTA to prevent WebSocket queue overflow
+    if (_otaInProgress) {
+        return;
+    }
+    
+    // Use stack allocation to avoid PSRAM crashes
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+    StaticJsonDocument<512> doc;
+    #pragma GCC diagnostic pop
+    doc["type"] = "bbw_settings";
+    
+    // Get BBW settings from brewByWeight manager
+    if (brewByWeight) {
+        // enabled maps to auto_stop (when BBW is enabled, it auto-stops at target)
+        doc["enabled"] = brewByWeight->isAutoStopEnabled();
+        doc["targetWeight"] = brewByWeight->getTargetWeight();
+        doc["doseWeight"] = brewByWeight->getDoseWeight();
+        doc["stopOffset"] = brewByWeight->getStopOffset();
+        doc["autoTare"] = brewByWeight->isAutoTareEnabled();
+    }
     
     // Allocate JSON buffer in internal RAM (not PSRAM) to avoid crashes
     size_t jsonSize = measureJson(doc) + 1;

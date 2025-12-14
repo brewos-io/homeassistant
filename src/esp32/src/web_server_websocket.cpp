@@ -456,23 +456,43 @@ void WebServer::processCommand(JsonDocument& doc) {
             broadcastLogLevel("info", "Scale reset");
         }
         // Brew-by-weight settings
+        // Accept both camelCase (from web client) and snake_case field names
         else if (cmd == "set_bbw") {
-            if (!doc["target_weight"].isNull()) {
+            // Target weight
+            if (!doc["targetWeight"].isNull()) {
+                brewByWeight->setTargetWeight(doc["targetWeight"].as<float>());
+            } else if (!doc["target_weight"].isNull()) {
                 brewByWeight->setTargetWeight(doc["target_weight"].as<float>());
             }
-            if (!doc["dose_weight"].isNull()) {
+            // Dose weight
+            if (!doc["doseWeight"].isNull()) {
+                brewByWeight->setDoseWeight(doc["doseWeight"].as<float>());
+            } else if (!doc["dose_weight"].isNull()) {
                 brewByWeight->setDoseWeight(doc["dose_weight"].as<float>());
             }
-            if (!doc["stop_offset"].isNull()) {
+            // Stop offset
+            if (!doc["stopOffset"].isNull()) {
+                brewByWeight->setStopOffset(doc["stopOffset"].as<float>());
+            } else if (!doc["stop_offset"].isNull()) {
                 brewByWeight->setStopOffset(doc["stop_offset"].as<float>());
             }
-            if (!doc["auto_stop"].isNull()) {
+            // Enabled / Auto-stop (enabled in UI maps to auto_stop in ESP32)
+            if (!doc["enabled"].isNull()) {
+                brewByWeight->setAutoStop(doc["enabled"].as<bool>());
+            } else if (!doc["auto_stop"].isNull()) {
                 brewByWeight->setAutoStop(doc["auto_stop"].as<bool>());
             }
-            if (!doc["auto_tare"].isNull()) {
+            // Auto-tare
+            if (!doc["autoTare"].isNull()) {
+                brewByWeight->setAutoTare(doc["autoTare"].as<bool>());
+            } else if (!doc["auto_tare"].isNull()) {
                 brewByWeight->setAutoTare(doc["auto_tare"].as<bool>());
             }
+            
             broadcastLogLevel("info", "Brew-by-weight settings updated");
+            
+            // Broadcast updated BBW settings to all clients (including cloud)
+            broadcastBBWSettings();
         }
         // Pre-infusion settings
         else if (cmd == "set_preinfusion") {
@@ -500,6 +520,7 @@ void WebServer::processCommand(JsonDocument& doc) {
                     auto& settings = State.settings();
                     settings.brew.preinfusionTime = onTimeMs / 1000.0f;  // Store as seconds
                     settings.brew.preinfusionPressure = enabled ? 1.0f : 0.0f;  // Use as enabled flag
+                    settings.brew.preinfusionPauseMs = pauseTimeMs;  // Store pause/soak time
                     State.saveBrewSettings();
                     
                     broadcastLogLevel("info", "Pre-infusion settings saved: %s, on=%dms, pause=%dms", 

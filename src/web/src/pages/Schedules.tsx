@@ -58,6 +58,16 @@ export function Schedules() {
     [preferences.firstDayOfWeek]
   );
 
+  // Local state for auto power-off editing
+  const [localAutoPowerOff, setLocalAutoPowerOff] = useState(autoPowerOff);
+
+  // Sync local state when store updates (for non-demo mode)
+  useEffect(() => {
+    if (!isDemo) {
+      setLocalAutoPowerOff(autoPowerOff);
+    }
+  }, [isDemo, autoPowerOff]);
+
   const resetForm = useCallback(() => {
     setIsEditing(null);
     setIsAdding(false);
@@ -160,13 +170,13 @@ export function Schedules() {
     }
 
     try {
-      await sendCommand("set_auto_off", autoPowerOff);
+      await sendCommand("set_auto_off", localAutoPowerOff);
       success("Auto power-off settings saved");
     } catch (err) {
       console.error("Failed to save auto power-off:", err);
       error("Failed to save auto power-off settings.");
     }
-  }, [isDemo, autoPowerOff, sendCommand, success, error]);
+  }, [isDemo, localAutoPowerOff, sendCommand, success, error]);
 
   const editSchedule = useCallback((schedule: Schedule) => {
     setIsEditing(schedule.id);
@@ -187,16 +197,6 @@ export function Schedules() {
     setIsEditing(null);
     setFormData(DEFAULT_SCHEDULE);
   }, []);
-
-  // Local state for auto power-off editing (for demo mode)
-  const [localAutoPowerOff, setLocalAutoPowerOff] = useState(autoPowerOff);
-
-  // Sync local state when store updates (for non-demo mode)
-  useEffect(() => {
-    if (!isDemo) {
-      setLocalAutoPowerOff(autoPowerOff);
-    }
-  }, [isDemo, autoPowerOff]);
 
   const handleAutoPowerOffChange = useCallback(
     (value: { enabled: boolean; minutes: number }) => {
