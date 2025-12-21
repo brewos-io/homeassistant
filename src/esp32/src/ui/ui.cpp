@@ -751,9 +751,13 @@ void UI::checkAutoScreenSwitch() {
     }
 
     // Show idle screen if machine is off or initializing
+    // But don't interrupt settings navigation (including all settings sub-screens)
     if ((_state.machine_state == UI_STATE_IDLE || _state.machine_state == UI_STATE_INIT) && 
         _currentScreen != SCREEN_IDLE && 
-        _currentScreen != SCREEN_SETTINGS) {
+        _currentScreen != SCREEN_SETTINGS &&
+        _currentScreen != SCREEN_TEMP_SETTINGS &&
+        _currentScreen != SCREEN_SCALE &&
+        _currentScreen != SCREEN_CLOUD) {
         
         // If currently on Splash screen, ensure we show it for at least 2 seconds
         if (_currentScreen == SCREEN_SPLASH) {
