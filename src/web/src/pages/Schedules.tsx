@@ -19,6 +19,8 @@ import {
 } from "@/components/schedules";
 import { isDemoMode, getDemoSchedules } from "@/lib/demo-mode";
 import { Clock, Plus, Moon, Calendar } from "lucide-react";
+import { getMachineByBrandModel } from "@/lib/machines";
+import { getHeatingStrategyForPowerMode } from "@/lib/powerValidation";
 
 export function Schedules() {
   const preferences = useStore((s) => s.preferences);
@@ -58,6 +60,15 @@ export function Schedules() {
     [preferences.firstDayOfWeek]
   );
 
+  // Get machine and power config for auto-strategy calculation
+  const voltage = useStore((s) => s.power.voltage) || 220;
+  const maxCurrent = useStore((s) => s.power.maxCurrent) || 13;
+  const machine = useMemo(() => {
+    if (!device.machineBrand || !device.machineModel) return undefined;
+    return getMachineByBrandModel(device.machineBrand, device.machineModel);
+  }, [device.machineBrand, device.machineModel]);
+  const powerConfig = useMemo(() => ({ voltage, maxCurrent }), [voltage, maxCurrent]);
+
   // Local state for auto power-off editing
   const [localAutoPowerOff, setLocalAutoPowerOff] = useState(autoPowerOff);
 
@@ -77,17 +88,27 @@ export function Schedules() {
   const saveSchedule = useCallback(async () => {
     setSaving(true);
 
+    // Calculate the heating strategy based on power mode and config
+    const calculatedStrategy = formData.action === "on" && isDualBoiler
+      ? getHeatingStrategyForPowerMode(formData.powerMode, machine, powerConfig)
+      : formData.strategy;
+    
+    const scheduleData = {
+      ...formData,
+      strategy: calculatedStrategy,
+    };
+
     // Demo mode: simulate save locally
     if (isDemo) {
       await new Promise((r) => setTimeout(r, 300));
       if (isEditing) {
         setDemoSchedules((prev) =>
-          prev.map((s) => (s.id === isEditing ? { ...s, ...formData } : s))
+          prev.map((s) => (s.id === isEditing ? { ...s, ...scheduleData } : s))
         );
       } else {
         const newSchedule: Schedule = {
           id: Date.now(),
-          ...formData,
+          ...scheduleData,
         };
         setDemoSchedules((prev) => [...prev, newSchedule]);
       }
@@ -99,7 +120,7 @@ export function Schedules() {
 
     try {
       const command = isEditing ? "update_schedule" : "add_schedule";
-      const payload = isEditing ? { id: isEditing, ...formData } : formData;
+      const payload = isEditing ? { id: isEditing, ...scheduleData } : scheduleData;
 
       await sendCommand(command, payload as Record<string, unknown>);
       resetForm();
@@ -110,7 +131,7 @@ export function Schedules() {
     } finally {
       setSaving(false);
     }
-  }, [isDemo, isEditing, formData, sendCommand, success, error, resetForm]);
+  }, [isDemo, isEditing, formData, sendCommand, success, error, resetForm, isDualBoiler, machine, powerConfig]);
 
   const deleteSchedule = useCallback(
     async (id: number) => {
@@ -196,6 +217,8 @@ export function Schedules() {
       minute: schedule.minute,
       action: schedule.action,
       strategy: schedule.strategy,
+      // Map legacy strategy to power mode for backward compatibility
+      powerMode: schedule.powerMode || (schedule.strategy === 0 ? "brew_only" : "brew_steam"),
       name: schedule.name,
     });
     setIsAdding(false);

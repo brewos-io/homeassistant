@@ -100,7 +100,7 @@ export class DemoConnection implements IConnection {
         temperatureUnit: "celsius",
         electricityPrice: 0.15,
         currency: "USD",
-        lastHeatingStrategy: 1,
+        lastPowerMode: "brew_steam", // User-facing preference (replaces lastHeatingStrategy)
         initialized: true, // In demo, always initialized
       },
     });

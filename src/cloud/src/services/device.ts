@@ -358,6 +358,76 @@ export function updateDeviceStatus(
 }
 
 /**
+ * Mark all devices as offline (used on server startup)
+ * This prevents stale online states from a previous server run
+ */
+export function markAllDevicesOffline(): number {
+  const db = getDb();
+  const now = nowUTC();
+
+  // Count how many devices will be affected
+  const onlineCount = db.exec(
+    `SELECT COUNT(*) FROM devices WHERE is_online = 1`
+  );
+  const count = (onlineCount[0]?.values[0]?.[0] as number) || 0;
+
+  if (count > 0) {
+    db.run(
+      `UPDATE devices SET is_online = 0, updated_at = ? WHERE is_online = 1`,
+      [now]
+    );
+    saveDatabase();
+  }
+
+  return count;
+}
+
+/**
+ * Sync database online status with actual WebSocket connections
+ * Marks devices as offline if they are marked online in DB but not in the connected set
+ * This handles edge cases like missed disconnect events, server restarts, etc.
+ * 
+ * @param connectedDeviceIds Set of device IDs that are actually connected via WebSocket
+ * @returns Number of devices marked as offline
+ */
+export function syncOnlineDevicesWithConnections(connectedDeviceIds: Set<string>): number {
+  const db = getDb();
+  const now = nowUTC();
+
+  // Find devices marked as online in DB
+  const onlineDevices = db.exec(
+    `SELECT id FROM devices WHERE is_online = 1`
+  );
+
+  if (onlineDevices.length === 0 || onlineDevices[0].values.length === 0) {
+    return 0;
+  }
+
+  // Find devices that are marked online in DB but NOT connected
+  const staleDeviceIds: string[] = [];
+  for (const row of onlineDevices[0].values) {
+    const deviceId = row[0] as string;
+    if (!connectedDeviceIds.has(deviceId)) {
+      staleDeviceIds.push(deviceId);
+    }
+  }
+
+  // Mark stale devices as offline
+  if (staleDeviceIds.length > 0) {
+    for (const deviceId of staleDeviceIds) {
+      db.run(
+        `UPDATE devices SET is_online = 0, updated_at = ? WHERE id = ?`,
+        [now, deviceId]
+      );
+    }
+    saveDatabase();
+    console.log(`[Device] Sync: marked ${staleDeviceIds.length} stale device(s) offline: ${staleDeviceIds.join(", ")}`);
+  }
+
+  return staleDeviceIds.length;
+}
+
+/**
  * Remove a device from user's account
  * Only removes the user-device association, not the device itself
  */

@@ -115,10 +115,17 @@ export function Layout({ onExitDemo }: LayoutProps) {
 
   const navigation = getNavigation(isCloud, deviceId || selectedDevice?.id);
 
-  // Check if device is offline (for hiding navigation)
+  // Check if device is offline (for hiding navigation and status indicator)
   // Use the same logic as ConnectionOverlay - check machine state from store
+  // This is the source of truth for real-time connection status
   const machineState = useStore((s) => s.machine.state);
   const isDeviceOffline = isCloud && machineState === "offline";
+  
+  // Determine if device is truly online for the status indicator
+  // Use real-time machine state as source of truth, fallback to selectedDevice.isOnline
+  const isDeviceOnline = isCloud 
+    ? (machineState !== "offline" && machineState !== "unknown" && selectedDevice?.isOnline)
+    : true;
 
   // Get current page title from navigation
   const currentPageTitle =
@@ -181,15 +188,15 @@ export function Layout({ onExitDemo }: LayoutProps) {
                 {currentPageTitle}
               </h1>
 
-              {/* Cloud: machine name */}
+              {/* Cloud: machine name with real-time status indicator */}
               {isCloud && selectedDevice && (
                 <Link
                   to="/machines"
                   className="flex items-center gap-2 px-2 py-1 rounded-lg bg-theme-tertiary hover:bg-theme-secondary transition-colors group"
                 >
                   <div
-                    className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                      selectedDevice.isOnline
+                    className={`w-2 h-2 rounded-full flex-shrink-0 transition-colors ${
+                      isDeviceOnline
                         ? "bg-emerald-500"
                         : "bg-theme-muted"
                     }`}
@@ -251,15 +258,15 @@ export function Layout({ onExitDemo }: LayoutProps) {
               <Logo size="md" className="hidden xs:flex" />
               <Logo size="md" iconOnly className="xs:hidden" />
 
-              {/* Cloud: Clickable machine indicator */}
+              {/* Cloud: Clickable machine indicator with real-time status */}
               {isCloud && selectedDevice && (
                 <Link
                   to="/machines"
                   className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-theme-tertiary hover:bg-theme-secondary transition-colors group"
                 >
                   <div
-                    className={`w-2 h-2 rounded-full ${
-                      selectedDevice.isOnline
+                    className={`w-2 h-2 rounded-full transition-colors ${
+                      isDeviceOnline
                         ? "bg-emerald-500"
                         : "bg-theme-muted"
                     }`}

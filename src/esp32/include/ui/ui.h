@@ -47,7 +47,7 @@ typedef enum {
 } machine_state_t;
 
 // =============================================================================
-// Heating Strategies
+// Heating Strategies (internal implementation - not shown to users)
 // =============================================================================
 
 typedef enum {
@@ -56,6 +56,15 @@ typedef enum {
     HEAT_PARALLEL = 2,
     HEAT_SMART_STAGGER = 3
 } heating_strategy_t;
+
+// =============================================================================
+// Power Modes (user-facing selection)
+// =============================================================================
+
+typedef enum {
+    POWER_MODE_BREW_ONLY = 0,   // Heat only brew boiler
+    POWER_MODE_BREW_STEAM = 1   // Heat both boilers (strategy auto-selected)
+} power_mode_t;
 
 // =============================================================================
 // Machine State for UI Display

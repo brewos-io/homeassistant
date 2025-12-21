@@ -1,7 +1,7 @@
 import { Button } from "@/components/Button";
 import { Toggle } from "@/components/Toggle";
-import { Power, PowerOff, Trash2, Flame } from "lucide-react";
-import { type Schedule, type DayInfo, STRATEGIES, WEEKDAYS, WEEKENDS, EVERY_DAY } from "./types";
+import { Power, PowerOff, Trash2, Flame, Sparkles } from "lucide-react";
+import { type Schedule, type DayInfo, POWER_MODES, WEEKDAYS, WEEKENDS, EVERY_DAY } from "./types";
 
 interface ScheduleItemProps {
   schedule: Schedule;
@@ -65,8 +65,18 @@ export function ScheduleItem({
           </div>
           {schedule.action === "on" && isDualBoiler && (
             <div className="text-xs text-theme-muted mt-1">
-              <Flame className="w-3 h-3 inline mr-1" />
-              {STRATEGIES.find((s) => s.value === schedule.strategy)?.label || "Sequential"}
+              {(() => {
+                // Map strategy to power mode for display
+                const powerMode = schedule.powerMode || (schedule.strategy === 0 ? "brew_only" : "brew_steam");
+                const modeInfo = POWER_MODES.find((m) => m.value === powerMode);
+                const Icon = powerMode === "brew_only" ? Flame : Sparkles;
+                return (
+                  <>
+                    <Icon className="w-3 h-3 inline mr-1" />
+                    {modeInfo?.label || "Brew & Steam"}
+                  </>
+                );
+              })()}
             </div>
           )}
         </div>

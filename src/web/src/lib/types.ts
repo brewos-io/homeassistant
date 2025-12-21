@@ -81,7 +81,12 @@ export type MachineState =
 
 export type MachineMode = "standby" | "on" | "eco";
 
-export type HeatingStrategy = 0 | 1 | 2 | 3; // 0=Brew Only, 1=Sequential, 2=Parallel, 3=Smart Stagger
+// User-facing power mode selection
+export type PowerMode = "brew_only" | "brew_steam";
+
+// Internal heating strategy (auto-determined based on power mode + config)
+// 0=Brew Only, 1=Sequential, 2=Parallel, 3=Smart Stagger
+export type HeatingStrategy = 0 | 1 | 2 | 3;
 
 export interface MachineStatus {
   state: MachineState;

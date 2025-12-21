@@ -1437,7 +1437,8 @@ export const useStore = create<BrewOSState>()(
 
         case "device_offline": {
           // Device went offline via cloud - update machine state to reflect offline
-          // Don't change connectionState - we're still connected to cloud
+          // IMPORTANT: Don't change cloud.connected - we're still connected to cloud server
+          // Only the physical device is offline
           console.log("[Store] Device went offline");
 
           // Update AppStore (device list) to show device as offline
@@ -1471,9 +1472,10 @@ export const useStore = create<BrewOSState>()(
               ...state.scale,
               connected: false,
             },
-            // Mark WiFi and Cloud as disconnected (device is unreachable)
+            // WiFi reflects the device's WiFi, which is not reachable
             wifi: { ...state.wifi, connected: false },
-            cloud: { ...state.cloud, connected: false },
+            // IMPORTANT: Keep cloud.connected true - we're still connected to cloud
+            // Setting this to false would cause reconnection loops
           }));
           break;
         }

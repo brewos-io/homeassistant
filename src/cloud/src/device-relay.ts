@@ -1,7 +1,7 @@
 import { WebSocketServer, WebSocket, RawData } from "ws";
 import { IncomingMessage } from "http";
 import type { DeviceMessage } from "./types.js";
-import { verifyDeviceKey, updateDeviceStatus } from "./services/device.js";
+import { verifyDeviceKey, updateDeviceStatus, syncOnlineDevicesWithConnections } from "./services/device.js";
 
 interface DeviceConnection {
   ws: WebSocket;
@@ -15,6 +15,9 @@ interface DeviceConnection {
 const PING_INTERVAL_MS = 10000;
 // Disconnect after this many missed pings (10s * 2 = 20s max detection time)
 const MAX_MISSED_PINGS = 2;
+// Database sync interval - reconcile in-memory connection state with database
+// This catches any missed disconnect events (crash, network issues, etc.)
+const DB_SYNC_INTERVAL_MS = 60000; // 1 minute
 
 /**
  * Device Relay
@@ -28,6 +31,7 @@ export class DeviceRelay {
     (deviceId: string, message: DeviceMessage) => void
   >();
   private pingInterval: NodeJS.Timeout | null = null;
+  private dbSyncInterval: NodeJS.Timeout | null = null;
 
   constructor(wss: WebSocketServer) {
     wss.on("connection", (ws, req) => this.handleConnection(ws, req));
@@ -36,6 +40,30 @@ export class DeviceRelay {
     this.pingInterval = setInterval(() => {
       this.pingAllDevices();
     }, PING_INTERVAL_MS);
+
+    // Start periodic database sync to reconcile in-memory state
+    // This catches any stale online states from missed disconnect events
+    this.dbSyncInterval = setInterval(() => {
+      this.syncDatabaseState();
+    }, DB_SYNC_INTERVAL_MS);
+  }
+
+  /**
+   * Sync in-memory connection state to database
+   * Marks devices as offline in DB if they're not in our connection map
+   * This handles edge cases like server restarts, crash recovery, etc.
+   */
+  private syncDatabaseState(): void {
+    try {
+      const connectedIds = new Set(this.devices.keys());
+      const staleCount = syncOnlineDevicesWithConnections(connectedIds);
+      
+      if (staleCount > 0) {
+        console.log(`[DeviceRelay] DB sync: marked ${staleCount} stale device(s) as offline`);
+      }
+    } catch (err) {
+      console.error("[DeviceRelay] Failed to sync database state:", err);
+    }
   }
 
   /**
@@ -292,6 +320,10 @@ export class DeviceRelay {
     if (this.pingInterval) {
       clearInterval(this.pingInterval);
       this.pingInterval = null;
+    }
+    if (this.dbSyncInterval) {
+      clearInterval(this.dbSyncInterval);
+      this.dbSyncInterval = null;
     }
     console.log("[DeviceRelay] Shutdown complete");
   }

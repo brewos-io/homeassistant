@@ -1,8 +1,11 @@
 /**
  * BrewOS Idle Screen Implementation
  * 
- * Power on screen with heating strategy selection
+ * Power on screen with power mode selection (Brew Only / Brew & Steam)
  * Optimized for 480x480 round display with logo
+ * 
+ * Users select what they want to use (Brew Only vs Brew & Steam),
+ * and the heating strategy is auto-determined based on power configuration.
  */
 
 #include "platform/platform.h"
@@ -10,46 +13,41 @@
 #include "display/theme.h"
 #include "display/display_config.h"
 
-// Strategy names (matching protocol_defs.h values)
-static const char* strategy_names[] = {
-    "Brew Only",      // 0
-    "Sequential",     // 1
-    "Parallel",       // 2
-    "Smart Stagger"   // 3
+// Power mode names (user-facing)
+static const char* power_mode_names[] = {
+    "Brew Only",       // POWER_MODE_BREW_ONLY
+    "Brew & Steam"     // POWER_MODE_BREW_STEAM
 };
 
-static const char* strategy_descriptions[] = {
-    "Heat brew boiler only",
-    "Brew then steam",
-    "Heat both at once",
-    "Power efficient"
+static const char* power_mode_descriptions[] = {
+    "Espresso without steam",
+    "Espresso + milk drinks"
 };
 
-// Map array index to protocol strategy value (note: value 3 is unused)
-static const uint8_t strategy_values[] = {
-    0,  // BREW_ONLY
-    1,  // SEQUENTIAL
-    2,  // PARALLEL
-    3   // SMART_STAGGER
+// Map power mode to default heating strategy
+// (actual strategy may be adjusted based on power config)
+static const uint8_t power_mode_default_strategy[] = {
+    0,  // POWER_MODE_BREW_ONLY -> HEAT_BREW_ONLY
+    2   // POWER_MODE_BREW_STEAM -> HEAT_PARALLEL (if power allows, else auto-fallback)
 };
 
-#define STRATEGY_COUNT 4
+#define POWER_MODE_COUNT 2
 
 // Static elements
 static lv_obj_t* screen = nullptr;
 static lv_obj_t* logo_img = nullptr;
 static lv_obj_t* power_icon = nullptr;
 static lv_obj_t* title_label = nullptr;
-static lv_obj_t* strategy_name_label = nullptr;
-static lv_obj_t* strategy_desc_label = nullptr;
+static lv_obj_t* mode_name_label = nullptr;
+static lv_obj_t* mode_desc_label = nullptr;
 static lv_obj_t* hint_label = nullptr;
 static lv_obj_t* dots_container = nullptr;
-static lv_obj_t* strategy_dots[STRATEGY_COUNT] = {nullptr};
+static lv_obj_t* mode_dots[POWER_MODE_COUNT] = {nullptr};
 
 // State
 static int selected_index = 0;
 static idle_turn_on_callback_t turn_on_callback = nullptr;
-static bool show_strategies = true;  // Default to showing (assume dual boiler until told otherwise)
+static bool show_power_modes = true;  // Default to showing (assume dual boiler until told otherwise)
 
 // =============================================================================
 // Screen Creation
@@ -105,40 +103,40 @@ lv_obj_t* screen_idle_create(void) {
     lv_obj_set_style_text_color(title_label, COLOR_TEXT_PRIMARY, 0);
     lv_obj_align(title_label, LV_ALIGN_CENTER, 0, -20);
     
-    // === Strategy Name ===
-    strategy_name_label = lv_label_create(container);
-    lv_label_set_text(strategy_name_label, strategy_names[selected_index]);
-    lv_obj_set_style_text_font(strategy_name_label, FONT_MEDIUM, 0);
-    lv_obj_set_style_text_color(strategy_name_label, COLOR_ACCENT_AMBER, 0);
-    lv_obj_align(strategy_name_label, LV_ALIGN_CENTER, 0, 30);
+    // === Power Mode Name ===
+    mode_name_label = lv_label_create(container);
+    lv_label_set_text(mode_name_label, power_mode_names[selected_index]);
+    lv_obj_set_style_text_font(mode_name_label, FONT_MEDIUM, 0);
+    lv_obj_set_style_text_color(mode_name_label, COLOR_ACCENT_AMBER, 0);
+    lv_obj_align(mode_name_label, LV_ALIGN_CENTER, 0, 30);
     
-    // === Strategy Description ===
-    strategy_desc_label = lv_label_create(container);
-    lv_label_set_text(strategy_desc_label, strategy_descriptions[selected_index]);
-    lv_obj_set_style_text_font(strategy_desc_label, FONT_SMALL, 0);
-    lv_obj_set_style_text_color(strategy_desc_label, COLOR_TEXT_MUTED, 0);
-    lv_obj_align(strategy_desc_label, LV_ALIGN_CENTER, 0, 58);
+    // === Power Mode Description ===
+    mode_desc_label = lv_label_create(container);
+    lv_label_set_text(mode_desc_label, power_mode_descriptions[selected_index]);
+    lv_obj_set_style_text_font(mode_desc_label, FONT_SMALL, 0);
+    lv_obj_set_style_text_color(mode_desc_label, COLOR_TEXT_MUTED, 0);
+    lv_obj_align(mode_desc_label, LV_ALIGN_CENTER, 0, 58);
     
-    // === Dots indicator ===
+    // === Dots indicator (just 2 dots for power modes) ===
     dots_container = lv_obj_create(container);
     lv_obj_remove_style_all(dots_container);
-    lv_obj_set_size(dots_container, STRATEGY_COUNT * 18, 16);
+    lv_obj_set_size(dots_container, POWER_MODE_COUNT * 24, 16);
     lv_obj_align(dots_container, LV_ALIGN_CENTER, 0, 95);
     lv_obj_set_flex_flow(dots_container, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(dots_container, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     
-    for (int i = 0; i < STRATEGY_COUNT; i++) {
-        strategy_dots[i] = lv_obj_create(dots_container);
-        lv_obj_set_size(strategy_dots[i], 8, 8);
-        lv_obj_set_style_radius(strategy_dots[i], LV_RADIUS_CIRCLE, 0);
-        lv_obj_set_style_border_width(strategy_dots[i], 0, 0);
-        lv_obj_set_style_pad_left(strategy_dots[i], 3, 0);
-        lv_obj_set_style_pad_right(strategy_dots[i], 3, 0);
+    for (int i = 0; i < POWER_MODE_COUNT; i++) {
+        mode_dots[i] = lv_obj_create(dots_container);
+        lv_obj_set_size(mode_dots[i], 10, 10);
+        lv_obj_set_style_radius(mode_dots[i], LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_border_width(mode_dots[i], 0, 0);
+        lv_obj_set_style_pad_left(mode_dots[i], 4, 0);
+        lv_obj_set_style_pad_right(mode_dots[i], 4, 0);
         
         if (i == selected_index) {
-            lv_obj_set_style_bg_color(strategy_dots[i], COLOR_ACCENT_AMBER, 0);
+            lv_obj_set_style_bg_color(mode_dots[i], COLOR_ACCENT_AMBER, 0);
         } else {
-            lv_obj_set_style_bg_color(strategy_dots[i], COLOR_BG_ELEVATED, 0);
+            lv_obj_set_style_bg_color(mode_dots[i], COLOR_BG_ELEVATED, 0);
         }
     }
     
@@ -161,9 +159,9 @@ lv_obj_t* screen_idle_create(void) {
             if (code == LV_EVENT_KEY) {
                 uint32_t key = lv_event_get_key(e);
                 if (key == LV_KEY_RIGHT || key == LV_KEY_NEXT) {
-                    screen_idle_select_strategy(selected_index + 1);
+                    screen_idle_select_power_mode(selected_index + 1);
                 } else if (key == LV_KEY_LEFT || key == LV_KEY_PREV) {
-                    screen_idle_select_strategy(selected_index - 1);
+                    screen_idle_select_power_mode(selected_index - 1);
                 }
             }
         }, LV_EVENT_KEY, NULL);
@@ -182,46 +180,60 @@ lv_obj_t* screen_idle_create(void) {
 void screen_idle_update(const ui_state_t* state) {
     if (!screen || !state) return;
     
-    // Update strategy visibility based on machine type
-    // Heating strategies only apply to dual boiler machines (type 1)
+    // Update power mode visibility based on machine type
+    // Power mode selection only applies to dual boiler machines (type 1)
     // machine_type: 0=unknown, 1=dual_boiler, 2=single_boiler, 3=heat_exchanger
     bool is_dual_boiler = (state->machine_type == 0 || state->machine_type == 1);
     
-    if (show_strategies != is_dual_boiler) {
+    if (show_power_modes != is_dual_boiler) {
         screen_idle_set_show_strategies(is_dual_boiler);
     }
 }
 
-void screen_idle_select_strategy(int index) {
-    // Clamp index
-    if (index < 0) index = STRATEGY_COUNT - 1;
-    if (index >= STRATEGY_COUNT) index = 0;
+void screen_idle_select_power_mode(int index) {
+    // Clamp index (wrap around for 2 modes)
+    if (index < 0) index = POWER_MODE_COUNT - 1;
+    if (index >= POWER_MODE_COUNT) index = 0;
     
     selected_index = index;
     
     // Update UI
-    if (strategy_name_label) {
-        lv_label_set_text(strategy_name_label, strategy_names[selected_index]);
+    if (mode_name_label) {
+        lv_label_set_text(mode_name_label, power_mode_names[selected_index]);
     }
-    if (strategy_desc_label) {
-        lv_label_set_text(strategy_desc_label, strategy_descriptions[selected_index]);
+    if (mode_desc_label) {
+        lv_label_set_text(mode_desc_label, power_mode_descriptions[selected_index]);
     }
     
     // Update dots
-    for (int i = 0; i < STRATEGY_COUNT; i++) {
-        if (strategy_dots[i]) {
+    for (int i = 0; i < POWER_MODE_COUNT; i++) {
+        if (mode_dots[i]) {
             if (i == selected_index) {
-                lv_obj_set_style_bg_color(strategy_dots[i], COLOR_ACCENT_AMBER, 0);
+                lv_obj_set_style_bg_color(mode_dots[i], COLOR_ACCENT_AMBER, 0);
             } else {
-                lv_obj_set_style_bg_color(strategy_dots[i], COLOR_BG_ELEVATED, 0);
+                lv_obj_set_style_bg_color(mode_dots[i], COLOR_BG_ELEVATED, 0);
             }
         }
     }
 }
 
+// Legacy function name for compatibility - calls the new function
+void screen_idle_select_strategy(int index) {
+    screen_idle_select_power_mode(index);
+}
+
+power_mode_t screen_idle_get_selected_power_mode(void) {
+    if (selected_index >= 0 && selected_index < POWER_MODE_COUNT) {
+        return (power_mode_t)selected_index;
+    }
+    return POWER_MODE_BREW_ONLY;
+}
+
 heating_strategy_t screen_idle_get_selected_strategy(void) {
-    if (selected_index >= 0 && selected_index < STRATEGY_COUNT) {
-        return (heating_strategy_t)strategy_values[selected_index];
+    // Return default strategy for the selected power mode
+    // The actual strategy will be determined by the controller based on power config
+    if (selected_index >= 0 && selected_index < POWER_MODE_COUNT) {
+        return (heating_strategy_t)power_mode_default_strategy[selected_index];
     }
     return HEAT_BREW_ONLY;
 }
@@ -231,22 +243,22 @@ void screen_idle_set_turn_on_callback(idle_turn_on_callback_t callback) {
 }
 
 void screen_idle_set_show_strategies(bool show) {
-    show_strategies = show;
+    show_power_modes = show;
     
-    // Update visibility of strategy-related UI elements
-    if (strategy_name_label) {
+    // Update visibility of power mode UI elements
+    if (mode_name_label) {
         if (show) {
-            lv_obj_clear_flag(strategy_name_label, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_clear_flag(mode_name_label, LV_OBJ_FLAG_HIDDEN);
         } else {
-            lv_obj_add_flag(strategy_name_label, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(mode_name_label, LV_OBJ_FLAG_HIDDEN);
         }
     }
     
-    if (strategy_desc_label) {
+    if (mode_desc_label) {
         if (show) {
-            lv_obj_clear_flag(strategy_desc_label, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_clear_flag(mode_desc_label, LV_OBJ_FLAG_HIDDEN);
         } else {
-            lv_obj_add_flag(strategy_desc_label, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(mode_desc_label, LV_OBJ_FLAG_HIDDEN);
         }
     }
     
@@ -266,10 +278,12 @@ void screen_idle_set_show_strategies(bool show) {
         }
     }
     
-    LOG_I("Idle screen: strategy selection %s", show ? "shown" : "hidden");
+    LOG_I("Idle screen: power mode selection %s", show ? "shown" : "hidden");
 }
 
 bool screen_idle_is_showing_strategies(void) {
-    return show_strategies;
+    return show_power_modes;
 }
+
+
 

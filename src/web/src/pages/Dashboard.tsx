@@ -3,7 +3,7 @@ import { useStore } from "@/lib/store";
 import { useCommand } from "@/lib/useCommand";
 import { useMobileLandscape } from "@/lib/useMobileLandscape";
 import { PageHeader } from "@/components/PageHeader";
-import { HeatingStrategyModal } from "@/components/HeatingStrategyModal";
+import { PowerModeModal } from "@/components/PowerModeModal";
 import {
   MachineStatusCard,
   TemperatureGauges,
@@ -14,6 +14,13 @@ import {
 } from "@/components/dashboard";
 import { Sparkles, Clock, Droplets, Scale } from "lucide-react";
 import { formatUptime } from "@/lib/utils";
+import { getMachineByBrandModel } from "@/lib/machines";
+import {
+  POWER_MODES,
+  getHeatingStrategyForPowerMode,
+  getPowerModeFromStrategy,
+  type PowerMode,
+} from "@/lib/powerValidation";
 
 // Time to show pressure card after brewing ends (ms)
 const POST_BREW_PRESSURE_DISPLAY_MS = 30000; // 30 seconds
@@ -130,9 +137,25 @@ export function Dashboard() {
   }, [machineOnTimestamp]);
 
   const { sendCommand } = useCommand();
-  const [showStrategyModal, setShowStrategyModal] = useState(false);
+  const [showPowerModeModal, setShowPowerModeModal] = useState(false);
 
   const isDualBoiler = machineType === "dual_boiler";
+
+  // Get machine and power config for auto-strategy calculation
+  const machineBrand = useStore((s) => s.device.machineBrand);
+  const machineModel = useStore((s) => s.device.machineModel);
+  const voltage = useStore((s) => s.power.voltage) || 220;
+  const maxCurrent = useStore((s) => s.power.maxCurrent) || 13;
+
+  const machine = useMemo(() => {
+    if (!machineBrand || !machineModel) return undefined;
+    return getMachineByBrandModel(machineBrand, machineModel);
+  }, [machineBrand, machineModel]);
+
+  const powerConfig = useMemo(
+    () => ({ voltage, maxCurrent }),
+    [voltage, maxCurrent]
+  );
 
   const setMode = useCallback(
     (mode: string, strategy?: number) => {
@@ -143,30 +166,43 @@ export function Dashboard() {
     [sendCommand]
   );
 
-  // Quick on: use last strategy from localStorage
+  // Quick on: use last power mode from localStorage, auto-calculate strategy
   const handleQuickOn = useCallback(() => {
     if (isDualBoiler) {
-      const stored = localStorage.getItem("brewos-last-heating-strategy");
-      const parsed = stored !== null ? parseInt(stored, 10) : NaN;
-      const strategy = !isNaN(parsed) ? parsed : 1; // Default to Sequential
+      // Get stored power mode preference
+      const stored = localStorage.getItem("brewos-last-power-mode") as PowerMode | null;
+      const powerMode = (stored === POWER_MODES.BREW_ONLY || stored === POWER_MODES.BREW_STEAM) 
+        ? stored 
+        : POWER_MODES.BREW_STEAM; // Default to Brew & Steam
+      
+      // Auto-calculate the best heating strategy for this power mode
+      const strategy = getHeatingStrategyForPowerMode(powerMode, machine, powerConfig);
       setMode("on", strategy);
     } else {
       setMode("on");
     }
-  }, [isDualBoiler, setMode]);
+  }, [isDualBoiler, setMode, machine, powerConfig]);
 
-  // Open strategy selector dialog
-  const handleOpenStrategyModal = useCallback(() => {
-    setShowStrategyModal(true);
+  // Open power mode selector dialog
+  const handleOpenPowerModeModal = useCallback(() => {
+    setShowPowerModeModal(true);
   }, []);
 
-  const handleStrategySelect = useCallback(
+  const handlePowerModeSelect = useCallback(
     (strategy: number) => {
       setMode("on", strategy);
-      setShowStrategyModal(false);
+      setShowPowerModeModal(false);
     },
     [setMode]
   );
+
+  // Memoize defaultMode to prevent flicker when modal opens
+  const defaultPowerMode = useMemo(() => {
+    if (heatingStrategy !== null && heatingStrategy !== undefined) {
+      return getPowerModeFromStrategy(heatingStrategy);
+    }
+    return undefined;
+  }, [heatingStrategy]);
 
   // Memoize formatted values
   const formattedUptime = useMemo(() => formatUptime(uptime), [uptime]);
@@ -229,7 +265,7 @@ export function Dashboard() {
           heatingStrategy={heatingStrategy}
           onSetMode={setMode}
           onQuickOn={handleQuickOn}
-          onOpenStrategyModal={handleOpenStrategyModal}
+          onOpenStrategyModal={handleOpenPowerModeModal}
         />
 
         <TemperatureGauges
@@ -303,10 +339,12 @@ export function Dashboard() {
         </div>
       </div>
 
-      <HeatingStrategyModal
-        isOpen={showStrategyModal}
-        onClose={() => setShowStrategyModal(false)}
-        onSelect={handleStrategySelect}
+      <PowerModeModal
+        key={showPowerModeModal ? `open-${defaultPowerMode ?? 'off'}` : 'closed'}
+        isOpen={showPowerModeModal}
+        onClose={() => setShowPowerModeModal(false)}
+        onSelect={handlePowerModeSelect}
+        defaultMode={defaultPowerMode}
       />
     </>
   );

@@ -100,8 +100,10 @@ export interface PaginatedResult<T> {
 
 /**
  * Get system-wide statistics
+ * @param liveOnlineCount Optional live count of connected devices from DeviceRelay
+ *                        If provided, uses this as the source of truth for online count
  */
-export function getSystemStats(): AdminStats {
+export function getSystemStats(liveOnlineCount?: number): AdminStats {
   const db = getDb();
 
   const userCount = db.exec(`SELECT COUNT(*) FROM profiles`);
@@ -109,16 +111,22 @@ export function getSystemStats(): AdminStats {
     `SELECT COUNT(*) FROM profiles WHERE is_admin = 1`
   );
   const deviceCount = db.exec(`SELECT COUNT(*) FROM devices`);
-  const onlineDeviceCount = db.exec(
-    `SELECT COUNT(*) FROM devices WHERE is_online = 1`
-  );
   const sessionCount = db.exec(`SELECT COUNT(*) FROM sessions`);
+
+  // Use live count if provided, otherwise fall back to database (which may be stale)
+  let onlineDeviceCount = liveOnlineCount;
+  if (onlineDeviceCount === undefined) {
+    const dbOnlineCount = db.exec(
+      `SELECT COUNT(*) FROM devices WHERE is_online = 1`
+    );
+    onlineDeviceCount = (dbOnlineCount[0]?.values[0]?.[0] as number) || 0;
+  }
 
   return {
     userCount: (userCount[0]?.values[0]?.[0] as number) || 0,
     adminCount: (adminCount[0]?.values[0]?.[0] as number) || 0,
     deviceCount: (deviceCount[0]?.values[0]?.[0] as number) || 0,
-    onlineDeviceCount: (onlineDeviceCount[0]?.values[0]?.[0] as number) || 0,
+    onlineDeviceCount,
     sessionCount: (sessionCount[0]?.values[0]?.[0] as number) || 0,
     uptime: process.uptime(),
   };
@@ -435,12 +443,15 @@ export function createImpersonationToken(
 
 /**
  * Get all devices with pagination and filters
+ * @param connectedDeviceIds Optional list of currently connected device IDs from DeviceRelay
+ *                           If provided, uses this as the source of truth for online status
  */
 export function getAllDevices(
   page: number = 1,
   pageSize: number = 20,
   search?: string,
-  onlineOnly?: boolean
+  onlineOnly?: boolean,
+  connectedDeviceIds?: string[]
 ): PaginatedResult<AdminDevice> {
   const db = getDb();
   const offset = (page - 1) * pageSize;
@@ -453,7 +464,9 @@ export function getAllDevices(
     params.push(`%${search}%`, `%${search}%`, `%${search}%`);
   }
 
-  if (onlineOnly) {
+  // Note: onlineOnly filter is applied after fetching if we have live connection data
+  // If we don't have live connection data, fall back to database
+  if (onlineOnly && !connectedDeviceIds) {
     conditions.push(`d.is_online = 1`);
   }
 
@@ -465,7 +478,7 @@ export function getAllDevices(
     `SELECT COUNT(*) FROM devices d ${whereClause}`,
     params
   );
-  const total = (countResult[0]?.values[0]?.[0] as number) || 0;
+  let total = (countResult[0]?.values[0]?.[0] as number) || 0;
 
   // Get devices with user count
   const result = db.exec(
@@ -487,21 +500,38 @@ export function getAllDevices(
     [...params, pageSize, offset]
   );
 
-  const items: AdminDevice[] =
+  // Create a Set for O(1) lookups
+  const connectedSet = connectedDeviceIds ? new Set(connectedDeviceIds) : null;
+
+  let items: AdminDevice[] =
     result.length > 0
-      ? result[0].values.map((row) => ({
-          id: row[0] as string,
-          name: row[1] as string,
-          machineBrand: row[2] as string | null,
-          machineModel: row[3] as string | null,
-          machineType: row[4] as string | null,
-          firmwareVersion: row[5] as string | null,
-          isOnline: row[6] === 1,
-          lastSeenAt: row[7] as string | null,
-          createdAt: row[8] as string,
-          userCount: row[9] as number,
-        }))
+      ? result[0].values.map((row) => {
+          const deviceId = row[0] as string;
+          // Use live connection status if available, otherwise fall back to database
+          const isOnline = connectedSet 
+            ? connectedSet.has(deviceId) 
+            : row[6] === 1;
+          
+          return {
+            id: deviceId,
+            name: row[1] as string,
+            machineBrand: row[2] as string | null,
+            machineModel: row[3] as string | null,
+            machineType: row[4] as string | null,
+            firmwareVersion: row[5] as string | null,
+            isOnline,
+            lastSeenAt: row[7] as string | null,
+            createdAt: row[8] as string,
+            userCount: row[9] as number,
+          };
+        })
       : [];
+
+  // Apply onlineOnly filter if we have live connection data
+  if (onlineOnly && connectedSet) {
+    items = items.filter(d => d.isOnline);
+    total = items.length; // Update total to reflect filtered count
+  }
 
   return {
     items,
@@ -514,8 +544,10 @@ export function getAllDevices(
 
 /**
  * Get detailed device information
+ * @param isConnected Optional live connection status from DeviceRelay
+ *                    If provided, uses this as the source of truth for online status
  */
-export function getDeviceById(deviceId: string): AdminDeviceDetail | null {
+export function getDeviceById(deviceId: string, isConnected?: boolean): AdminDeviceDetail | null {
   const db = getDb();
 
   const deviceResult = db.exec(
@@ -540,6 +572,10 @@ export function getDeviceById(deviceId: string): AdminDeviceDetail | null {
   }
 
   const row = deviceResult[0].values[0];
+  
+  // Use live connection status if provided, otherwise fall back to database
+  const isOnline = isConnected !== undefined ? isConnected : row[6] === 1;
+  
   const device: AdminDeviceDetail = {
     id: row[0] as string,
     name: row[1] as string,
@@ -547,7 +583,7 @@ export function getDeviceById(deviceId: string): AdminDeviceDetail | null {
     machineModel: row[3] as string | null,
     machineType: row[4] as string | null,
     firmwareVersion: row[5] as string | null,
-    isOnline: row[6] === 1,
+    isOnline,
     lastSeenAt: row[7] as string | null,
     createdAt: row[8] as string,
     userCount: row[9] as number,

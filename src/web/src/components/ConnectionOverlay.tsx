@@ -9,11 +9,16 @@ const DEV_MODE = import.meta.env.DEV;
 const DEV_BYPASS_KEY = "brewos-dev-bypass-overlay";
 
 // Debounce time before hiding overlay after connection
-const HIDE_DELAY_MS = 1000;
+const HIDE_DELAY_MS = 1500;
 
 // Minimum time to show any overlay state before allowing transitions
 // This prevents rapid flickering between states
-const STATE_STABLE_MS = 3000;
+// Increased to 5s to handle slow connections and avoid "connecting -> offline -> online" loops
+const STATE_STABLE_MS = 5000;
+
+// Extra delay before showing offline state after initial connection
+// This gives the device time to respond after cloud connection is established
+const OFFLINE_GRACE_PERIOD_MS = 8000;
 
 // Key to track OTA in progress across page reloads (shared with store.ts)
 const OTA_IN_PROGRESS_KEY = "brewos-ota-in-progress";
@@ -62,6 +67,8 @@ export function ConnectionOverlay() {
   const pendingStateChange = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Track if device has been confirmed offline (persists across cloud reconnects)
   const deviceConfirmedOffline = useRef<boolean>(false);
+  // Track when cloud connection was first established (for grace period)
+  const cloudConnectedAt = useRef<number | null>(null);
 
   // Track OTA state in localStorage so store.ts can detect it after reconnect
   useEffect(() => {
@@ -89,11 +96,28 @@ export function ConnectionOverlay() {
     }
   }, [ota.stage, ota.isUpdating, machineState, isConnected]);
 
-  // Track device offline state - once confirmed offline, stay that way until device comes back
+  // Track cloud connection time for grace period logic
   useEffect(() => {
-    if (isDeviceOffline) {
-      deviceConfirmedOffline.current = true;
-    } else if (isConnected) {
+    if (isConnected && cloudConnectedAt.current === null) {
+      cloudConnectedAt.current = Date.now();
+    } else if (!isConnected) {
+      cloudConnectedAt.current = null;
+    }
+  }, [isConnected]);
+
+  // Track device offline state - once confirmed offline, stay that way until device comes back
+  // But only mark as confirmed offline after the grace period
+  useEffect(() => {
+    if (isDeviceOffline && isConnected) {
+      // Only confirm offline after grace period has passed
+      const timeSinceConnect = cloudConnectedAt.current 
+        ? Date.now() - cloudConnectedAt.current 
+        : 0;
+      
+      if (timeSinceConnect >= OFFLINE_GRACE_PERIOD_MS) {
+        deviceConfirmedOffline.current = true;
+      }
+    } else if (!isDeviceOffline && isConnected) {
       // Device is no longer offline - clear the flag
       // This includes "unknown" state (just reconnected, waiting for status)
       deviceConfirmedOffline.current = false;
@@ -105,7 +129,19 @@ export function ConnectionOverlay() {
     if (isUpdating) return "updating";
 
     // Device is offline (cloud connected but device unreachable)
-    if (isDeviceOffline && isConnected) return "offline";
+    if (isDeviceOffline && isConnected) {
+      // Check if we're still in the grace period
+      // During grace period, device might be "offline" just because it hasn't responded yet
+      const timeSinceConnect = cloudConnectedAt.current 
+        ? Date.now() - cloudConnectedAt.current 
+        : 0;
+      
+      if (timeSinceConnect < OFFLINE_GRACE_PERIOD_MS) {
+        // Still in grace period - show connecting instead of offline
+        return "connecting";
+      }
+      return "offline";
+    }
 
     // Not connected to server - show connecting or offline
     if (!isConnected) {

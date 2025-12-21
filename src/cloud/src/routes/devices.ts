@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, Request } from "express";
 import rateLimit from "express-rate-limit";
 import { sessionAuthMiddleware } from "../middleware/auth.js";
 import {
@@ -168,10 +168,14 @@ router.post("/claim", strictLimiter, sessionAuthMiddleware, (req, res) => {
 /**
  * GET /api/devices
  * List user's devices
+ * Uses live WebSocket connection status as source of truth for online/offline
  */
 router.get("/", sessionAuthMiddleware, (req, res) => {
   try {
     const devices = getUserDevices(req.user!.id);
+    
+    // Get live connection checker from DeviceRelay (source of truth)
+    const isDeviceConnected = (req as Request & { isDeviceConnected?: (id: string) => boolean }).isDeviceConnected;
 
     res.json({
       devices: devices.map((d) => ({
@@ -179,7 +183,8 @@ router.get("/", sessionAuthMiddleware, (req, res) => {
         name: d.user_name,
         machineBrand: d.machine_brand,
         machineModel: d.machine_model,
-        isOnline: !!d.is_online,
+        // Use live connection status if available, otherwise fall back to database
+        isOnline: isDeviceConnected ? isDeviceConnected(d.id) : !!d.is_online,
         lastSeen: d.last_seen_at,
         firmwareVersion: d.firmware_version,
         machineType: d.machine_type,
@@ -195,6 +200,7 @@ router.get("/", sessionAuthMiddleware, (req, res) => {
 /**
  * GET /api/devices/:id
  * Get a specific device
+ * Uses live WebSocket connection status as source of truth for online/offline
  */
 router.get("/:id", sessionAuthMiddleware, (req, res) => {
   try {
@@ -211,6 +217,10 @@ router.get("/:id", sessionAuthMiddleware, (req, res) => {
 
     const userDevices = getUserDevices(req.user!.id);
     const userDevice = userDevices.find((d) => d.id === id);
+    
+    // Get live connection status from DeviceRelay (source of truth)
+    const isDeviceConnected = (req as Request & { isDeviceConnected?: (id: string) => boolean }).isDeviceConnected;
+    const isOnline = isDeviceConnected ? isDeviceConnected(id) : !!device.is_online;
 
     res.json({
       device: {
@@ -218,7 +228,7 @@ router.get("/:id", sessionAuthMiddleware, (req, res) => {
         name: (device as any).user_name || device.name,
         machineBrand: device.machine_brand,
         machineModel: device.machine_model,
-        isOnline: !!device.is_online,
+        isOnline,
         lastSeen: device.last_seen_at,
         firmwareVersion: device.firmware_version,
         machineType: device.machine_type,

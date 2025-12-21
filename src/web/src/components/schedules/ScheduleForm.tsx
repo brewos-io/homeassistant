@@ -1,11 +1,12 @@
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
-import { Power, PowerOff, Save, X } from "lucide-react";
+import { Power, PowerOff, Save, X, Flame, Sparkles } from "lucide-react";
 import {
   type ScheduleFormData,
   type DayInfo,
-  STRATEGIES,
+  POWER_MODES,
 } from "./types";
+import type { PowerMode } from "@/lib/powerValidation";
 
 interface ScheduleFormProps {
   data: ScheduleFormData;
@@ -64,9 +65,9 @@ export function ScheduleForm({
       />
 
       {data.action === "on" && isDualBoiler && (
-        <StrategySelector
-          strategy={data.strategy}
-          onChange={(strategy) => onChange({ ...data, strategy })}
+        <PowerModeSelector
+          powerMode={data.powerMode}
+          onChange={(powerMode) => onChange({ ...data, powerMode })}
         />
       )}
 
@@ -103,7 +104,7 @@ function ActionSelector({ action, onChange }: ActionSelectorProps) {
           className={`flex-1 px-3 rounded-xl border text-sm font-medium transition-all flex items-center justify-center ${
             action === "on"
               ? "bg-emerald-500/20 border-emerald-500 text-emerald-500"
-              : "bg-theme-secondary border-theme text-theme-secondary hover:border-theme-light"
+              : "bg-theme-secondary border-theme text-theme-secondary hover:border-emerald-500/40 hover:bg-theme-tertiary"
           }`}
         >
           <Power className="w-4 h-4 mr-2" />
@@ -114,7 +115,7 @@ function ActionSelector({ action, onChange }: ActionSelectorProps) {
           className={`flex-1 px-3 rounded-xl border text-sm font-medium transition-all flex items-center justify-center ${
             action === "off"
               ? "bg-orange-500/20 border-orange-500 text-orange-500"
-              : "bg-theme-secondary border-theme text-theme-secondary hover:border-theme-light"
+              : "bg-theme-secondary border-theme text-theme-secondary hover:border-orange-500/40 hover:bg-theme-tertiary"
           }`}
         >
           <PowerOff className="w-4 h-4 mr-2" />
@@ -206,28 +207,37 @@ function DaySelector({ days, orderedDays, onToggleDay, onSetPreset }: DaySelecto
   );
 }
 
-interface StrategySelectorProps {
-  strategy: number;
-  onChange: (strategy: number) => void;
+interface PowerModeSelectorProps {
+  powerMode: PowerMode;
+  onChange: (powerMode: PowerMode) => void;
 }
 
-function StrategySelector({ strategy, onChange }: StrategySelectorProps) {
+function PowerModeSelector({ powerMode, onChange }: PowerModeSelectorProps) {
   return (
     <div>
       <label className="block text-xs font-semibold uppercase tracking-wider text-theme-muted mb-1.5">
-        Heating Strategy
+        Power Mode
       </label>
-      <select
-        value={strategy}
-        onChange={(e) => onChange(parseInt(e.target.value))}
-        className="w-full h-[50px] px-4 bg-theme-secondary border border-theme rounded-xl text-theme outline-none transition-colors focus:border-accent"
-      >
-        {STRATEGIES.map((s) => (
-          <option key={s.value} value={s.value}>
-            {s.label} - {s.desc}
-          </option>
-        ))}
-      </select>
+      <div className="flex gap-2 h-[50px]">
+        {POWER_MODES.map((mode) => {
+          const Icon = mode.value === "brew_only" ? Flame : Sparkles;
+          const isSelected = powerMode === mode.value;
+          return (
+            <button
+              key={mode.value}
+              onClick={() => onChange(mode.value)}
+              className={`flex-1 px-3 rounded-xl border text-sm font-medium transition-all flex items-center justify-center ${
+                isSelected
+                  ? "bg-accent/20 border-accent text-accent"
+                  : "bg-theme-secondary border-theme text-theme-secondary hover:border-accent/40 hover:bg-theme-tertiary"
+              }`}
+            >
+              <Icon className="w-4 h-4 mr-2" />
+              {mode.label}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

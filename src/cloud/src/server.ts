@@ -21,6 +21,7 @@ import { initDatabase } from "./lib/database.js";
 import {
   cleanupExpiredTokens,
   cleanupOrphanedDevices,
+  markAllDevicesOffline,
 } from "./services/device.js";
 import {
   cleanupExpiredSessions,
@@ -524,7 +525,18 @@ app.get("/api/info", (_req, res) => {
 
 // API routes
 app.use("/api/auth", authRouter);
-app.use("/api/devices", devicesRouter);
+// Devices routes - inject device relay for live connection status
+app.use(
+  "/api/devices",
+  (req, _res, next) => {
+    // Inject live device connection checker - this is the source of truth for online status
+    (req as unknown as Record<string, unknown>).isDeviceConnected = (deviceId: string) => {
+      return deviceRelay.isDeviceConnected(deviceId);
+    };
+    next();
+  },
+  devicesRouter
+);
 app.use("/api/push", pushRouter);
 
 // Admin routes - inject device relay and client proxy functions
@@ -540,6 +552,14 @@ app.use(
         devices: deviceRelay.getStats(),
         clients: clientProxy.getStats(),
       };
+    };
+    // Inject live device connection checker - this is the source of truth for online status
+    (req as unknown as Record<string, unknown>).isDeviceConnected = (deviceId: string) => {
+      return deviceRelay.isDeviceConnected(deviceId);
+    };
+    // Inject function to get list of connected device IDs
+    (req as unknown as Record<string, unknown>).getConnectedDeviceIds = () => {
+      return deviceRelay.getConnectedDevices().map(d => d.id);
     };
     next();
   },
@@ -594,6 +614,17 @@ async function start() {
   try {
     // Initialize SQLite database
     await initDatabase();
+
+    // IMPORTANT: Mark all devices as offline on startup
+    // This prevents stale online states from a previous server run or crash
+    try {
+      const offlineCount = markAllDevicesOffline();
+      if (offlineCount > 0) {
+        console.log(`[Startup] Reset ${offlineCount} device(s) to offline state`);
+      }
+    } catch (error) {
+      console.error("[Startup] Failed to reset device states:", error);
+    }
 
     // Initialize push notifications
     initializePushNotifications();

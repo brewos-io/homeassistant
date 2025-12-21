@@ -58,10 +58,16 @@ router.use(adminAuthMiddleware);
 /**
  * GET /api/admin/stats
  * Get system-wide statistics
+ * Uses live WebSocket connection count as source of truth for online devices
  */
-router.get("/stats", (_req: Request, res: Response) => {
+router.get("/stats", (req: Request, res: Response) => {
   try {
-    const stats = getSystemStats();
+    // Get live connection count from DeviceRelay (source of truth)
+    const getConnectionStats = (req as Request & { getConnectionStats?: () => { devices: { connectedDevices: number } } }).getConnectionStats;
+    const connStats = getConnectionStats ? getConnectionStats() : null;
+    const liveOnlineCount = connStats?.devices?.connectedDevices;
+    
+    const stats = getSystemStats(liveOnlineCount);
     res.json(stats);
   } catch (error) {
     console.error("[Admin] Failed to get stats:", error);
@@ -212,6 +218,7 @@ router.post("/users/:id/impersonate", sensitiveLimiter, (req: Request, res: Resp
 /**
  * GET /api/admin/devices
  * List all devices with pagination and filters
+ * Uses live WebSocket connection status as source of truth for online/offline
  */
 router.get("/devices", (req: Request, res: Response) => {
   try {
@@ -220,7 +227,11 @@ router.get("/devices", (req: Request, res: Response) => {
     const search = req.query.search as string | undefined;
     const onlineOnly = req.query.onlineOnly === "true";
 
-    const result = getAllDevices(page, pageSize, search, onlineOnly);
+    // Get live connection status from DeviceRelay (source of truth)
+    const getConnectedDeviceIds = (req as Request & { getConnectedDeviceIds?: () => string[] }).getConnectedDeviceIds;
+    const connectedDeviceIds = getConnectedDeviceIds ? getConnectedDeviceIds() : undefined;
+
+    const result = getAllDevices(page, pageSize, search, onlineOnly, connectedDeviceIds);
     res.json(result);
   } catch (error) {
     console.error("[Admin] Failed to get devices:", error);
@@ -231,11 +242,17 @@ router.get("/devices", (req: Request, res: Response) => {
 /**
  * GET /api/admin/devices/:id
  * Get detailed device information
+ * Uses live WebSocket connection status as source of truth for online/offline
  */
 router.get("/devices/:id", (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const device = getDeviceById(id);
+    
+    // Get live connection status from DeviceRelay (source of truth)
+    const isDeviceConnected = (req as Request & { isDeviceConnected?: (id: string) => boolean }).isDeviceConnected;
+    const isConnected = isDeviceConnected ? isDeviceConnected(id) : undefined;
+    
+    const device = getDeviceById(id, isConnected);
 
     if (!device) {
       return res.status(404).json({ error: "Device not found" });

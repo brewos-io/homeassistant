@@ -8,20 +8,19 @@ import {
   Coffee,
   Thermometer,
   Flame,
-  Wind,
-  Brain,
+  Sparkles,
   ChevronDown,
 } from "lucide-react";
 import { cn, getMachineStateLabel, getMachineStateColor } from "@/lib/utils";
 import { useStore } from "@/lib/store";
 import { convertFromCelsius, getUnitSymbol } from "@/lib/temperature";
 import type { HeatingStrategy } from "@/lib/types";
+import { getPowerModeFromStrategy, POWER_MODES } from "@/lib/powerValidation";
 
-const STRATEGY_LABELS: Record<number, { label: string; icon: typeof Flame }> = {
-  0: { label: "Brew Only", icon: Flame },
-  1: { label: "Sequential", icon: Wind },
-  2: { label: "Parallel", icon: Zap },
-  3: { label: "Smart", icon: Brain },
+// User-facing power mode labels (not internal heating strategies)
+const POWER_MODE_LABELS: Record<string, { label: string; icon: typeof Flame }> = {
+  brew_only: { label: "Brew Only", icon: Flame },
+  brew_steam: { label: "Brew & Steam", icon: Sparkles },
 };
 
 // Extracted outside component to prevent re-creation on each render
@@ -205,7 +204,7 @@ export const MachineStatusCard = memo(function MachineStatusCard({
               >
                 {getMachineStateLabel(state)}
               </Badge>
-              {/* Heating strategy - show for dual boiler when machine is on */}
+              {/* Power mode - show for dual boiler when machine is on */}
               {isDualBoiler &&
                 mode !== "standby" &&
                 heatingStrategy !== null &&
@@ -213,12 +212,13 @@ export const MachineStatusCard = memo(function MachineStatusCard({
                   <span className="inline-flex items-center gap-1.5 text-xs text-theme-muted">
                     <span className="text-theme-tertiary">•</span>
                     {(() => {
-                      const strategy = STRATEGY_LABELS[heatingStrategy];
-                      const Icon = strategy?.icon || Flame;
+                      const powerMode = getPowerModeFromStrategy(heatingStrategy);
+                      const modeInfo = POWER_MODE_LABELS[powerMode];
+                      const Icon = modeInfo?.icon || Flame;
                       return (
                         <>
                           <Icon className="w-3 h-3" />
-                          {strategy?.label || "Unknown"}
+                          {modeInfo?.label || "Unknown"}
                         </>
                       );
                     })()}
@@ -294,8 +294,10 @@ function getStatusDescription(
     return "Eco mode active. Lower temperature to save energy.";
   if (state === "heating") {
     if (heatingProgress && heatingProgress > 0) {
-      // More descriptive message for dual boilers
-      if (isDualBoiler && heatingStrategy !== 0) {
+      // More descriptive message for dual boilers in Brew & Steam mode
+      const isBrewSteamMode = isDualBoiler && heatingStrategy !== 0;
+      if (isBrewSteamMode) {
+        // For sequential heating (strategy 1), show which boiler
         if (heatingStrategy === 1 && heatingProgress < 50) {
           return `Heating brew boiler... ${Math.round(heatingProgress * 2)}%`;
         } else if (heatingStrategy === 1 && heatingProgress >= 50) {
@@ -312,7 +314,9 @@ function getStatusDescription(
     return "Warming up... Your machine will be ready soon.";
   }
   if (state === "ready") {
-    if (isDualBoiler && heatingStrategy !== 0) {
+    // Check if in Brew & Steam mode (any strategy except 0)
+    const isBrewSteamMode = isDualBoiler && heatingStrategy !== 0;
+    if (isBrewSteamMode) {
       return "Both boilers at temperature. Ready to brew!";
     }
     return "Perfect temperature reached. Ready to brew!";
@@ -455,25 +459,30 @@ const PowerControls = memo(function PowerControls({
   state,
 }: PowerControlsProps & { state: string }) {
   const isOnActive = mode === "on";
+  const isEcoActive = mode === "eco";
 
-  // Only allow turning on from idle, ready, or eco states
-  const canTurnOn = state === "idle" || state === "ready" || state === "eco";
+  // Can switch modes when not brewing, not in fault/safe state
+  // This allows: On ↔ Eco, Standby → On, Standby → Eco, and changing power mode while running
+  const canSwitchModes = state !== "brewing" && state !== "fault" && state !== "safe" && state !== "offline";
 
   // Split "On" button for dual boiler
   const SplitOnButton = () => {
-    // Get the strategy that will be used (from state or localStorage)
-    const getEffectiveStrategy = () => {
+    // Get the power mode that will be used (from state or localStorage)
+    const getEffectivePowerMode = () => {
       if (heatingStrategy !== null && heatingStrategy !== undefined) {
-        return heatingStrategy;
+        return getPowerModeFromStrategy(heatingStrategy);
       }
-      const stored = localStorage.getItem("brewos-last-heating-strategy");
-      return stored && !isNaN(parseInt(stored, 10)) ? parseInt(stored, 10) : 1; // Default to Sequential
+      const stored = localStorage.getItem("brewos-last-power-mode");
+      if (stored === POWER_MODES.BREW_ONLY || stored === POWER_MODES.BREW_STEAM) {
+        return stored;
+      }
+      return POWER_MODES.BREW_STEAM; // Default to Brew & Steam
     };
 
-    const effectiveStrategy = getEffectiveStrategy();
-    const StrategyIcon = STRATEGY_LABELS[effectiveStrategy]?.icon || Zap;
-    const strategyLabel =
-      STRATEGY_LABELS[effectiveStrategy]?.label || "Sequential";
+    const effectiveMode = getEffectivePowerMode();
+    const modeInfo = POWER_MODE_LABELS[effectiveMode];
+    const ModeIcon = modeInfo?.icon || Sparkles;
+    const modeLabel = modeInfo?.label || "Brew & Steam";
 
     return (
       <div
@@ -481,25 +490,25 @@ const PowerControls = memo(function PowerControls({
         aria-label="Power control"
         className="flex-1 flex rounded-xl overflow-hidden"
       >
-        {/* Main button - 70% - Turn On with strategy */}
+        {/* Main button - 70% - Turn On with power mode */}
         <button
           onClick={onQuickOn}
-          disabled={!canTurnOn}
+          disabled={!canSwitchModes}
           className={cn(
             "flex-[7] px-4 py-4 font-semibold transition-colors duration-200",
             "flex items-center justify-center gap-3",
-            !canTurnOn && "opacity-50 cursor-not-allowed",
+            !canSwitchModes && "opacity-50 cursor-not-allowed",
             isOnActive
               ? "nav-active rounded-l-xl"
               : "bg-theme-secondary text-theme-secondary hover:bg-theme-tertiary"
           )}
           title={
-            !canTurnOn
-              ? "Machine must be in IDLE, READY, or ECO state to turn on"
+            !canSwitchModes
+              ? "Cannot change mode while brewing or in fault state"
               : undefined
           }
         >
-          <StrategyIcon className="w-5 h-5" />
+          <ModeIcon className="w-5 h-5" />
           <div className="flex flex-col items-start">
             <span className="text-sm">On</span>
             <span
@@ -508,7 +517,7 @@ const PowerControls = memo(function PowerControls({
                 isOnActive ? "opacity-70" : "text-theme-muted"
               )}
             >
-              {strategyLabel}
+              {modeLabel}
             </span>
           </div>
         </button>
@@ -521,22 +530,22 @@ const PowerControls = memo(function PowerControls({
           )}
         />
 
-        {/* Secondary button - 30% - Change Strategy */}
+        {/* Secondary button - 30% - Change power mode (enabled when machine is running) */}
         <button
           onClick={onOpenStrategyModal}
-          disabled={!canTurnOn}
+          disabled={!canSwitchModes}
           className={cn(
             "flex-[3] px-3 py-4 transition-colors duration-200",
             "flex items-center justify-center",
-            !canTurnOn && "opacity-50 cursor-not-allowed",
+            !canSwitchModes && "opacity-50 cursor-not-allowed",
             isOnActive
               ? "nav-active rounded-r-xl"
               : "bg-theme-secondary text-theme-secondary hover:bg-theme-tertiary"
           )}
           title={
-            !canTurnOn
-              ? "Machine must be in IDLE, READY, or ECO state to turn on"
-              : "Change heating strategy"
+            !canSwitchModes
+              ? "Cannot change mode while brewing or in fault state"
+              : "Change power mode"
           }
         >
           <ChevronDown className="w-5 h-5" />
@@ -567,18 +576,18 @@ const PowerControls = memo(function PowerControls({
         ) : (
           <button
             onClick={onQuickOn}
-            disabled={!canTurnOn}
+            disabled={!canSwitchModes}
             className={cn(
               "flex-1 px-5 py-4 rounded-xl font-semibold transition-colors duration-200",
               "flex items-center justify-center gap-3",
-              !canTurnOn && "opacity-50 cursor-not-allowed",
+              !canSwitchModes && "opacity-50 cursor-not-allowed",
               isOnActive
                 ? "nav-active"
                 : "bg-theme-secondary text-theme-secondary hover:bg-theme-tertiary"
             )}
             title={
-              !canTurnOn
-                ? "Machine must be in IDLE, READY, or ECO state to turn on"
+              !canSwitchModes
+                ? "Cannot change mode while brewing or in fault state"
                 : undefined
             }
           >
@@ -600,18 +609,18 @@ const PowerControls = memo(function PowerControls({
         {/* Eco button */}
         <button
           onClick={handleEco}
-          disabled={!canTurnOn}
+          disabled={!canSwitchModes}
           className={cn(
             "flex-1 px-5 py-4 rounded-xl font-semibold transition-colors duration-200",
             "flex items-center justify-center gap-3",
-            !canTurnOn && "opacity-50 cursor-not-allowed",
-            mode === "eco"
+            !canSwitchModes && "opacity-50 cursor-not-allowed",
+            isEcoActive
               ? "nav-active"
               : "bg-theme-secondary text-theme-secondary hover:bg-theme-tertiary"
           )}
           title={
-            !canTurnOn
-              ? "Machine must be in IDLE, READY, or ECO state to enter eco mode"
+            !canSwitchModes
+              ? "Cannot change mode while brewing or in fault state"
               : undefined
           }
         >
@@ -621,7 +630,7 @@ const PowerControls = memo(function PowerControls({
             <span
               className={cn(
                 "text-[10px] font-normal",
-                mode === "eco" ? "opacity-70" : "text-theme-muted"
+                isEcoActive ? "opacity-70" : "text-theme-muted"
               )}
             >
               Energy saving

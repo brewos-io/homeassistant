@@ -1,3 +1,5 @@
+import type { PowerMode } from "@/lib/powerValidation";
+
 export interface Schedule {
   id: number;
   enabled: boolean;
@@ -5,7 +7,8 @@ export interface Schedule {
   hour: number;
   minute: number;
   action: "on" | "off";
-  strategy: number;
+  strategy: number; // Internal strategy value (auto-calculated from powerMode)
+  powerMode: PowerMode; // User-selected power mode
   name: string;
 }
 
@@ -15,7 +18,8 @@ export interface ScheduleFormData {
   hour: number;
   minute: number;
   action: "on" | "off";
-  strategy: number;
+  strategy: number; // Internal strategy value (auto-calculated from powerMode)
+  powerMode: PowerMode; // User-selected power mode
   name: string;
 }
 
@@ -41,6 +45,13 @@ export const WEEKDAYS = 0x3e; // Mon-Fri
 export const WEEKENDS = 0x41; // Sat-Sun
 export const EVERY_DAY = 0x7f;
 
+// User-facing power modes (used in schedule form)
+export const POWER_MODES = [
+  { value: "brew_only" as PowerMode, label: "Brew Only", desc: "Espresso without steam" },
+  { value: "brew_steam" as PowerMode, label: "Brew & Steam", desc: "Espresso + milk drinks" },
+];
+
+// Legacy strategies for backward compatibility with existing schedules
 export const STRATEGIES = [
   { value: 0, label: "Brew Only", desc: "Heat only brew boiler" },
   { value: 1, label: "Sequential", desc: "Brew first, then steam" },
@@ -54,7 +65,8 @@ export const DEFAULT_SCHEDULE: ScheduleFormData = {
   hour: 7,
   minute: 0,
   action: "on",
-  strategy: 1,
+  strategy: 2, // Default strategy (will be recalculated from powerMode)
+  powerMode: "brew_steam", // Default to full functionality
   name: "",
 };
 
