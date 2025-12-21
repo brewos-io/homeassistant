@@ -263,3 +263,11 @@ void screen_cloud_set_refresh_callback(cloud_refresh_callback_t callback) {
     refresh_callback = callback;
 }
 
+void screen_cloud_trigger_refresh(void) {
+    // Automatically trigger refresh when entering screen
+    if (refresh_callback) {
+        screen_cloud_show_loading();
+        refresh_callback();
+    }
+}
+

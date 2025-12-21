@@ -187,7 +187,8 @@ void Encoder::update() {
     
     // Report any events
     if (diff != 0 || btnToReport != BTN_RELEASED) {
-        display.resetIdleTimer();
+        // Note: Don't reset idle timer here - let the callback handle it
+        // This allows the callback to check if display was sleeping first
         
         if (_callback) {
             _callback(diff, btnToReport);

@@ -1,7 +1,8 @@
 /**
  * BrewOS Settings Screen Implementation
  * 
- * Simplified menu for settings navigation
+ * Round carousel-style menu for settings navigation
+ * Supports inline temperature editing without leaving the menu
  * Optimized for 480x480 round display
  */
 
@@ -10,46 +11,152 @@
 #include "display/theme.h"
 #include "display/display_config.h"
 
-// Simplified menu items (removed MQTT, System - configurable via web UI)
+// Menu items with icons, names, and descriptions
 static const char* item_icons[] = {
-    LV_SYMBOL_SETTINGS,  // Temp
-    LV_SYMBOL_BLUETOOTH, // Scale
-    LV_SYMBOL_UPLOAD,    // Cloud
+    LV_SYMBOL_SETTINGS,  // Brew Boiler Temp
+    LV_SYMBOL_SETTINGS,  // Steam Boiler Temp
+    LV_SYMBOL_DOWNLOAD,  // Brew by Weight
+    LV_SYMBOL_CLOUD,     // Cloud
     LV_SYMBOL_WIFI,      // WiFi
-    LV_SYMBOL_FILE,      // About
     LV_SYMBOL_LEFT       // Exit
 };
 
 static const char* item_names[] = {
-    "Temperature",
-    "Scale",
+    "Brew Boiler",
+    "Steam Boiler",
+    "Brew by Weight",
     "Cloud",
-    "WiFi",
-    "About",
+    "WiFi Setup",
     "Exit"
 };
 
 static const char* item_descriptions[] = {
-    "Boiler temperatures",
-    "Connect scale",
+    "Set brew temperature",
+    "Set steam temperature",
+    "Enable weight-based brewing",
     "Pair with cloud",
     "Enter setup mode",
-    "Device info",
     "Return to home"
 };
+
+// Temperature limits
+static const float BREW_MIN = 80.0f;
+static const float BREW_MAX = 105.0f;
+static const float STEAM_MIN = 120.0f;
+static const float STEAM_MAX = 160.0f;
+static const float TEMP_STEP = 0.5f;
 
 // Static elements
 static lv_obj_t* screen = nullptr;
 static lv_obj_t* title_label = nullptr;
 static lv_obj_t* icon_label = nullptr;
 static lv_obj_t* name_label = nullptr;
+static lv_obj_t* value_label = nullptr;
 static lv_obj_t* desc_label = nullptr;
 static lv_obj_t* status_icons[SETTINGS_COUNT] = {nullptr};
 static lv_obj_t* selector_arc = nullptr;
 
 // State
 static int selected_index = 0;
+static bool editing_temp = false;  // True when editing a temperature value
 static settings_select_callback_t select_callback = nullptr;
+static float cached_brew_setpoint = 93.0f;
+static float cached_steam_setpoint = 145.0f;
+static float edit_temp_value = 0.0f;  // Value being edited
+static bool bbw_enabled = false;
+
+// Callback for temperature changes
+static void (*temp_change_callback)(bool is_steam, float temp) = nullptr;
+
+// =============================================================================
+// Helper Functions
+// =============================================================================
+
+static void update_value_display() {
+    if (!value_label) return;
+    
+    char buf[24];
+    
+    switch (selected_index) {
+        case SETTINGS_BREW_TEMP:
+            if (editing_temp) {
+                snprintf(buf, sizeof(buf), "%.1f°C", edit_temp_value);
+                lv_obj_set_style_text_color(value_label, COLOR_SUCCESS, 0);
+            } else {
+                snprintf(buf, sizeof(buf), "%.0f°C", cached_brew_setpoint);
+                lv_obj_set_style_text_color(value_label, COLOR_ACCENT_AMBER, 0);
+            }
+            lv_label_set_text(value_label, buf);
+            lv_obj_clear_flag(value_label, LV_OBJ_FLAG_HIDDEN);
+            break;
+            
+        case SETTINGS_STEAM_TEMP:
+            if (editing_temp) {
+                snprintf(buf, sizeof(buf), "%.1f°C", edit_temp_value);
+                lv_obj_set_style_text_color(value_label, COLOR_SUCCESS, 0);
+            } else {
+                snprintf(buf, sizeof(buf), "%.0f°C", cached_steam_setpoint);
+                lv_obj_set_style_text_color(value_label, COLOR_ACCENT_ORANGE, 0);
+            }
+            lv_label_set_text(value_label, buf);
+            lv_obj_clear_flag(value_label, LV_OBJ_FLAG_HIDDEN);
+            break;
+            
+        case SETTINGS_BREW_BY_WEIGHT:
+            lv_label_set_text(value_label, bbw_enabled ? "ON" : "OFF");
+            lv_obj_set_style_text_color(value_label, 
+                bbw_enabled ? COLOR_SUCCESS : COLOR_TEXT_MUTED, 0);
+            lv_obj_clear_flag(value_label, LV_OBJ_FLAG_HIDDEN);
+            break;
+            
+        default:
+            lv_obj_add_flag(value_label, LV_OBJ_FLAG_HIDDEN);
+            break;
+    }
+    
+    // Update description based on edit state
+    if (desc_label) {
+        if (editing_temp) {
+            lv_label_set_text(desc_label, "Rotate to adjust • Press to confirm");
+            lv_obj_set_style_text_color(desc_label, COLOR_ACCENT_AMBER, 0);
+        } else {
+            lv_label_set_text(desc_label, item_descriptions[selected_index]);
+            lv_obj_set_style_text_color(desc_label, COLOR_TEXT_MUTED, 0);
+        }
+    }
+    
+    // Update arc color based on edit state
+    if (selector_arc) {
+        if (editing_temp) {
+            lv_obj_set_style_arc_color(selector_arc, COLOR_SUCCESS, LV_PART_INDICATOR);
+        } else {
+            lv_obj_set_style_arc_color(selector_arc, COLOR_ACCENT_AMBER, LV_PART_INDICATOR);
+        }
+    }
+}
+
+static void update_menu_display() {
+    // Update icon and name
+    lv_label_set_text(icon_label, item_icons[selected_index]);
+    lv_label_set_text(name_label, item_names[selected_index]);
+    
+    // Update arc position
+    lv_arc_set_value(selector_arc, selected_index + 1);
+    
+    // Update dots
+    for (int i = 0; i < SETTINGS_COUNT; i++) {
+        if (status_icons[i]) {
+            if (i == selected_index) {
+                lv_obj_set_style_bg_color(status_icons[i], COLOR_ACCENT_AMBER, 0);
+            } else {
+                lv_obj_set_style_bg_color(status_icons[i], COLOR_BG_ELEVATED, 0);
+            }
+        }
+    }
+    
+    // Update value display
+    update_value_display();
+}
 
 // =============================================================================
 // Screen Creation
@@ -102,21 +209,28 @@ lv_obj_t* screen_settings_create(void) {
     lv_label_set_text(icon_label, item_icons[selected_index]);
     lv_obj_set_style_text_font(icon_label, FONT_TEMP, 0);
     lv_obj_set_style_text_color(icon_label, COLOR_ACCENT_AMBER, 0);
-    lv_obj_align(icon_label, LV_ALIGN_CENTER, 0, -30);
+    lv_obj_align(icon_label, LV_ALIGN_CENTER, 0, -50);
     
     // === Item Name ===
     name_label = lv_label_create(container);
     lv_label_set_text(name_label, item_names[selected_index]);
     lv_obj_set_style_text_font(name_label, FONT_LARGE, 0);
     lv_obj_set_style_text_color(name_label, COLOR_TEXT_PRIMARY, 0);
-    lv_obj_align(name_label, LV_ALIGN_CENTER, 0, 40);
+    lv_obj_align(name_label, LV_ALIGN_CENTER, 0, 10);
+    
+    // === Current Value (for temps and BBW) ===
+    value_label = lv_label_create(container);
+    lv_label_set_text(value_label, "");
+    lv_obj_set_style_text_font(value_label, FONT_LARGE, 0);  // Larger font for better visibility
+    lv_obj_set_style_text_color(value_label, COLOR_ACCENT_AMBER, 0);
+    lv_obj_align(value_label, LV_ALIGN_CENTER, 0, 40);
     
     // === Description ===
     desc_label = lv_label_create(container);
     lv_label_set_text(desc_label, item_descriptions[selected_index]);
     lv_obj_set_style_text_font(desc_label, FONT_SMALL, 0);
     lv_obj_set_style_text_color(desc_label, COLOR_TEXT_MUTED, 0);
-    lv_obj_align(desc_label, LV_ALIGN_CENTER, 0, 70);
+    lv_obj_align(desc_label, LV_ALIGN_CENTER, 0, 75);
     
     // === Page dots at bottom ===
     lv_obj_t* dots_container = lv_obj_create(container);
@@ -148,9 +262,8 @@ lv_obj_t* screen_settings_create(void) {
     lv_obj_set_style_text_color(hint, COLOR_TEXT_MUTED, 0);
     lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -80);
     
-    // Note: Encoder navigation is handled via direct callbacks in main.cpp (handleEncoderEvent)
-    // This avoids double navigation that occurred when both LVGL input device and direct 
-    // callbacks were processing encoder events
+    // Update initial value display
+    update_value_display();
     
     LOG_I("Settings screen created");
     return screen;
@@ -161,37 +274,56 @@ lv_obj_t* screen_settings_create(void) {
 // =============================================================================
 
 void screen_settings_update(const ui_state_t* state) {
-    // Could update connection status indicators for WiFi, MQTT, Scale
     if (!screen || !state) return;
+    
+    // Only update cached values if not currently editing
+    if (!editing_temp) {
+        if (state->brew_setpoint > 0) {
+            cached_brew_setpoint = state->brew_setpoint;
+        }
+        if (state->steam_setpoint > 0) {
+            cached_steam_setpoint = state->steam_setpoint;
+        }
+        
+        // Refresh display
+        update_value_display();
+    }
 }
 
 void screen_settings_navigate(int direction) {
-    LOG_I("Settings navigate: direction=%d, current=%d", direction, selected_index);
-    
-    // Update selection
-    selected_index += direction;
-    if (selected_index < 0) selected_index = SETTINGS_COUNT - 1;
-    if (selected_index >= SETTINGS_COUNT) selected_index = 0;
-    
-    LOG_I("Settings navigate: new index=%d", selected_index);
-    
-    // Update UI
-    lv_label_set_text(icon_label, item_icons[selected_index]);
-    lv_label_set_text(name_label, item_names[selected_index]);
-    lv_label_set_text(desc_label, item_descriptions[selected_index]);
-    
-    // Update arc position (each item is 1 unit)
-    lv_arc_set_value(selector_arc, selected_index + 1);
-    
-    // Update dots
-    for (int i = 0; i < SETTINGS_COUNT; i++) {
-        if (status_icons[i]) {
-            if (i == selected_index) {
-                lv_obj_set_style_bg_color(status_icons[i], COLOR_ACCENT_AMBER, 0);
-            } else {
-                lv_obj_set_style_bg_color(status_icons[i], COLOR_BG_ELEVATED, 0);
-            }
+    if (editing_temp) {
+        // In edit mode: adjust temperature value
+        float min_temp, max_temp;
+        
+        if (selected_index == SETTINGS_BREW_TEMP) {
+            min_temp = BREW_MIN;
+            max_temp = BREW_MAX;
+        } else {
+            min_temp = STEAM_MIN;
+            max_temp = STEAM_MAX;
         }
+        
+        edit_temp_value += direction * TEMP_STEP;
+        
+        // Clamp to limits
+        if (edit_temp_value < min_temp) edit_temp_value = min_temp;
+        if (edit_temp_value > max_temp) edit_temp_value = max_temp;
+        
+        // Update display
+        update_value_display();
+        
+        LOG_I("Editing temp: %.1f°C", edit_temp_value);
+    } else {
+        // Normal menu navigation
+        LOG_I("Settings navigate: direction=%d, current=%d", direction, selected_index);
+        
+        selected_index += direction;
+        if (selected_index < 0) selected_index = SETTINGS_COUNT - 1;
+        if (selected_index >= SETTINGS_COUNT) selected_index = 0;
+        
+        update_menu_display();
+        
+        LOG_I("Settings navigate: new index=%d", selected_index);
     }
 }
 
@@ -200,6 +332,62 @@ settings_item_t screen_settings_get_selection(void) {
 }
 
 void screen_settings_select(void) {
+    if (editing_temp) {
+        // Confirm temperature edit
+        bool is_steam = (selected_index == SETTINGS_STEAM_TEMP);
+        
+        // Update cached value
+        if (is_steam) {
+            cached_steam_setpoint = edit_temp_value;
+        } else {
+            cached_brew_setpoint = edit_temp_value;
+        }
+        
+        // Call temperature change callback
+        if (temp_change_callback) {
+            temp_change_callback(is_steam, edit_temp_value);
+        }
+        
+        LOG_I("Temperature confirmed: %s = %.1f°C", 
+              is_steam ? "steam" : "brew", edit_temp_value);
+        
+        // Exit edit mode
+        editing_temp = false;
+        update_value_display();
+        
+        return;
+    }
+    
+    // Handle selection based on item type
+    switch (selected_index) {
+        case SETTINGS_BREW_TEMP:
+            // Enter edit mode for brew temperature
+            editing_temp = true;
+            edit_temp_value = cached_brew_setpoint;
+            update_value_display();
+            LOG_I("Editing brew temp, starting at %.1f°C", edit_temp_value);
+            return;  // Don't call select callback
+            
+        case SETTINGS_STEAM_TEMP:
+            // Enter edit mode for steam temperature
+            editing_temp = true;
+            edit_temp_value = cached_steam_setpoint;
+            update_value_display();
+            LOG_I("Editing steam temp, starting at %.1f°C", edit_temp_value);
+            return;  // Don't call select callback
+            
+        case SETTINGS_BREW_BY_WEIGHT:
+            // Toggle BBW inline
+            bbw_enabled = !bbw_enabled;
+            update_value_display();
+            LOG_I("Brew by Weight: %s", bbw_enabled ? "ON" : "OFF");
+            break;
+            
+        default:
+            break;
+    }
+    
+    // Call select callback for navigation items (Cloud, WiFi, Exit)
     if (select_callback) {
         select_callback((settings_item_t)selected_index);
     }
@@ -207,5 +395,30 @@ void screen_settings_select(void) {
 
 void screen_settings_set_select_callback(settings_select_callback_t callback) {
     select_callback = callback;
+}
+
+void screen_settings_set_temp_callback(void (*callback)(bool is_steam, float temp)) {
+    temp_change_callback = callback;
+}
+
+void screen_settings_set_bbw_enabled(bool enabled) {
+    bbw_enabled = enabled;
+    update_value_display();
+}
+
+bool screen_settings_get_bbw_enabled(void) {
+    return bbw_enabled;
+}
+
+bool screen_settings_is_editing(void) {
+    return editing_temp;
+}
+
+void screen_settings_cancel_edit(void) {
+    if (editing_temp) {
+        editing_temp = false;
+        update_value_display();
+        LOG_I("Edit cancelled");
+    }
 }
 

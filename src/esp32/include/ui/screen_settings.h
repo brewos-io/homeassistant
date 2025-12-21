@@ -1,14 +1,13 @@
 /**
  * BrewOS Settings Screen
  * 
- * Simplified settings menu:
- * - Temperature
- * - Scale (connect)
- * - Cloud
+ * Round carousel-style settings menu with inline editing:
+ * - Brew Boiler Temp (edit directly with encoder)
+ * - Steam Boiler Temp (edit directly with encoder)
+ * - Brew by Weight (on/off toggle)
+ * - Cloud (pairing)
  * - WiFi (enter setup mode)
- * - About
- * 
- * Note: MQTT, System settings are configurable via web UI
+ * - Exit
  */
 
 #ifndef SCREEN_SETTINGS_H
@@ -18,14 +17,14 @@
 #include "ui.h"
 
 /**
- * Settings menu items (simplified)
+ * Settings menu items
  */
 typedef enum {
-    SETTINGS_TEMP,
-    SETTINGS_SCALE,
+    SETTINGS_BREW_TEMP,
+    SETTINGS_STEAM_TEMP,
+    SETTINGS_BREW_BY_WEIGHT,
     SETTINGS_CLOUD,
     SETTINGS_WIFI,
-    SETTINGS_ABOUT,
     SETTINGS_EXIT,
     SETTINGS_COUNT
 } settings_item_t;
@@ -41,7 +40,9 @@ lv_obj_t* screen_settings_create(void);
 void screen_settings_update(const ui_state_t* state);
 
 /**
- * Navigate menu (encoder rotation)
+ * Navigate menu or adjust value (encoder rotation)
+ * In edit mode: adjusts temperature
+ * In browse mode: navigates menu items
  */
 void screen_settings_navigate(int direction);
 
@@ -51,15 +52,45 @@ void screen_settings_navigate(int direction);
 settings_item_t screen_settings_get_selection(void);
 
 /**
- * Select current item (encoder press)
+ * Select current item or confirm edit (encoder press)
+ * For temps: enters edit mode, second press confirms
+ * For BBW: toggles on/off
+ * For others: triggers callback
  */
 void screen_settings_select(void);
 
 /**
- * Callback for menu item selection
+ * Callback for menu item selection (Cloud, WiFi, Exit)
  */
 typedef void (*settings_select_callback_t)(settings_item_t item);
 void screen_settings_set_select_callback(settings_select_callback_t callback);
+
+/**
+ * Callback for temperature changes
+ * Called when user confirms a temperature edit
+ */
+void screen_settings_set_temp_callback(void (*callback)(bool is_steam, float temp));
+
+/**
+ * Set Brew by Weight enabled state
+ */
+void screen_settings_set_bbw_enabled(bool enabled);
+
+/**
+ * Get Brew by Weight enabled state
+ */
+bool screen_settings_get_bbw_enabled(void);
+
+/**
+ * Check if currently editing a temperature value
+ */
+bool screen_settings_is_editing(void);
+
+/**
+ * Cancel current edit (if editing)
+ * Used for long-press to cancel
+ */
+void screen_settings_cancel_edit(void);
 
 #endif // SCREEN_SETTINGS_H
 

@@ -51,5 +51,10 @@ void screen_cloud_select(void);
 typedef void (*cloud_refresh_callback_t)(void);
 void screen_cloud_set_refresh_callback(cloud_refresh_callback_t callback);
 
+/**
+ * Trigger a refresh (call when entering screen)
+ */
+void screen_cloud_trigger_refresh(void);
+
 #endif // SCREEN_CLOUD_H
 

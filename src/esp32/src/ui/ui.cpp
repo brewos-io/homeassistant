@@ -443,6 +443,11 @@ void UI::handleLongPress() {
     
     switch (_currentScreen) {
         case SCREEN_SETTINGS:
+            // If editing a temperature, long press cancels edit mode
+            if (screen_settings_is_editing()) {
+                screen_settings_cancel_edit();
+                return;
+            }
             // Long press from menu -> Exit menu (go to Home/Idle)
             // If machine is off, go to Idle, otherwise Home
             if (_state.machine_state == UI_STATE_IDLE || _state.machine_state == UI_STATE_INIT) {
@@ -514,28 +519,30 @@ void UI::createCompleteScreen() {
 void UI::createSettingsScreen() {
     _screens[SCREEN_SETTINGS] = screen_settings_create();
     
-    // Set callback for menu item selection
+    // Set callback for temperature changes (inline editing)
+    screen_settings_set_temp_callback([](bool is_steam, float temp) {
+        if (ui._onSetTemp) {
+            ui._onSetTemp(is_steam, temp);
+        }
+    });
+    
+    // Set callback for menu item selection (navigation items only)
     screen_settings_set_select_callback([](settings_item_t item) {
         switch (item) {
-            case SETTINGS_TEMP:
-                // Temperature settings
-                ui.showScreen(SCREEN_TEMP_SETTINGS);
-                break;
-            case SETTINGS_SCALE:
-                // Connect to scale
-                ui.showScreen(SCREEN_SCALE);
+            case SETTINGS_BREW_TEMP:
+            case SETTINGS_STEAM_TEMP:
+            case SETTINGS_BREW_BY_WEIGHT:
+                // These are handled inline in screen_settings_select()
                 break;
             case SETTINGS_CLOUD:
-                // Cloud pairing
+                // Cloud pairing - show screen and auto-refresh
                 ui.showScreen(SCREEN_CLOUD);
+                // Trigger refresh to load QR code
+                screen_cloud_trigger_refresh();
                 break;
             case SETTINGS_WIFI:
                 // Enter WiFi setup mode - callback will reset to DHCP and start AP
                 ui.triggerWifiSetup();
-                break;
-            case SETTINGS_ABOUT:
-                // Show device info notification
-                ui.showNotification("BrewOS v1.0", 3000);
                 break;
             case SETTINGS_EXIT:
                 // Return to appropriate screen based on state
@@ -601,16 +608,10 @@ void UI::createScaleScreen() {
 void UI::createCloudScreen() {
     _screens[SCREEN_CLOUD] = screen_cloud_create();
     
-    // Set refresh callback to generate new pairing token
-    screen_cloud_set_refresh_callback([]() {
-        // In real implementation, this would call pairingManager.generateToken()
-        // and update the screen with the new token
-        // For now, show a placeholder
-        screen_cloud_update("BRW-12345678", "ABC123XY", 
-                           "brewos://pair?id=BRW-12345678&token=ABC123XY", 600);
-    });
+    // Note: The refresh callback is set in main.cpp after pairingManager is available
+    // This allows the cloud screen to properly generate real pairing tokens
     
-    // Initialize with placeholder data
+    // Initialize with placeholder data - will be updated when screen is shown
     screen_cloud_update("BRW---------", "--------", 
                        "brewos://pair", 0);
 }

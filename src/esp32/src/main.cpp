@@ -34,6 +34,7 @@
 #include "ui/ui.h"
 #include "ui/screen_setup.h"
 #include "ui/screen_ota.h"
+#include "ui/screen_cloud.h"
 
 // MQTT
 #include "mqtt_client.h"
@@ -1180,6 +1181,39 @@ void setup() {
         webServer->setCloudConnection(cloudConnection);
     }
     
+    // Set up cloud screen callback for QR code generation
+    // This is set regardless of whether cloud is enabled - the callback
+    // will show appropriate error if cloud is not configured
+    screen_cloud_set_refresh_callback([]() {
+        auto& cloudSettings = State.settings().cloud;
+        
+        if (!cloudSettings.enabled || strlen(cloudSettings.serverUrl) == 0) {
+            screen_cloud_show_error("Cloud not configured");
+            return;
+        }
+        
+        if (pairingManager) {
+            // Generate new token and register with cloud
+            pairingManager->generateToken();
+            bool registered = pairingManager->registerTokenWithCloud();
+            
+            if (registered || pairingManager->isTokenValid()) {
+                // Update cloud screen with real pairing data
+                String deviceId = pairingManager->getDeviceId();
+                String token = pairingManager->getCurrentToken();
+                String url = pairingManager->getPairingUrl();
+                uint32_t expiresIn = (pairingManager->getTokenExpiry() - millis()) / 1000;
+                
+                screen_cloud_update(deviceId.c_str(), token.c_str(), 
+                                   url.c_str(), expiresIn);
+            } else {
+                screen_cloud_show_error("Cloud not connected");
+            }
+        } else {
+            screen_cloud_show_error("Cloud not initialized");
+        }
+    });
+    
     // Initialize Notification Manager
     Serial.println("[8.5/8] Initializing Notification Manager...");
     // Serial.flush(); // Removed - can block on USB CDC
@@ -1387,12 +1421,14 @@ void loop() {
         display.update();
     }
     
-    // Reset idle timer on user activity (brewing, encoder, etc.)
+    // Reset idle timer on user activity (brewing, button press)
+    // Note: encoder rotation already resets idle timer in encoder.update()
+    // Don't call encoder.resetPosition() here - it causes race conditions
+    // where events get lost between update() and this check
     static bool lastPressed = false;
     bool currentPressed = encoder.isPressed();
-    if (machineState.is_brewing || (currentPressed && !lastPressed) || encoder.getPosition() != 0) {
+    if (machineState.is_brewing || (currentPressed && !lastPressed)) {
         State.resetIdleTimer();
-        encoder.resetPosition();
     }
     lastPressed = currentPressed;
     
@@ -1609,6 +1645,23 @@ void parsePicoStatus(const uint8_t* payload, uint8_t length) {
  * Handle encoder rotation and button events
  */
 void handleEncoderEvent(int32_t diff, button_state_t btn) {
+    // Check if display is dimmed/sleeping - if so, wake it up without triggering action
+    bool wasDimmed = display.isDimmed();
+    
+    if (wasDimmed) {
+        // Wake up the display
+        display.resetIdleTimer();
+        encoderActivityFlag = true;
+        
+        // Don't trigger any button/encoder actions when waking from sleep
+        // The user just wants to see the screen, not interact with it yet
+        if (btn != BTN_RELEASED || diff != 0) {
+            LOG_I("Display woken from sleep - ignoring input");
+            return;
+        }
+    }
+    
+    // Normal handling when display is already awake
     if (diff != 0) {
         LOG_I("Encoder rotate: %+d (screen=%d)", diff, (int)ui.getCurrentScreen());
         
@@ -1620,19 +1673,23 @@ void handleEncoderEvent(int32_t diff, button_state_t btn) {
             ui.handleEncoder(direction);
         }
         encoderActivityFlag = true;  // Trigger immediate UI refresh
+        display.resetIdleTimer();    // Reset idle timer on activity
     }
     
     if (btn == BTN_PRESSED) {
         LOG_I("Encoder button: PRESS (screen=%d)", (int)ui.getCurrentScreen());
         ui.handleButtonPress();
         encoderActivityFlag = true;  // Trigger immediate UI refresh
+        display.resetIdleTimer();    // Reset idle timer on activity
     } else if (btn == BTN_LONG_PRESSED) {
         LOG_I("Encoder button: LONG_PRESS (screen=%d)", (int)ui.getCurrentScreen());
         ui.handleLongPress();
         encoderActivityFlag = true;
+        display.resetIdleTimer();
     } else if (btn == BTN_DOUBLE_PRESSED) {
         LOG_I("Encoder button: DOUBLE_PRESS (screen=%d)", (int)ui.getCurrentScreen());
         ui.handleDoublePress();
         encoderActivityFlag = true;
+        display.resetIdleTimer();
     }
 }
