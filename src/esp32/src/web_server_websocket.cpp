@@ -17,11 +17,11 @@ extern ui_state_t machineState;
 
 /**
  * Helper function to allocate memory for JSON buffers.
- * Tries heap_caps_malloc first (preferred for internal RAM), falls back to malloc.
+ * Tries PSRAM first (preferred for JSON), falls back to malloc.
  * Returns nullptr on failure.
  */
 static char* allocateJsonBuffer(size_t size) {
-    char* buffer = (char*)heap_caps_malloc(size, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    char* buffer = (char*)heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!buffer) {
         buffer = (char*)malloc(size);
     }
@@ -37,6 +37,13 @@ void WebServer::handleWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* clie
             
         case WS_EVT_CONNECT:
             {
+                // Limit to 2 concurrent clients to save RAM
+                if (server->count() > 2) {
+                    LOG_W("Too many WebSocket clients (%u), rejecting %u", server->count(), client->id());
+                    client->close();
+                    return;
+                }
+                
                 LOG_I("WebSocket client %u connected from %s", client->id(), client->remoteIP().toString().c_str());
                 // Check if we have enough memory to send device info (needs ~3KB for JSON)
                 size_t freeHeap = ESP.getFreeHeap();

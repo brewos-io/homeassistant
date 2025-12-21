@@ -41,7 +41,7 @@ static void broadcastLogInternal(AsyncWebSocket* ws, CloudConnection* cloudConne
     
     // Allocate JSON buffer in internal RAM (not PSRAM) to avoid crashes
     size_t jsonSize = measureJson(doc) + 1;
-    char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!jsonBuffer) {
         // Fallback to regular malloc if heap_caps_malloc fails
         jsonBuffer = (char*)malloc(jsonSize);
@@ -116,7 +116,7 @@ void WebServer::broadcastPicoMessage(uint8_t type, const uint8_t* payload, size_
     
     // Allocate JSON buffer in internal RAM (not PSRAM) to avoid crashes
     size_t jsonSize = measureJson(doc) + 1;
-    char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!jsonBuffer) {
         jsonBuffer = (char*)malloc(jsonSize);
     }
@@ -167,14 +167,19 @@ void WebServer::broadcastFullStatus(const ui_state_t& state) {
         return;  // No one to send to
     }
     
-    // Use heap allocation to avoid stack overflow (4KB is too large for stack)
+    // Use PSRAM for JSON document to preserve internal RAM for SSL
     #pragma GCC diagnostic push
     #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-    DynamicJsonDocument* docPtr = new DynamicJsonDocument(4096);
-    if (!docPtr) {
+    void* mem = heap_caps_malloc(4096 + sizeof(DynamicJsonDocument), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!mem) {
+        // Fallback to internal RAM if PSRAM fails
+        mem = malloc(4096 + sizeof(DynamicJsonDocument));
+    }
+    if (!mem) {
         LOG_E("Failed to allocate JSON document for status broadcast");
         return;
     }
+    DynamicJsonDocument* docPtr = new (mem) DynamicJsonDocument(4096);
     DynamicJsonDocument& doc = *docPtr;
     #pragma GCC diagnostic pop
     doc["type"] = "status";
@@ -447,7 +452,7 @@ void WebServer::broadcastFullStatus(const ui_state_t& state) {
     
     // Allocate JSON buffer in internal RAM (not PSRAM) to avoid crashes
     size_t jsonSize = measureJson(doc) + 1;
-    char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!jsonBuffer) {
         // Fallback to regular malloc if heap_caps_malloc fails
         jsonBuffer = (char*)malloc(jsonSize);
@@ -469,8 +474,9 @@ void WebServer::broadcastFullStatus(const ui_state_t& state) {
         free(jsonBuffer);
     }
     
-    // Free the JSON document
-    delete docPtr;
+    // Free the JSON document (was allocated with placement new in PSRAM)
+    docPtr->~DynamicJsonDocument();
+    free(mem);
 }
 
 void WebServer::broadcastDeviceInfo() {
@@ -535,7 +541,7 @@ void WebServer::broadcastDeviceInfo() {
     
     // Allocate JSON buffer in internal RAM (not PSRAM) to avoid crashes
     size_t jsonSize = measureJson(doc) + 1;
-    char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!jsonBuffer) {
         jsonBuffer = (char*)malloc(jsonSize);
     }
@@ -578,7 +584,7 @@ void WebServer::broadcastBBWSettings() {
     
     // Allocate JSON buffer in internal RAM (not PSRAM) to avoid crashes
     size_t jsonSize = measureJson(doc) + 1;
-    char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!jsonBuffer) {
         jsonBuffer = (char*)malloc(jsonSize);
     }
@@ -614,7 +620,7 @@ void WebServer::broadcastPowerMeterStatus() {
     
     // Allocate JSON buffer in internal RAM (not PSRAM) to avoid crashes
     size_t jsonSize = measureJson(doc) + 1;
-    char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!jsonBuffer) {
         jsonBuffer = (char*)malloc(jsonSize);
     }
@@ -652,7 +658,7 @@ void WebServer::broadcastEvent(const String& event, const JsonDocument* data) {
     
     // Allocate JSON buffer in internal RAM (not PSRAM) to avoid crashes
     size_t jsonSize = measureJson(doc) + 1;
-    char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!jsonBuffer) {
         jsonBuffer = (char*)malloc(jsonSize);
     }

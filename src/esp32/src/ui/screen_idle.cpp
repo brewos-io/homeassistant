@@ -60,22 +60,25 @@ lv_obj_t* screen_idle_create(void) {
     
     // Create screen with dark background
     screen = lv_obj_create(NULL);
-    // Ensure screen fills entire display
-    lv_obj_set_size(screen, DISPLAY_WIDTH, DISPLAY_HEIGHT);
-    lv_obj_set_pos(screen, 0, 0);
     lv_obj_set_style_bg_color(screen, COLOR_BG_DARK, 0);
-    lv_obj_clear_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
+    
+    // Create main container (exact same pattern as settings screen)
+    lv_obj_t* container = lv_obj_create(screen);
+    lv_obj_remove_style_all(container);
+    lv_obj_set_size(container, DISPLAY_WIDTH, DISPLAY_HEIGHT);
+    lv_obj_center(container);
+    lv_obj_clear_flag(container, LV_OBJ_FLAG_SCROLLABLE);
     
     // === Logo at top (or power icon as fallback) ===
     #ifdef LV_USE_FS_STDIO
     // Try to load logo image
-    logo_img = lv_img_create(screen);
+    logo_img = lv_img_create(container);
     lv_img_set_src(logo_img, "S:/logo-icon.png");
     lv_obj_set_size(logo_img, 80, 80);
     lv_obj_align(logo_img, LV_ALIGN_CENTER, 0, -100);
     #else
     // Fallback: Power icon with animation
-    power_icon = lv_label_create(screen);
+    power_icon = lv_label_create(container);
     lv_label_set_text(power_icon, LV_SYMBOL_POWER);
     lv_obj_set_style_text_font(power_icon, FONT_XLARGE, 0);
     lv_obj_set_style_text_color(power_icon, COLOR_ACCENT_AMBER, 0);
@@ -96,28 +99,28 @@ lv_obj_t* screen_idle_create(void) {
     #endif
     
     // === Title ===
-    title_label = lv_label_create(screen);
+    title_label = lv_label_create(container);
     lv_label_set_text(title_label, "Press to Start");
     lv_obj_set_style_text_font(title_label, FONT_LARGE, 0);
     lv_obj_set_style_text_color(title_label, COLOR_TEXT_PRIMARY, 0);
     lv_obj_align(title_label, LV_ALIGN_CENTER, 0, -20);
     
     // === Strategy Name ===
-    strategy_name_label = lv_label_create(screen);
+    strategy_name_label = lv_label_create(container);
     lv_label_set_text(strategy_name_label, strategy_names[selected_index]);
     lv_obj_set_style_text_font(strategy_name_label, FONT_MEDIUM, 0);
     lv_obj_set_style_text_color(strategy_name_label, COLOR_ACCENT_AMBER, 0);
     lv_obj_align(strategy_name_label, LV_ALIGN_CENTER, 0, 30);
     
     // === Strategy Description ===
-    strategy_desc_label = lv_label_create(screen);
+    strategy_desc_label = lv_label_create(container);
     lv_label_set_text(strategy_desc_label, strategy_descriptions[selected_index]);
     lv_obj_set_style_text_font(strategy_desc_label, FONT_SMALL, 0);
     lv_obj_set_style_text_color(strategy_desc_label, COLOR_TEXT_MUTED, 0);
     lv_obj_align(strategy_desc_label, LV_ALIGN_CENTER, 0, 58);
     
     // === Dots indicator ===
-    dots_container = lv_obj_create(screen);
+    dots_container = lv_obj_create(container);
     lv_obj_remove_style_all(dots_container);
     lv_obj_set_size(dots_container, STRATEGY_COUNT * 18, 16);
     lv_obj_align(dots_container, LV_ALIGN_CENTER, 0, 95);
@@ -140,7 +143,7 @@ lv_obj_t* screen_idle_create(void) {
     }
     
     // === Hint at bottom ===
-    hint_label = lv_label_create(screen);
+    hint_label = lv_label_create(container);
     lv_label_set_text(hint_label, LV_SYMBOL_LOOP " Rotate to select");
     lv_obj_set_style_text_font(hint_label, FONT_SMALL, 0);
     lv_obj_set_style_text_color(hint_label, COLOR_TEXT_MUTED, 0);

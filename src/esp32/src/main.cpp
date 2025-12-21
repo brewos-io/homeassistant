@@ -203,8 +203,15 @@ static void onWiFiAPStarted() {
     LOG_I("Open http://%s to configure", apIPStr);
     
     // AP is active - check if we also have STA connection (AP+STA mode)
-    machineState.wifi_ap_mode = true;
-    machineState.wifi_connected = (WiFi.status() == WL_CONNECTED);  // May still be connected in AP+STA mode
+    // Only set wifi_ap_mode if we're truly in AP-only mode (no STA connection)
+    // If WiFi is still connected, we're in AP+STA mode - don't trigger auto-setup screen
+    bool wifiStillConnected = (WiFi.status() == WL_CONNECTED);
+    machineState.wifi_ap_mode = !wifiStillConnected;  // Only true if AP-only (no WiFi connection)
+    machineState.wifi_connected = wifiStillConnected;
+    
+    if (wifiStillConnected) {
+        LOG_I("AP+STA mode: WiFi still connected, setup screen will not auto-show");
+    }
     
     // Stop DNS server first if it was running (clean restart)
     if (dnsServerRunning) {
@@ -595,24 +602,35 @@ void setup() {
     Serial.println("SETUP START");
     delay(100);
     
-    Serial.print("Heap: ");
+    Serial.print("Internal heap: ");
     Serial.println(ESP.getFreeHeap());
     Serial.print("PSRAM size: ");
     Serial.println(ESP.getPsramSize());
+    Serial.print("PSRAM free: ");
+    Serial.println(ESP.getFreePsram());
     
-    // Verify PSRAM is disabled for heap allocations
-    // ESP32-S3 PSRAM address range
+    // Check memory allocation strategy
+    // Small allocations (<4KB) should use internal RAM for speed
+    // Large allocations (>4KB) can use PSRAM
+    void* smallAlloc = malloc(64);
+    void* largeAlloc = ps_malloc(65536);  // 64KB - use PSRAM explicitly
+    
     constexpr uintptr_t ESP32S3_PSRAM_START = 0x3C000000;
     constexpr uintptr_t ESP32S3_PSRAM_END   = 0x3E000000;
     
-    void* testAlloc = malloc(64);
-    uintptr_t addr = (uintptr_t)testAlloc;
-    bool inPSRAM = (addr >= ESP32S3_PSRAM_START && addr < ESP32S3_PSRAM_END);
-    Serial.printf("Malloc test: 0x%08X (%s)\n", addr, inPSRAM ? "PSRAM - ERROR!" : "Internal RAM - OK");
-    if (inPSRAM) {
-        Serial.println("ERROR: PSRAM should be disabled! Check platformio.ini");
+    uintptr_t smallAddr = (uintptr_t)smallAlloc;
+    bool smallInPSRAM = (smallAddr >= ESP32S3_PSRAM_START && smallAddr < ESP32S3_PSRAM_END);
+    Serial.printf("Small alloc (64B): 0x%08X (%s)\n", smallAddr, smallInPSRAM ? "PSRAM" : "Internal RAM");
+    
+    if (largeAlloc) {
+        uintptr_t largeAddr = (uintptr_t)largeAlloc;
+        bool largeInPSRAM = (largeAddr >= ESP32S3_PSRAM_START && largeAddr < ESP32S3_PSRAM_END);
+        Serial.printf("Large alloc (64KB): 0x%08X (%s)\n", largeAddr, largeInPSRAM ? "PSRAM - OK" : "Internal RAM - PSRAM not working!");
+        free(largeAlloc);
+    } else {
+        Serial.println("WARNING: PSRAM allocation failed - PSRAM may not be available");
     }
-    free(testAlloc);
+    free(smallAlloc);
     Serial.flush();
     
     // Initialize NVS (Non-Volatile Storage) FIRST
@@ -636,10 +654,11 @@ void setup() {
     
     // Initialize LittleFS (needed by State, WebServer, etc.)
     Serial.println("[2/8] Initializing LittleFS...");
-    if (!LittleFS.begin(true)) {
+    // Use 15 max open files to support parallel asset loading in web UI
+    if (!LittleFS.begin(true, "/littlefs", 15)) {
         Serial.println("LittleFS mount failed - formatting...");
         LittleFS.format();
-        if (!LittleFS.begin(true)) {
+        if (!LittleFS.begin(true, "/littlefs", 15)) {
             Serial.println("ERROR: LittleFS format failed!");
             // Continue anyway - web server will handle missing files gracefully
         } else {
@@ -1236,11 +1255,11 @@ void loop() {
     
     // Cloud connection (handles WebSocket to cloud server)
     // Throttle cloud loop to prioritize local UI responsiveness
-    // - Normal: 200ms interval (responsive enough for remote control)
-    // - Local clients connected: 500ms interval (balance between local UI and cloud heartbeat)
-    // Note: Cloud heartbeat is 15s ping with 3s timeout, so we need to process events at least every 500ms
+    // - Normal: 100ms interval (needed for reliable ping/pong processing)
+    // - Local clients connected: 200ms interval (balance between local UI and cloud heartbeat)
+    // Note: Cloud heartbeat is 15s ping with 10s timeout, so we need to process events frequently
     static unsigned long lastCloudLoop = 0;
-    unsigned long cloudInterval = (webServer && webServer->getClientCount() > 0) ? 500 : 200;
+    unsigned long cloudInterval = (webServer && webServer->getClientCount() > 0) ? 200 : 100;
 
     if (cloudConnection && millis() - lastCloudLoop >= cloudInterval) {
         lastCloudLoop = millis();
@@ -1329,15 +1348,10 @@ void loop() {
     State.loop();
     
     // Update display and encoder
-    // Reduce update rate when WiFi is active to minimize EMI interference
-    // Normal: 20 FPS (50ms), WiFi active or just started: 10 FPS (100ms) to reduce interference
-    // During startup (first 20s), keep updates slow to avoid contention during connection
+    // Fixed 10 FPS (100ms) for stability and low memory bandwidth usage
+    // This is sufficient for the UI and significantly reduces PSRAM contention
     unsigned long now = millis();
-    unsigned long uiUpdateInterval = 50;
-    
-    if (machineState.wifi_connected || machineState.wifi_ap_mode || now < 20000) {
-        uiUpdateInterval = 100; // 10 FPS when WiFi active or during startup
-    }
+    unsigned long uiUpdateInterval = 100; // 10 FPS fixed
     
     // Update encoder state FAST (every loop) to ensure responsiveness
     // Do not throttle input polling!
@@ -1467,12 +1481,16 @@ void loop() {
         lastMemoryLog = millis();
         size_t freeHeap = ESP.getFreeHeap();
         size_t minFreeHeap = ESP.getMinFreeHeap();
-        LOG_I("Memory: free=%zu, min=%zu, largest=%zu", 
-              freeHeap, minFreeHeap, ESP.getMaxAllocHeap());
+        size_t freePsram = ESP.getFreePsram();
+        size_t totalPsram = ESP.getPsramSize();
         
-        // Warn if memory is critically low
+        // Log both internal heap (critical for SSL) and PSRAM (for large buffers)
+        LOG_I("Memory: heap=%zu/%zu, PSRAM=%zuKB/%zuKB", 
+              freeHeap, minFreeHeap, freePsram/1024, totalPsram/1024);
+        
+        // Only warn if internal heap is dangerously low
         if (freeHeap < 10000) {
-            LOG_W("CRITICAL: Low memory! Consider reducing LVGL buffer or disabling features");
+            LOG_W("Low internal heap: %zu bytes", freeHeap);
         }
     }
 }
@@ -1572,15 +1590,18 @@ void parsePicoStatus(const uint8_t* payload, uint8_t length) {
  */
 void handleEncoderEvent(int32_t diff, button_state_t btn) {
     if (diff != 0) {
-        LOG_D("Encoder: %+d", diff);
+        LOG_I("Encoder rotate: %+d (screen=%d)", diff, (int)ui.getCurrentScreen());
         ui.handleEncoder(diff);
     }
     
     if (btn == BTN_PRESSED) {
+        LOG_I("Encoder button: PRESS (screen=%d)", (int)ui.getCurrentScreen());
         ui.handleButtonPress();
     } else if (btn == BTN_LONG_PRESSED) {
+        LOG_I("Encoder button: LONG_PRESS (screen=%d)", (int)ui.getCurrentScreen());
         ui.handleLongPress();
     } else if (btn == BTN_DOUBLE_PRESSED) {
+        LOG_I("Encoder button: DOUBLE_PRESS (screen=%d)", (int)ui.getCurrentScreen());
         ui.handleDoublePress();
     }
 }

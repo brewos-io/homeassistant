@@ -1,5 +1,6 @@
 #include "pairing_manager.h"
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <mbedtls/md.h>
@@ -157,9 +158,10 @@ bool PairingManager::registerTokenWithCloud() {
         generateToken();
     }
     
-    // Retry up to 3 times with delay (network stack may need time after WiFi connects)
-    const int maxRetries = 3;
-    const int retryDelayMs = 1000;
+    // Retry up to 2 times with shorter delay (network stack may need time after WiFi connects)
+    // Reduced retries and timeout for faster response
+    const int maxRetries = 2;
+    const int retryDelayMs = 500;  // Reduced from 1000ms
     
     // Convert WebSocket URL to HTTP URL
     // wss://cloud.brewos.io -> https://cloud.brewos.io
@@ -175,12 +177,19 @@ bool PairingManager::registerTokenWithCloud() {
     }
     
     for (int attempt = 1; attempt <= maxRetries; attempt++) {
+        WiFiClientSecure client;
+        client.setInsecure(); // Skip certificate validation for speed/memory
+        // Reduce buffer sizes to save RAM (default is often 4096+16384)
+        // 512 bytes is enough for handshake and small JSON response
+        // But need enough for certificate chain... use 1024 RX / 512 TX
+        // Actually, let's stick to defaults but ensure we destroy it
+        
         HTTPClient http;
         String url = httpUrl + "/api/devices/register-claim";
         
-        http.begin(url);
+        http.begin(client, url);
         http.addHeader("Content-Type", "application/json");
-        http.setTimeout(10000);  // 10 second timeout
+        http.setTimeout(5000);  // Reduced from 10 to 5 seconds for faster failure
         
         // Create request body - include device key for authentication setup
         JsonDocument doc;
@@ -191,7 +200,10 @@ bool PairingManager::registerTokenWithCloud() {
         String body;
         serializeJson(doc, body);
         
+        // Allow other tasks to run during HTTP request
+        yield();
         int httpCode = http.POST(body);
+        yield();
         http.end();
         
         if (httpCode == 200) {
@@ -203,7 +215,12 @@ bool PairingManager::registerTokenWithCloud() {
         
         if (attempt < maxRetries) {
             Serial.printf("[Pairing] Retrying in %dms...\n", retryDelayMs);
-            delay(retryDelayMs);
+            // Use yield() during delay to keep system responsive
+            unsigned long retryStart = millis();
+            while (millis() - retryStart < retryDelayMs) {
+                yield();
+                delay(100);
+            }
         }
     }
     

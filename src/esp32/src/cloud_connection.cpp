@@ -1,6 +1,5 @@
 #include "cloud_connection.h"
 #include <WiFi.h>
-#include <esp_heap_caps.h>
 
 // Logging macros (match project convention)
 #define LOG_I(fmt, ...) Serial.printf("[Cloud] " fmt "\n", ##__VA_ARGS__)
@@ -8,18 +7,8 @@
 #define LOG_E(fmt, ...) Serial.printf("[Cloud] ERROR: " fmt "\n", ##__VA_ARGS__)
 #define LOG_D(fmt, ...) Serial.printf("[Cloud] DEBUG: " fmt "\n", ##__VA_ARGS__)
 
-// Minimum free heap required for SSL connection (SSL needs ~40KB + margin)
-// Reduced from 70000 to 45000 as we're using internal RAM for LVGL buffer
-#define MIN_FREE_HEAP_FOR_SSL 45000
-
-// If disconnected within this time of connecting, it's a "quick disconnect" (likely server rejection)
-#define QUICK_DISCONNECT_THRESHOLD_MS 5000
-
-// Max retries before giving up for a longer period
-#define MAX_QUICK_DISCONNECT_RETRIES 3
-
-// Long backoff after too many quick disconnects (30 seconds)
-#define LONG_BACKOFF_MS 30000
+// Simple, robust reconnection settings
+#define RECONNECT_DELAY_MS 30000  // Wait 30 seconds between connection attempts (prevents UI freeze loop)
 
 CloudConnection::CloudConnection() {
 }
@@ -29,11 +18,9 @@ void CloudConnection::begin(const String& serverUrl, const String& deviceId, con
     _deviceId = deviceId;
     _deviceKey = deviceKey;
     _enabled = true;
-    _reconnectDelay = 5000;  // Start with 5 seconds
-    _quickDisconnectCount = 0;
-    _inLongBackoff = false;
+    _reconnectDelay = RECONNECT_DELAY_MS;
     
-    // Set up event handler ONCE here (not in connect() to avoid memory leaks)
+    // Set up event handler ONCE here
     _ws.onEvent([this](WStype_t type, uint8_t* payload, size_t length) {
         handleEvent(type, payload, length);
     });
@@ -42,8 +29,6 @@ void CloudConnection::begin(const String& serverUrl, const String& deviceId, con
     _ws.setReconnectInterval(0);
     
     LOG_I("Initialized: server=%s, device=%s", serverUrl.c_str(), deviceId.c_str());
-    
-    // Don't connect immediately - wait for WiFi and loop() call
 }
 
 void CloudConnection::end() {
@@ -89,7 +74,7 @@ void CloudConnection::loop() {
     }
     
     // Check WiFi
-    if (WiFi.status() != WL_CONNECTED) {
+    if (WiFi.status() != WL_CONNECTED || WiFi.localIP() == IPAddress(0, 0, 0, 0)) {
         if (_connected) {
             _connected = false;
             _connecting = false;
@@ -98,81 +83,30 @@ void CloudConnection::loop() {
         return;
     }
     
-    // If in long backoff, don't process anything - just wait
-    if (_inLongBackoff) {
-        unsigned long now = millis();
-        if (now - _lastConnectAttempt < _reconnectDelay) {
-            // Still in backoff period - don't process WebSocket events
-            return;
-        }
-        // Backoff expired, reset and try again
-        LOG_I("Backoff expired, will retry connection");
-        _inLongBackoff = false;
-        _quickDisconnectCount = 0;
-        _reconnectDelay = 5000;  // Reset to initial delay
-    }
-    
-    // If not connected and not connecting, try to connect
+    // If not connected, try to connect after delay
     if (!_connected && !_connecting) {
         unsigned long now = millis();
         if (now - _lastConnectAttempt >= _reconnectDelay) {
-            // Check free heap before attempting SSL connection
-            size_t freeHeap = ESP.getFreeHeap();
-            static bool lowMemLogged = false;
-            
-            if (freeHeap < MIN_FREE_HEAP_FOR_SSL) {
-                // Don't spam the log - only log once when entering this state
-                if (!lowMemLogged) {
-                    LOG_W("Insufficient memory for SSL (free: %u, need: %u) - pausing cloud", 
-                          freeHeap, MIN_FREE_HEAP_FOR_SSL);
-                    lowMemLogged = true;
-                }
-                // Wait longer before retrying when memory is low
-                _lastConnectAttempt = now;
-                _reconnectDelay = LONG_BACKOFF_MS * 2;  // Double the normal backoff
-                _inLongBackoff = true;
-                return;  // Skip _ws.loop() when memory is low
-            } else {
-                // Memory recovered - reset the log flag
-                lowMemLogged = false;
-            }
-            
             connect();
         }
-        return;  // Don't call _ws.loop() when not connected - prevents hammering
+        return;
     }
     
-    // Process WebSocket events only when connected
+    // Process WebSocket events
     _ws.loop();
 }
 
 void CloudConnection::connect() {
     if (_serverUrl.isEmpty() || _deviceId.isEmpty()) {
         LOG_W("Cannot connect: missing server URL or device ID");
-        _connecting = false;
         return;
     }
     
-    // Register device key with cloud before first connection
-    // This ensures the cloud server knows our key for authentication
+    // Register device with cloud on first connection
     if (!_registered && _onRegister) {
         LOG_I("Registering device with cloud...");
-        if (_onRegister()) {
-            LOG_I("Device registered successfully");
-            _registered = true;
-        } else {
-            LOG_W("Device registration failed - will retry next connection");
-            // Don't block connection attempt - server might already know us
-        }
+        _registered = _onRegister();
     }
-    
-    // Disconnect and cleanup any existing connection first
-    // This is critical for SSL memory management
-    // Use yield() to prevent watchdog timeout during cleanup
-    _ws.disconnect();
-    yield();
-    delay(100);  // Give it time to clean up SSL resources
-    yield();
     
     _lastConnectAttempt = millis();
     _connecting = true;
@@ -195,22 +129,30 @@ void CloudConnection::connect() {
         wsPath += "&key=" + _deviceKey;
     }
     
-    size_t freeHeap = ESP.getFreeHeap();
-    LOG_I("Connecting to %s:%d%s (SSL=%d, free heap: %u bytes)", 
-          host.c_str(), port, wsPath.c_str(), useSSL, freeHeap);
+    LOG_I("Connecting to %s:%d (SSL=%d)", host.c_str(), port, useSSL);
     
-    // Enable heartbeat (ping every 20s, timeout 5s, disconnect after 3 failures)
-    // Increased timeout to account for throttled loop() calls when local clients are connected
-    _ws.enableHeartbeat(20000, 5000, 3);
+    // Enable heartbeat (ping every 30s, timeout 15s, 2 failures to disconnect)
+    _ws.enableHeartbeat(30000, 15000, 2);
     
-    // Connect - yield before to prevent watchdog timeout
-    yield();
+    // Connect
     if (useSSL) {
         _ws.beginSSL(host.c_str(), port, wsPath.c_str());
     } else {
         _ws.begin(host.c_str(), port, wsPath.c_str());
     }
-    yield();  // Yield after to allow connection to start
+}
+
+void CloudConnection::pause() {
+    if (_connected || _connecting) {
+        LOG_I("Pausing cloud connection to free resources");
+        _ws.disconnect();
+        _connected = false;
+        _connecting = false;
+        
+        // Wait 30 seconds before reconnecting
+        _reconnectDelay = 30000;
+        _lastConnectAttempt = millis();
+    }
 }
 
 bool CloudConnection::parseUrl(const String& url, String& host, uint16_t& port, String& path, bool& useSSL) {
@@ -259,66 +201,24 @@ bool CloudConnection::parseUrl(const String& url, String& host, uint16_t& port, 
 }
 
 void CloudConnection::handleEvent(WStype_t type, uint8_t* payload, size_t length) {
-    // Safety check: ignore events if we're shutting down
-    // This prevents crashes during SSL teardown when end() was called
     if (!_enabled && type != WStype_DISCONNECTED) {
         return;
     }
     
     switch (type) {
         case WStype_DISCONNECTED:
-            {
-                bool wasConnected = _connected;
-                unsigned long now = millis();
-                
-                // Log disconnect reason if available
-                if (length > 0 && payload) {
-                    LOG_W("Disconnected: %.*s", length, payload);
-                } else {
-                    LOG_W("Disconnected (no reason provided)");
-                }
-                
-                _connected = false;
-                _connecting = false;
-                
-                if (wasConnected) {
-                    // Check if this was a "quick disconnect" (server rejection)
-                    unsigned long connectedDuration = now - _lastConnectedTime;
-                    if (connectedDuration < QUICK_DISCONNECT_THRESHOLD_MS) {
-                        _quickDisconnectCount++;
-                        LOG_W("Quick disconnect #%d (connected for %lums) - server may be rejecting", 
-                              _quickDisconnectCount, connectedDuration);
-                        
-                        // Trigger long backoff immediately if too many quick disconnects
-                        if (_quickDisconnectCount >= MAX_QUICK_DISCONNECT_RETRIES) {
-                            LOG_W("Too many quick disconnects - backing off for 30 seconds");
-                            _reconnectDelay = LONG_BACKOFF_MS;
-                            _inLongBackoff = true;
-                            _lastConnectAttempt = millis();  // Use fresh timestamp
-                            _quickDisconnectCount = 0;  // Reset counter for next cycle
-                        } else {
-                            // Increase backoff significantly for quick disconnects
-                            _reconnectDelay = min(_reconnectDelay * 3, MAX_RECONNECT_DELAY);
-                        }
-                    } else {
-                        // Normal disconnect after stable connection
-                        LOG_W("Disconnected from cloud (was connected for %lums)", connectedDuration);
-                        _quickDisconnectCount = 0;  // Reset counter on stable connection
-                        _reconnectDelay = min(_reconnectDelay * 2, MAX_RECONNECT_DELAY);
-                    }
-                } else {
-                    // Disconnected while connecting (connection failed)
-                    _reconnectDelay = min(_reconnectDelay * 2, MAX_RECONNECT_DELAY);
-                }
+            if (_connected) {
+                LOG_W("Disconnected from cloud");
             }
+            _connected = false;
+            _connecting = false;
+            _lastConnectAttempt = millis();  // Will reconnect after RECONNECT_DELAY_MS
             break;
             
         case WStype_CONNECTED:
             LOG_I("Connected to cloud!");
             _connected = true;
             _connecting = false;
-            _lastConnectedTime = millis();
-            // Don't reset backoff immediately - wait for stable connection
             break;
             
         case WStype_TEXT:
@@ -326,35 +226,19 @@ void CloudConnection::handleEvent(WStype_t type, uint8_t* payload, size_t length
             break;
             
         case WStype_BIN:
-            LOG_D("Received binary data (length=%d)", length);
             break;
             
         case WStype_ERROR:
             {
-                // Check if it's an SSL memory error
-                size_t freeHeap = ESP.getFreeHeap();
-                LOG_E("WebSocket error (free heap: %u bytes)", freeHeap);
+                String errorMsg = (length > 0 && payload) ? String((char*)payload, length) : "unknown";
+                LOG_E("WebSocket error: %s", errorMsg.c_str());
                 _connecting = false;
-                
-                // If it's a memory issue, increase backoff significantly
-                if (freeHeap < MIN_FREE_HEAP_FOR_SSL) {
-                    _reconnectDelay = MAX_RECONNECT_DELAY;
-                    LOG_W("SSL memory error - waiting %lu ms before retry", _reconnectDelay);
-                } else {
-                    // Exponential backoff for other errors
-                    _reconnectDelay = min(_reconnectDelay * 2, MAX_RECONNECT_DELAY);
-                }
             }
             break;
             
         case WStype_PING:
-            // Server sent ping - library should auto-respond with pong
-            LOG_D("Received ping from server");
-            break;
-            
         case WStype_PONG:
-            // Response to our ping
-            LOG_D("Received pong from server");
+            // Heartbeat handled by library
             break;
             
         default:
@@ -417,16 +301,18 @@ void CloudConnection::send(const JsonDocument& doc) {
         return;
     }
     
-    // Allocate JSON buffer in internal RAM (not PSRAM) to avoid crashes
+    // Use PSRAM for serialization buffer to save Internal RAM
     size_t jsonSize = measureJson(doc) + 1;
-    char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    
     if (!jsonBuffer) {
+        // Fallback to internal RAM if PSRAM allocation fails
         jsonBuffer = (char*)malloc(jsonSize);
     }
     
     if (jsonBuffer) {
         serializeJson(doc, jsonBuffer, jsonSize);
-        _ws.sendTXT(jsonBuffer, strlen(jsonBuffer));
+        _ws.sendTXT(jsonBuffer); // library calculates strlen
         free(jsonBuffer);
     }
 }

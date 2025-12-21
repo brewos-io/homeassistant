@@ -88,6 +88,11 @@ public:
      * Check if cloud is enabled
      */
     bool isEnabled() const;
+    
+    /**
+     * Pause connection to free up resources (e.g. for Web UI loading)
+     */
+    void pause();
 
 private:
     WebSocketsClient _ws;
@@ -98,15 +103,11 @@ private:
     bool _connected = false;
     bool _connecting = false;
     unsigned long _lastConnectAttempt = 0;
-    unsigned long _lastConnectedTime = 0;       // When we last successfully connected
-    unsigned long _reconnectDelay = 5000;       // Start with 5 seconds
-    int _quickDisconnectCount = 0;              // Count of quick disconnects (server rejections)
-    bool _inLongBackoff = false;                // True if we're in a long backoff period
-    static const unsigned long MAX_RECONNECT_DELAY = 60000;  // Max 60 seconds
+    unsigned long _reconnectDelay = 5000;  // 5 seconds between retries
     
     CommandCallback _onCommand = nullptr;
     RegisterCallback _onRegister = nullptr;
-    bool _registered = false;  // True after successful registration
+    bool _registered = false;
     
     // Parse URL into host, port, path
     bool parseUrl(const String& url, String& host, uint16_t& port, String& path, bool& useSSL);

@@ -9,6 +9,7 @@
 
 #include "display/display.h"
 #include "display/display_config.h"
+#include "display/lv_fs_littlefs.h"
 #include "config.h"
 
 #include <esp_lcd_panel_ops.h>
@@ -247,9 +248,10 @@ void Display::initHardware() {
     LOG_I("Creating RGB panel...");
     esp_lcd_rgb_panel_config_t panel_config = {};
     panel_config.clk_src = LCD_CLK_SRC_PLL160M;
-    // Pixel clock set to 16MHz to minimize EMI and ensure stable operation
-    // This provides smooth 60Hz refresh for 480x480 display
-    panel_config.timings.pclk_hz = 16 * 1000 * 1000;  // 16 MHz
+    // Pixel clock set to 14MHz to avoid WiFi channel interference
+    // 16MHz harmonics land exactly on WiFi channels (16*150=2400, 16*154=2464)
+    // 14MHz avoids most common channels
+    panel_config.timings.pclk_hz = 14 * 1000 * 1000;  // 14 MHz
     panel_config.timings.h_res = 480;
     panel_config.timings.v_res = 480;
     panel_config.timings.hsync_pulse_width = 8;
@@ -313,23 +315,38 @@ void Display::initLVGL() {
     
     lv_init();
     
-    // Allocate LVGL draw buffer
-    // Try Internal RAM first to avoid PSRAM bandwidth contention with RGB panel
-    // Use smaller buffer if needed to fit in SRAM
-    size_t buf_size = DISPLAY_WIDTH * 20; // Reduced to 20 lines to fit in SRAM
+    // Register LittleFS driver for images (drive letter 'S')
+    lv_fs_littlefs_init();
     
+    // Allocate LVGL draw buffer
+    // Use Internal RAM to prevent display noise (PSRAM bandwidth contention)
+    // Keep buffer very small (5 lines) to save critical RAM for SSL
+    // 5 lines = 480 * 5 * 2 = 4800 bytes
+    size_t buf_size = DISPLAY_WIDTH * 5;
+    
+    // Try Internal RAM first (critical for noise-free display)
     _buf1 = (lv_color_t *)heap_caps_malloc(buf_size * sizeof(lv_color_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    
     if (!_buf1) {
-        LOG_W("Internal RAM allocation failed, trying PSRAM");
+        LOG_W("Internal RAM allocation failed for LVGL buffer, trying PSRAM (may cause noise)");
+        // If internal fails, use larger PSRAM buffer
+        buf_size = DISPLAY_WIDTH * 40; 
         _buf1 = (lv_color_t *)heap_caps_malloc(buf_size * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);
     }
+    
     _buf2 = nullptr;
     
     if (!_buf1) {
         LOG_E("Failed to allocate LVGL buffer!");
         return;
     }
-    LOG_I("LVGL buffer at %p (%d bytes)", _buf1, buf_size * sizeof(lv_color_t));
+    
+    // Check where it ended up
+    if ((uintptr_t)_buf1 >= 0x3FC00000 && (uintptr_t)_buf1 < 0x3FD00000) {
+        LOG_I("LVGL buffer allocated in INTERNAL RAM (%d bytes)", buf_size * sizeof(lv_color_t));
+    } else {
+        LOG_I("LVGL buffer allocated in PSRAM (%d bytes)", buf_size * sizeof(lv_color_t));
+    }
     
     lv_disp_draw_buf_init(&_drawBuf, _buf1, _buf2, buf_size);
     

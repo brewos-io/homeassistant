@@ -171,11 +171,10 @@ bool WiFiManager::connectToWiFi() {
     // This is critical for WebSocket responsiveness and OTA speed
     WiFi.setSleep(false);
     
-    // Reduce WiFi transmit power to minimize EMI interference with display
-    // Default is WIFI_POWER_19_5dBm
-    // Using 11dBm as a balance between range and EMI reduction
-    // 8.5dBm was too low causing connection issues
-    WiFi.setTxPower(WIFI_POWER_11dBm);  // 11dBm (was 8.5dBm)
+    // Use maximum WiFi transmit power for best connectivity
+    // Previously reduced to 11dBm to save power/reduce EMI, but caused instability
+    // We handle EMI by changing the display PCLK instead
+    WiFi.setTxPower(WIFI_POWER_19_5dBm);
     
     _mode = WiFiManagerMode::STA_CONNECTING;
     _connectStartTime = millis();

@@ -1,16 +1,59 @@
 /**
  * BrewOS Rotary Encoder Driver Implementation
+ * 
+ * Uses official ESP32_Knob and ESP32_Button libraries for reliable
+ * timer-based input handling with proper debouncing.
  */
 
 #include "display/encoder.h"
 #include "display/display.h"
 #include "config.h"
+#include "ESP_Knob.h"
+#include "Button.h"
 
 // Global encoder instance
 Encoder encoder;
 
-// Static pointer for ISR
+// Static pointer for callbacks
 static Encoder* encoderInstance = nullptr;
+
+// =============================================================================
+// Callback wrappers for ESP32_Knob library
+// =============================================================================
+
+static void onKnobLeftCallback(int count, void* usr_data) {
+    if (encoderInstance) {
+        encoderInstance->onKnobLeft(count);
+    }
+}
+
+static void onKnobRightCallback(int count, void* usr_data) {
+    if (encoderInstance) {
+        encoderInstance->onKnobRight(count);
+    }
+}
+
+// =============================================================================
+// Callback wrappers for ESP32_Button library
+// =============================================================================
+
+static void onButtonSingleClickCallback(void* button_handle, void* usr_data) {
+    if (encoderInstance) {
+        encoderInstance->onButtonSingleClick();
+    }
+}
+
+static void onButtonDoubleClickCallback(void* button_handle, void* usr_data) {
+    if (encoderInstance) {
+        encoderInstance->onButtonDoubleClick();
+    }
+}
+
+static void onButtonLongPressCallback(void* button_handle, void* usr_data) {
+    if (encoderInstance) {
+        encoderInstance->onButtonLongPress();
+    }
+}
 
 // =============================================================================
 // Encoder Implementation
@@ -18,38 +61,66 @@ static Encoder* encoderInstance = nullptr;
 
 Encoder::Encoder()
     : _indev(nullptr)
+    , _knob(nullptr)
+    , _button(nullptr)
     , _position(0)
     , _lastReportedPosition(0)
+    , _lastLvglPosition(0)
     , _buttonPressed(false)
     , _buttonState(BTN_RELEASED)
-    , _buttonPressTime(0)
-    , _lastButtonReleaseTime(0)
-    , _waitingForDoublePress(false)
-    , _longPressHandled(false)
-    , _lastEncoded(0)
-    , _lastEncoderTime(0)
+    , _lastReportedButtonState(BTN_RELEASED)
     , _callback(nullptr) {
 }
 
+Encoder::~Encoder() {
+    if (_knob) {
+        _knob->del();
+        delete _knob;
+        _knob = nullptr;
+    }
+    if (_button) {
+        _button->del();
+        delete _button;
+        _button = nullptr;
+    }
+}
+
 bool Encoder::begin() {
-    LOG_I("Initializing encoder...");
+    LOG_I("Initializing encoder with ESP32_Knob and ESP32_Button libraries...");
     
-    // Store instance for ISR
+    // Store instance for callbacks
     encoderInstance = this;
     
-    // Configure encoder pins with internal pullups
-    pinMode(ENCODER_A_PIN, INPUT_PULLUP);
-    pinMode(ENCODER_B_PIN, INPUT_PULLUP);
-    pinMode(ENCODER_BTN_PIN, INPUT_PULLUP);
+    // Create and initialize the Knob (encoder rotation)
+    _knob = new ESP_Knob(ENCODER_A_PIN, ENCODER_B_PIN);
+    if (!_knob) {
+        LOG_E("Failed to create ESP_Knob");
+        return false;
+    }
     
-    // Read initial state
-    uint8_t a = digitalRead(ENCODER_A_PIN);
-    uint8_t b = digitalRead(ENCODER_B_PIN);
-    _lastEncoded = (a << 1) | b;
+    // Invert direction to match physical rotation with UI expectations
+    _knob->invertDirection();
     
-    // Attach interrupts for encoder
-    attachInterrupt(digitalPinToInterrupt(ENCODER_A_PIN), encoderISR, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(ENCODER_B_PIN), encoderISR, CHANGE);
+    _knob->begin();
+    
+    // Attach rotation callbacks
+    _knob->attachLeftEventCallback(onKnobLeftCallback);
+    _knob->attachRightEventCallback(onKnobRightCallback);
+    
+    // Create and initialize the Button
+    _button = new Button((gpio_num_t)ENCODER_BTN_PIN, true);  // true = pullup
+    if (!_button) {
+        LOG_E("Failed to create Button");
+        return false;
+    }
+    
+    // Attach button callbacks
+    // SingleClick = released after short press (100-2000ms)
+    // DoubleClick = two clicks within 300ms
+    // LongPressStart = fires immediately when 2s threshold reached (while still holding)
+    _button->attachSingleClickEventCb(onButtonSingleClickCallback, nullptr);
+    _button->attachDoubleClickEventCb(onButtonDoubleClickCallback, nullptr);
+    _button->attachLongPressStartEventCb(onButtonLongPressCallback, nullptr);
     
     // Initialize LVGL input device
     lv_indev_drv_init(&_indevDrv);
@@ -64,134 +135,77 @@ bool Encoder::begin() {
     lv_group_set_default(group);
     lv_indev_set_group(_indev, group);
     
-    LOG_I("Encoder initialized on pins A=%d, B=%d, BTN=%d",
+    LOG_I("Encoder initialized on pins A=%d, B=%d, BTN=%d (using ESP libraries)",
           ENCODER_A_PIN, ENCODER_B_PIN, ENCODER_BTN_PIN);
     
     return true;
 }
 
-void IRAM_ATTR Encoder::encoderISR() {
-    if (!encoderInstance) return;
-    encoderInstance->readEncoder();
+void Encoder::resetPosition() {
+    _position = 0;
+    _lastReportedPosition = 0;
+    _lastLvglPosition = 0;
+    if (_knob) {
+        _knob->clearCountValue();
+    }
 }
 
-void IRAM_ATTR Encoder::readEncoder() {
-    // Debounce
-    unsigned long now = millis();
-    if (now - _lastEncoderTime < ENCODER_DEBOUNCE_MS) return;
-    _lastEncoderTime = now;
-    
-    // Read current state
-    uint8_t a = digitalRead(ENCODER_A_PIN);
-    uint8_t b = digitalRead(ENCODER_B_PIN);
-    uint8_t encoded = (a << 1) | b;
-    
-    // State machine for quadrature decoding
-    uint8_t sum = (_lastEncoded << 2) | encoded;
-    
-    // Valid transitions for CW: 0001, 0111, 1110, 1000
-    // Valid transitions for CCW: 0010, 0100, 1101, 1011
-    switch (sum) {
-        case 0b0001:
-        case 0b0111:
-        case 0b1110:
-        case 0b1000:
-            _position++;
-            break;
-        case 0b0010:
-        case 0b0100:
-        case 0b1101:
-        case 0b1011:
-            _position--;
-            break;
-    }
-    
-    _lastEncoded = encoded;
+void Encoder::onKnobLeft(int count) {
+    _position--;
+    LOG_I("Encoder rotate: -1 (count=%d)", count);
+}
+
+void Encoder::onKnobRight(int count) {
+    _position++;
+    LOG_I("Encoder rotate: +1 (count=%d)", count);
+}
+
+void Encoder::onButtonSingleClick() {
+    _buttonState = BTN_PRESSED;
+    LOG_I("Encoder button: PRESS");
+}
+
+void Encoder::onButtonDoubleClick() {
+    _buttonState = BTN_DOUBLE_PRESSED;
+    LOG_I("Encoder button: DOUBLE_PRESS");
+}
+
+void Encoder::onButtonLongPress() {
+    _buttonState = BTN_LONG_PRESSED;
+    LOG_I("Encoder button: LONG_PRESS");
 }
 
 void Encoder::update() {
-    // Read button state
-    readButton();
-    
     // Check for position change
     int32_t diff = _position - _lastReportedPosition;
-    if (diff != 0 || _buttonState != BTN_RELEASED) {
-        // Reset display idle timer on any input
+    
+    // Check for button state change - atomically grab and clear
+    button_state_t btnToReport = _buttonState;
+    if (btnToReport != BTN_RELEASED) {
+        _buttonState = BTN_RELEASED;  // Clear immediately to not miss next press
+    }
+    
+    // Report any events
+    if (diff != 0 || btnToReport != BTN_RELEASED) {
         display.resetIdleTimer();
         
-        // Call callback if set
         if (_callback) {
-            _callback(diff, _buttonState);
+            _callback(diff, btnToReport);
         }
         
         _lastReportedPosition = _position;
     }
 }
 
-void Encoder::readButton() {
-    static bool lastRaw = true;  // Pulled up, so HIGH when not pressed
-    bool raw = digitalRead(ENCODER_BTN_PIN);
-    unsigned long now = millis();
-    
-    // Button pressed (active low)
-    if (!raw && lastRaw) {
-        // Debounce
-        if (now - _lastButtonReleaseTime > BTN_DEBOUNCE_MS) {
-            _buttonPressed = true;
-            _buttonPressTime = now;
-            _longPressHandled = false;
-        }
-    }
-    // Button released
-    else if (raw && !lastRaw) {
-        if (_buttonPressed) {
-            _buttonPressed = false;
-            
-            // Check if it was a long press (already handled)
-            if (_longPressHandled) {
-                _buttonState = BTN_RELEASED;
-                _longPressHandled = false;
-            }
-            // Check for double press
-            else if (_waitingForDoublePress && (now - _lastButtonReleaseTime < BTN_DOUBLE_PRESS_MS)) {
-                _buttonState = BTN_DOUBLE_PRESSED;
-                _waitingForDoublePress = false;
-            }
-            // Short press - wait for potential double press
-            else {
-                _buttonState = BTN_PRESSED;
-                _waitingForDoublePress = true;
-                _lastButtonReleaseTime = now;
-            }
-        }
-    }
-    // Check for long press while held
-    else if (!raw && _buttonPressed && !_longPressHandled) {
-        if (now - _buttonPressTime >= BTN_LONG_PRESS_MS) {
-            _buttonState = BTN_LONG_PRESSED;
-            _longPressHandled = true;
-            _waitingForDoublePress = false;
-        }
-    }
-    
-    // Clear double-press waiting after timeout
-    if (_waitingForDoublePress && (now - _lastButtonReleaseTime >= BTN_DOUBLE_PRESS_MS)) {
-        _waitingForDoublePress = false;
-        // Short press was the final state
-    }
-    
-    lastRaw = raw;
-}
-
 void Encoder::readCallback(lv_indev_drv_t* drv, lv_indev_data_t* data) {
     Encoder* enc = (Encoder*)drv->user_data;
     
-    // Get encoder difference
-    int32_t diff = enc->_position - enc->_lastReportedPosition;
-    enc->_lastReportedPosition = enc->_position;
+    // Get encoder difference for LVGL (uses separate tracking to not interfere with callback)
+    int32_t diff = enc->_position - enc->_lastLvglPosition;
+    enc->_lastLvglPosition = enc->_position;
     
-    // Report to LVGL
-    data->enc_diff = diff / ENCODER_STEPS_PER_NOTCH;
+    // Report to LVGL (1:1 mapping, no division needed with ESP32_Knob)
+    data->enc_diff = diff;
     
     // Report button state
     if (enc->_buttonPressed) {
@@ -205,4 +219,3 @@ void Encoder::readCallback(lv_indev_drv_t* drv, lv_indev_data_t* data) {
         display.resetIdleTimer();
     }
 }
-

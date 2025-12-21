@@ -12,30 +12,33 @@
 
 // Simplified menu items (removed MQTT, System - configurable via web UI)
 static const char* item_icons[] = {
-    LV_SYMBOL_WIFI,
-    LV_SYMBOL_BLUETOOTH,
-    LV_SYMBOL_SETTINGS,
+    LV_SYMBOL_SETTINGS,  // Temp
+    LV_SYMBOL_BLUETOOTH, // Scale
     LV_SYMBOL_UPLOAD,    // Cloud
     LV_SYMBOL_EYE_OPEN,  // Theme
-    LV_SYMBOL_FILE
+    LV_SYMBOL_WIFI,      // WiFi
+    LV_SYMBOL_FILE,      // About
+    LV_SYMBOL_LEFT       // Exit
 };
 
 static const char* item_names[] = {
-    "WiFi",
-    "Scale",
     "Temperature",
+    "Scale",
     "Cloud",
     "Theme",
-    "About"
+    "WiFi",
+    "About",
+    "Exit"
 };
 
 static const char* item_descriptions[] = {
-    "Enter setup mode",
-    "Connect scale",
     "Boiler temperatures",
+    "Connect scale",
     "Pair with cloud",
     "Dark / Light mode",
-    "Device info"
+    "Enter setup mode",
+    "Device info",
+    "Return to home"
 };
 
 // Static elements
@@ -182,10 +185,14 @@ void screen_settings_update(const ui_state_t* state) {
 }
 
 void screen_settings_navigate(int direction) {
+    LOG_I("Settings navigate: direction=%d, current=%d", direction, selected_index);
+    
     // Update selection
     selected_index += direction;
     if (selected_index < 0) selected_index = SETTINGS_COUNT - 1;
     if (selected_index >= SETTINGS_COUNT) selected_index = 0;
+    
+    LOG_I("Settings navigate: new index=%d", selected_index);
     
     // Update UI
     lv_label_set_text(icon_label, item_icons[selected_index]);

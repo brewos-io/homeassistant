@@ -38,28 +38,31 @@ lv_obj_t* screen_home_create(void) {
     
     // Create screen with dark background
     screen = lv_obj_create(NULL);
-    // Ensure screen fills entire display
-    lv_obj_set_size(screen, DISPLAY_WIDTH, DISPLAY_HEIGHT);
-    lv_obj_set_pos(screen, 0, 0);
     lv_obj_set_style_bg_color(screen, COLOR_BG_DARK, 0);
-    lv_obj_clear_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
     
-    // === Main temperature arc (centered) ===
-    brew_temp_arc = lv_arc_create(screen);
-    lv_obj_set_size(brew_temp_arc, 320, 320);
+    // Create main container (exact same pattern as settings screen)
+    lv_obj_t* container = lv_obj_create(screen);
+    lv_obj_remove_style_all(container);
+    lv_obj_set_size(container, DISPLAY_WIDTH, DISPLAY_HEIGHT);
+    lv_obj_center(container);
+    lv_obj_clear_flag(container, LV_OBJ_FLAG_SCROLLABLE);
+    
+    // === Main temperature arc (at the edge of display) ===
+    brew_temp_arc = lv_arc_create(container);
+    lv_obj_set_size(brew_temp_arc, 460, 460);  // Large arc near display edge
     lv_obj_center(brew_temp_arc);
     lv_arc_set_range(brew_temp_arc, 0, 100);
     lv_arc_set_value(brew_temp_arc, 0);
-    lv_arc_set_bg_angles(brew_temp_arc, 135, 45);
+    lv_arc_set_bg_angles(brew_temp_arc, 135, 45);  // Open at bottom
     lv_arc_set_rotation(brew_temp_arc, 0);
     
-    // Arc background
+    // Arc background - thicker for edge visibility
     lv_obj_set_style_arc_color(brew_temp_arc, COLOR_BG_ELEVATED, LV_PART_MAIN);
-    lv_obj_set_style_arc_width(brew_temp_arc, 10, LV_PART_MAIN);
+    lv_obj_set_style_arc_width(brew_temp_arc, 12, LV_PART_MAIN);
     
-    // Arc indicator  
+    // Arc indicator - thicker and rounded
     lv_obj_set_style_arc_color(brew_temp_arc, COLOR_ACCENT_PRIMARY, LV_PART_INDICATOR);
-    lv_obj_set_style_arc_width(brew_temp_arc, 10, LV_PART_INDICATOR);
+    lv_obj_set_style_arc_width(brew_temp_arc, 12, LV_PART_INDICATOR);
     lv_obj_set_style_arc_rounded(brew_temp_arc, true, LV_PART_INDICATOR);
     
     // Hide knob
@@ -67,7 +70,7 @@ lv_obj_t* screen_home_create(void) {
     lv_obj_clear_flag(brew_temp_arc, LV_OBJ_FLAG_CLICKABLE);
     
     // === Status at top (centered) ===
-    lv_obj_t* status_row = lv_obj_create(screen);
+    lv_obj_t* status_row = lv_obj_create(container);
     lv_obj_remove_style_all(status_row);
     lv_obj_set_size(status_row, 140, 24);
     lv_obj_align(status_row, LV_ALIGN_CENTER, 0, -115);
@@ -87,14 +90,14 @@ lv_obj_t* screen_home_create(void) {
     lv_obj_set_style_pad_left(status_label, 6, 0);
     
     // === Brew Temperature (large, centered) ===
-    brew_temp_label = lv_label_create(screen);
+    brew_temp_label = lv_label_create(container);
     lv_label_set_text(brew_temp_label, "--°");
     lv_obj_set_style_text_font(brew_temp_label, FONT_TEMP, 0);
     lv_obj_set_style_text_color(brew_temp_label, COLOR_TEXT_PRIMARY, 0);
     lv_obj_align(brew_temp_label, LV_ALIGN_CENTER, 0, -35);
     
     // Brew label (dynamically updated based on machine type)
-    brew_label_text = lv_label_create(screen);
+    brew_label_text = lv_label_create(container);
     lv_label_set_text(brew_label_text, "BREW");
     lv_obj_set_style_text_font(brew_label_text, FONT_SMALL, 0);
     lv_obj_set_style_text_color(brew_label_text, COLOR_TEXT_MUTED, 0);
@@ -102,14 +105,14 @@ lv_obj_t* screen_home_create(void) {
     lv_obj_align(brew_label_text, LV_ALIGN_CENTER, 0, 5);
     
     // Setpoint
-    brew_setpoint_label = lv_label_create(screen);
+    brew_setpoint_label = lv_label_create(container);
     lv_label_set_text(brew_setpoint_label, "--");
     lv_obj_set_style_text_font(brew_setpoint_label, FONT_SMALL, 0);
     lv_obj_set_style_text_color(brew_setpoint_label, COLOR_TEXT_MUTED, 0);
     lv_obj_align(brew_setpoint_label, LV_ALIGN_CENTER, 0, 25);
     
     // === Bottom cards container ===
-    lv_obj_t* cards_row = lv_obj_create(screen);
+    lv_obj_t* cards_row = lv_obj_create(container);
     lv_obj_remove_style_all(cards_row);
     lv_obj_set_size(cards_row, 220, 55);
     lv_obj_align(cards_row, LV_ALIGN_CENTER, 0, 85);
@@ -165,7 +168,7 @@ lv_obj_t* screen_home_create(void) {
     lv_obj_align(bar_label, LV_ALIGN_BOTTOM_RIGHT, 0, 2);
     
     // === Connection icons (bottom) ===
-    conn_icons = lv_obj_create(screen);
+    conn_icons = lv_obj_create(container);
     lv_obj_remove_style_all(conn_icons);
     lv_obj_set_size(conn_icons, 60, 16);
     lv_obj_align(conn_icons, LV_ALIGN_CENTER, 0, 145);

@@ -145,8 +145,8 @@ export default defineConfig(({ mode, command }) => {
           threshold: 1024, // Only compress files > 1KB
           deleteOriginFile: true, // Delete originals to fit in 1.5MB partition
           // Exclude index.html - keep it uncompressed for SPA fallback handler
-          // (only 2.5KB, not worth the complexity of handling gzipped default file)
-          filter: (file) => !/index\.html$/.test(file),
+          // Exclude uncompressed folder - keep assets for LVGL/firmware access
+          filter: (file) => !/(index\.html|uncompressed\/)/.test(file),
         }),
     ].filter(Boolean),
     resolve: {

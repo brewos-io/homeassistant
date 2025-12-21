@@ -21,12 +21,13 @@
  * Settings menu items (simplified)
  */
 typedef enum {
-    SETTINGS_WIFI,
-    SETTINGS_SCALE,
     SETTINGS_TEMP,
+    SETTINGS_SCALE,
     SETTINGS_CLOUD,
     SETTINGS_THEME,
+    SETTINGS_WIFI,
     SETTINGS_ABOUT,
+    SETTINGS_EXIT,
     SETTINGS_COUNT
 } settings_item_t;
 

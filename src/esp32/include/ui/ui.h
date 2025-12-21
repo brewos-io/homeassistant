@@ -25,6 +25,7 @@ typedef enum {
     SCREEN_SCALE,       // Scale pairing
     SCREEN_CLOUD,       // Cloud pairing QR code
     SCREEN_ALARM,       // Alarm display
+    SCREEN_SPLASH,      // Boot splash screen
     SCREEN_COUNT
 } screen_id_t;
 
@@ -239,6 +240,7 @@ private:
     void createScaleScreen();
     void createCloudScreen();
     void createAlarmScreen();
+    void createSplashScreen();
     
     // Update methods
     void updateSetupScreen();

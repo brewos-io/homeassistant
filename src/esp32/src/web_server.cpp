@@ -49,8 +49,9 @@ WebServer::WebServer(WiFiManager& wifiManager, PicoUART& picoUart, MQTTClient& m
 void WebServer::begin() {
     LOG_I("Starting web server...");
     
-    // Initialize LittleFS
-    if (!LittleFS.begin(true)) {
+    // Initialize LittleFS with more open files to handle parallel asset requests
+    // Default is 5, increasing to 15 to prevent "fopen failed" errors
+    if (!LittleFS.begin(true, "/littlefs", 15)) {
         LOG_E("Failed to mount LittleFS");
     } else {
         LOG_I("LittleFS mounted");
@@ -404,7 +405,7 @@ void WebServer::setupRoutes() {
 )rawliteral";
         // Copy from PROGMEM to regular RAM for AsyncWebServer
         size_t htmlLen = strlen_P(html);
-        char* htmlBuffer = (char*)heap_caps_malloc(htmlLen + 1, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        char* htmlBuffer = (char*)heap_caps_malloc(htmlLen + 1, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if (htmlBuffer) {
             strcpy_P(htmlBuffer, html);
             request->send(200, "text/html", htmlBuffer);
@@ -415,8 +416,14 @@ void WebServer::setupRoutes() {
     });
     
     // Root route - serve React app
-    _server.on("/", HTTP_GET, [](AsyncWebServerRequest* request) {
-        Serial.println("[WEB] / hit - serving index.html");
+    _server.on("/", HTTP_GET, [this](AsyncWebServerRequest* request) {
+        LOG_I("/ hit - serving index.html");
+        
+        // Pause cloud connection to free up memory for web assets
+        if (_cloudConnection) {
+            _cloudConnection->pause();
+        }
+        
         File file = LittleFS.open("/index.html", "r");
         if (file) {
             size_t fileSize = file.size();
@@ -502,7 +509,7 @@ void WebServer::setupRoutes() {
         
         // Serialize JSON to buffer in internal RAM (not PSRAM)
         size_t jsonSize = measureJson(doc) + 1;
-        char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if (!jsonBuffer) {
             jsonBuffer = (char*)malloc(jsonSize);
         }
@@ -510,7 +517,7 @@ void WebServer::setupRoutes() {
         if (jsonBuffer) {
             serializeJson(doc, jsonBuffer, jsonSize);
             request->send(200, "application/json", jsonBuffer);
-            // Buffer will be freed by AsyncWebServer after response
+            free(jsonBuffer);
         } else {
             request->send(500, "application/json", "{\"error\":\"Out of memory\"}");
         }
@@ -622,7 +629,7 @@ void WebServer::setupRoutes() {
         
         // Serialize JSON to buffer in internal RAM (not PSRAM)
         size_t jsonSize = measureJson(doc) + 1;
-        char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if (!jsonBuffer) {
             jsonBuffer = (char*)malloc(jsonSize);
         }
@@ -630,7 +637,7 @@ void WebServer::setupRoutes() {
         if (jsonBuffer) {
             serializeJson(doc, jsonBuffer, jsonSize);
             request->send(200, "application/json", jsonBuffer);
-            // Buffer will be freed by AsyncWebServer after response
+            free(jsonBuffer);
         } else {
             request->send(500, "application/json", "{\"error\":\"Out of memory\"}");
         }
@@ -659,7 +666,7 @@ void WebServer::setupRoutes() {
         
         // Allocate JSON buffer in internal RAM (not PSRAM)
         size_t jsonSize = measureJson(doc) + 1;
-        char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if (!jsonBuffer) {
             jsonBuffer = (char*)malloc(jsonSize);
         }
@@ -667,7 +674,7 @@ void WebServer::setupRoutes() {
         if (jsonBuffer) {
             serializeJson(doc, jsonBuffer, jsonSize);
             request->send(200, "application/json", jsonBuffer);
-            // Buffer will be freed by AsyncWebServer after response
+            free(jsonBuffer);
         } else {
             request->send(500, "application/json", "{\"error\":\"Out of memory\"}");
         }
@@ -710,7 +717,7 @@ void WebServer::setupRoutes() {
         
         // Allocate JSON buffer in internal RAM (not PSRAM)
         size_t jsonSize = measureJson(doc) + 1;
-        char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if (!jsonBuffer) {
             jsonBuffer = (char*)malloc(jsonSize);
         }
@@ -718,7 +725,7 @@ void WebServer::setupRoutes() {
         if (jsonBuffer) {
             serializeJson(doc, jsonBuffer, jsonSize);
             request->send(200, "application/json", jsonBuffer);
-            // Buffer will be freed by AsyncWebServer after response
+            free(jsonBuffer);
         } else {
             request->send(500, "application/json", "{\"error\":\"Out of memory\"}");
         }
@@ -755,7 +762,7 @@ void WebServer::setupRoutes() {
         
         // Allocate JSON buffer in internal RAM (not PSRAM)
         size_t jsonSize = measureJson(doc) + 1;
-        char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if (!jsonBuffer) {
             jsonBuffer = (char*)malloc(jsonSize);
         }
@@ -763,7 +770,7 @@ void WebServer::setupRoutes() {
         if (jsonBuffer) {
             serializeJson(doc, jsonBuffer, jsonSize);
             request->send(200, "application/json", jsonBuffer);
-            // Buffer will be freed by AsyncWebServer after response
+            free(jsonBuffer);
         } else {
             request->send(500, "application/json", "{\"error\":\"Out of memory\"}");
         }
@@ -1096,7 +1103,7 @@ void WebServer::setupRoutes() {
         
         // Allocate JSON buffer in internal RAM (not PSRAM)
         size_t jsonSize = measureJson(doc) + 1;
-        char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if (!jsonBuffer) {
             jsonBuffer = (char*)malloc(jsonSize);
         }
@@ -1104,7 +1111,7 @@ void WebServer::setupRoutes() {
         if (jsonBuffer) {
             serializeJson(doc, jsonBuffer, jsonSize);
             request->send(200, "application/json", jsonBuffer);
-            // Buffer will be freed by AsyncWebServer after response
+            free(jsonBuffer);
         } else {
             request->send(500, "application/json", "{\"error\":\"Out of memory\"}");
         }
@@ -1233,7 +1240,7 @@ void WebServer::setupRoutes() {
         
         // Allocate JSON buffer in internal RAM (not PSRAM)
         size_t jsonSize = measureJson(doc) + 1;
-        char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if (!jsonBuffer) {
             jsonBuffer = (char*)malloc(jsonSize);
         }
@@ -1241,7 +1248,7 @@ void WebServer::setupRoutes() {
         if (jsonBuffer) {
             serializeJson(doc, jsonBuffer, jsonSize);
             request->send(200, "application/json", jsonBuffer);
-            // Buffer will be freed by AsyncWebServer after response
+            free(jsonBuffer);
         } else {
             request->send(500, "application/json", "{\"error\":\"Out of memory\"}");
         }
@@ -1291,7 +1298,7 @@ void WebServer::setupRoutes() {
         
         // Allocate JSON buffer in internal RAM (not PSRAM)
         size_t jsonSize = measureJson(doc) + 1;
-        char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if (!jsonBuffer) {
             jsonBuffer = (char*)malloc(jsonSize);
         }
@@ -1299,7 +1306,7 @@ void WebServer::setupRoutes() {
         if (jsonBuffer) {
             serializeJson(doc, jsonBuffer, jsonSize);
             request->send(200, "application/json", jsonBuffer);
-            // Buffer will be freed by AsyncWebServer after response
+            free(jsonBuffer);
         } else {
             request->send(500, "application/json", "{\"error\":\"Out of memory\"}");
         }
@@ -1501,7 +1508,7 @@ void WebServer::setupRoutes() {
         
         // Allocate JSON buffer in internal RAM (not PSRAM)
         size_t jsonSize = measureJson(doc) + 1;
-        char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if (!jsonBuffer) {
             jsonBuffer = (char*)malloc(jsonSize);
         }
@@ -1509,7 +1516,7 @@ void WebServer::setupRoutes() {
         if (jsonBuffer) {
             serializeJson(doc, jsonBuffer, jsonSize);
             request->send(200, "application/json", jsonBuffer);
-            // Buffer will be freed by AsyncWebServer after response
+            free(jsonBuffer);
         } else {
             request->send(500, "application/json", "{\"error\":\"Out of memory\"}");
         }
@@ -1536,7 +1543,7 @@ void WebServer::setupRoutes() {
         
         // Allocate JSON buffer in internal RAM (not PSRAM)
         size_t jsonSize = measureJson(doc) + 1;
-        char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if (!jsonBuffer) {
             jsonBuffer = (char*)malloc(jsonSize);
         }
@@ -1544,7 +1551,7 @@ void WebServer::setupRoutes() {
         if (jsonBuffer) {
             serializeJson(doc, jsonBuffer, jsonSize);
             request->send(200, "application/json", jsonBuffer);
-            // Buffer will be freed by AsyncWebServer after response
+            free(jsonBuffer);
         } else {
             request->send(500, "application/json", "{\"error\":\"Out of memory\"}");
         }
@@ -1623,7 +1630,7 @@ void WebServer::setupRoutes() {
         
         // Allocate JSON buffer in internal RAM (not PSRAM)
         size_t jsonSize = measureJson(doc) + 1;
-        char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if (!jsonBuffer) {
             jsonBuffer = (char*)malloc(jsonSize);
         }
@@ -1631,7 +1638,7 @@ void WebServer::setupRoutes() {
         if (jsonBuffer) {
             serializeJson(doc, jsonBuffer, jsonSize);
             request->send(200, "application/json", jsonBuffer);
-            // Buffer will be freed by AsyncWebServer after response
+            free(jsonBuffer);
         } else {
             request->send(500, "application/json", "{\"error\":\"Out of memory\"}");
         }
@@ -1671,7 +1678,7 @@ void WebServer::setupRoutes() {
         
         // Allocate JSON buffer in internal RAM (not PSRAM)
         size_t jsonSize = measureJson(doc) + 1;
-        char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if (!jsonBuffer) {
             jsonBuffer = (char*)malloc(jsonSize);
         }
@@ -1679,7 +1686,7 @@ void WebServer::setupRoutes() {
         if (jsonBuffer) {
             serializeJson(doc, jsonBuffer, jsonSize);
             request->send(200, "application/json", jsonBuffer);
-            // Buffer will be freed by AsyncWebServer after response
+            free(jsonBuffer);
         } else {
             request->send(500, "application/json", "{\"error\":\"Out of memory\"}");
         }
@@ -1945,7 +1952,7 @@ void WebServer::handleGetStatus(AsyncWebServerRequest* request) {
     
     // Serialize JSON to buffer in internal RAM (not PSRAM)
     size_t jsonSize = measureJson(doc) + 1;
-    char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!jsonBuffer) {
         jsonBuffer = (char*)malloc(jsonSize);
     }
@@ -1995,11 +2002,12 @@ void WebServer::handleGetWiFiNetworks(AsyncWebServerRequest* request) {
         }
         
         size_t jsonSize = measureJson(doc) + 1;
-        char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if (!jsonBuffer) jsonBuffer = (char*)malloc(jsonSize);
         if (jsonBuffer) {
             serializeJson(doc, jsonBuffer, jsonSize);
             request->send(200, "application/json", jsonBuffer);
+            free(jsonBuffer);
         } else {
             request->send(500, "application/json", "{\"error\":\"Out of memory\"}");
         }
@@ -2042,11 +2050,12 @@ void WebServer::handleGetWiFiNetworks(AsyncWebServerRequest* request) {
         }
         
         size_t jsonSize = measureJson(doc) + 1;
-        char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if (!jsonBuffer) jsonBuffer = (char*)malloc(jsonSize);
         if (jsonBuffer) {
             serializeJson(doc, jsonBuffer, jsonSize);
             request->send(200, "application/json", jsonBuffer);
+            free(jsonBuffer);
         } else {
             request->send(500, "application/json", "{\"error\":\"Out of memory\"}");
         }
@@ -2204,7 +2213,7 @@ void WebServer::handleOTAUpload(AsyncWebServerRequest* request, const String& fi
             
             // Use heap_caps_malloc to avoid PSRAM
             size_t jsonSize = measureJson(doc) + 1;
-            char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+            char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
             if (!jsonBuffer) jsonBuffer = (char*)malloc(jsonSize);
             if (jsonBuffer) {
                 serializeJson(doc, jsonBuffer, jsonSize);
@@ -2252,7 +2261,7 @@ void WebServer::handleOTAUpload(AsyncWebServerRequest* request, const String& fi
         finalDoc["success"] = uploadSuccess;
         
         size_t jsonSize = measureJson(finalDoc) + 1;
-        char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if (!jsonBuffer) jsonBuffer = (char*)malloc(jsonSize);
         if (jsonBuffer) {
             serializeJson(finalDoc, jsonBuffer, jsonSize);
@@ -2462,7 +2471,7 @@ bool WebServer::streamFirmwareToPico(File& firmwareFile, size_t firmwareSize) {
                 doc["total"] = firmwareSize;
                 
                 size_t jsonSize = measureJson(doc) + 1;
-                char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+                char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
                 if (!jsonBuffer) jsonBuffer = (char*)malloc(jsonSize);
                 if (jsonBuffer) {
                     serializeJson(doc, jsonBuffer, jsonSize);
@@ -2518,7 +2527,7 @@ void WebServer::handleGetMQTTConfig(AsyncWebServerRequest* request) {
     
         // Allocate JSON buffer in internal RAM (not PSRAM)
         size_t jsonSize = measureJson(doc) + 1;
-        char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if (!jsonBuffer) {
             jsonBuffer = (char*)malloc(jsonSize);
         }
@@ -2526,7 +2535,7 @@ void WebServer::handleGetMQTTConfig(AsyncWebServerRequest* request) {
         if (jsonBuffer) {
             serializeJson(doc, jsonBuffer, jsonSize);
             request->send(200, "application/json", jsonBuffer);
-            // Buffer will be freed by AsyncWebServer after response
+            free(jsonBuffer);
         } else {
             request->send(500, "application/json", "{\"error\":\"Out of memory\"}");
         }

@@ -14,6 +14,7 @@
 #include "ui/screen_settings.h"
 #include "ui/screen_cloud.h"
 #include "ui/screen_alarm.h"
+#include "ui/screen_splash.h"
 #ifndef SIMULATOR
 #include "ui/screen_temp.h"
 #include "ui/screen_scale.h"
@@ -79,29 +80,26 @@ bool UI::begin() {
     createScaleScreen();
     createCloudScreen();
     createAlarmScreen();
+    createSplashScreen();
     
-    // Show initial screen immediately (no animation for first load)
-    // Use direct load instead of animation to ensure it shows right away
-    if (_screens[SCREEN_HOME]) {
-        _currentScreen = SCREEN_HOME;
-        _previousScreen = SCREEN_HOME;
-        lv_scr_load(_screens[SCREEN_HOME]);
-        
-        // Don't update with zero state initially - screen is created with default values
-        // The main loop will update it with real state data
-        // Just invalidate to ensure it's drawn
-        lv_obj_invalidate(_screens[SCREEN_HOME]);
+    // Show splash screen immediately (no animation for first load)
+    if (_screens[SCREEN_SPLASH]) {
+        _currentScreen = SCREEN_SPLASH;
+        _previousScreen = SCREEN_SPLASH;
+        lv_scr_load(_screens[SCREEN_SPLASH]);
         
         // Force LVGL to process and flush the entire screen
-        // Call timer handler multiple times to ensure all refresh tasks complete
-        // Each call processes pending refresh tasks
+        lv_obj_invalidate(_screens[SCREEN_SPLASH]);
         for (int i = 0; i < 15; i++) {
             uint32_t tasks = lv_timer_handler();
-            if (tasks == 0 && i > 5) break;  // No more tasks, but ensure at least 5 iterations
-            vTaskDelay(pdMS_TO_TICKS(5));  // Small delay to allow DMA transfers
+            if (tasks == 0 && i > 5) break;
+#ifndef SIMULATOR
+            vTaskDelay(pdMS_TO_TICKS(5));
+#else
+            platform_delay(5);
+#endif
         }
-        
-        LOG_I("Initial screen (HOME) loaded, updated, and refreshed");
+        LOG_I("Initial screen (SPLASH) loaded");
     }
     
     LOG_I("UI initialized with %d screens", SCREEN_COUNT);
@@ -266,6 +264,15 @@ void UI::clearAlarm() {
 }
 
 void UI::triggerWifiSetup() {
+    // Rate limit to prevent repeated calls
+    static unsigned long lastTrigger = 0;
+    unsigned long now = platform_millis();
+    if (now - lastTrigger < 2000) {  // 2 second debounce
+        LOG_W("WiFi setup trigger rate limited");
+        return;
+    }
+    lastTrigger = now;
+    
     // Call the callback to reset static IP to DHCP and start AP mode
     if (_onWifiSetup) {
         _onWifiSetup();
@@ -286,14 +293,22 @@ void UI::handleEncoder(int direction) {
             break;
             
         case SCREEN_HOME:
-            // Could navigate between info panels or to settings
-            if (direction > 0) {
-                showScreen(SCREEN_SETTINGS);
+            // Rotate from home → go to idle screen (heating strategy selection)
+            // This allows quick access to turn-on options and strategy selection
+            if (direction != 0) {
+                showScreen(SCREEN_IDLE);
             }
             break;
             
         case SCREEN_SETTINGS:
-            screen_settings_navigate(direction);
+            // Normalize direction to -1, 0, or +1 for consistent navigation
+            // This ensures smooth scrolling regardless of encoder speed
+            LOG_D("Settings screen encoder: direction=%d", direction);
+            if (direction > 0) {
+                screen_settings_navigate(1);
+            } else if (direction < 0) {
+                screen_settings_navigate(-1);
+            }
             break;
             
         case SCREEN_TEMP_SETTINGS:
@@ -331,6 +346,14 @@ void UI::handleEncoder(int direction) {
 }
 
 void UI::handleButtonPress() {
+    // Rate limit button presses to prevent rapid repeated actions
+    static unsigned long lastButtonPress = 0;
+    unsigned long now = platform_millis();
+    if (now - lastButtonPress < 300) {  // 300ms debounce
+        return;
+    }
+    lastButtonPress = now;
+    
     switch (_currentScreen) {
         case SCREEN_SETUP:
             // Short press during setup - no action (wait for WiFi config)
@@ -360,8 +383,12 @@ void UI::handleButtonPress() {
             break;
             
         case SCREEN_COMPLETE:
-            // Dismiss complete screen
-            showScreen(SCREEN_HOME);
+            // Dismiss complete screen - go to Home (if on) or Idle (if off)
+            if (_state.machine_state == UI_STATE_IDLE || _state.machine_state == UI_STATE_INIT) {
+                showScreen(SCREEN_IDLE);
+            } else {
+                showScreen(SCREEN_HOME);
+            }
             break;
             
         case SCREEN_SETTINGS:
@@ -372,7 +399,11 @@ void UI::handleButtonPress() {
         case SCREEN_TEMP_SETTINGS:
 #ifndef SIMULATOR
             // Handle temperature edit
-            screen_temp_select();
+            if (screen_temp_select()) {
+                LOG_I("Temp screen: button handled");
+            } else {
+                LOG_W("Temp screen: button press not handled");
+            }
 #endif
             break;
             
@@ -399,31 +430,28 @@ void UI::handleButtonPress() {
 }
 
 void UI::handleLongPress() {
+    // Rate limit long presses to prevent repeated actions
+    static unsigned long lastLongPress = 0;
+    unsigned long now = platform_millis();
+    if (now - lastLongPress < 1000) {  // 1 second debounce
+        return;
+    }
+    lastLongPress = now;
+    
     switch (_currentScreen) {
-        case SCREEN_HOME:
-            // Long press on home - turn off machine
-            if (_onTurnOff) {
-                _onTurnOff();
-            }
-            showScreen(SCREEN_IDLE);
-            break;
-            
         case SCREEN_SETTINGS:
-        case SCREEN_TEMP_SETTINGS:
-        case SCREEN_SCALE:
-        case SCREEN_CLOUD:
-            // Long press goes back
-            showScreen(SCREEN_HOME);
-            break;
-            
-        case SCREEN_BREWING:
-            // Long press during brewing - show home (can't stop via UI)
-            showScreen(SCREEN_HOME);
+            // Long press from menu -> Exit menu (go to Home/Idle)
+            // If machine is off, go to Idle, otherwise Home
+            if (_state.machine_state == UI_STATE_IDLE || _state.machine_state == UI_STATE_INIT) {
+                showScreen(SCREEN_IDLE);
+            } else {
+                showScreen(SCREEN_HOME);
+            }
             break;
             
         default:
-            // Default: go to home
-            showScreen(SCREEN_HOME);
+            // Long press from ANY other screen -> Go to Settings Menu
+            showScreen(SCREEN_SETTINGS);
             break;
     }
 }
@@ -486,17 +514,13 @@ void UI::createSettingsScreen() {
     // Set callback for menu item selection
     screen_settings_set_select_callback([](settings_item_t item) {
         switch (item) {
-            case SETTINGS_WIFI:
-                // Enter WiFi setup mode - callback will reset to DHCP and start AP
-                ui.triggerWifiSetup();
+            case SETTINGS_TEMP:
+                // Temperature settings
+                ui.showScreen(SCREEN_TEMP_SETTINGS);
                 break;
             case SETTINGS_SCALE:
                 // Connect to scale
                 ui.showScreen(SCREEN_SCALE);
-                break;
-            case SETTINGS_TEMP:
-                // Temperature settings
-                ui.showScreen(SCREEN_TEMP_SETTINGS);
                 break;
             case SETTINGS_CLOUD:
                 // Cloud pairing
@@ -512,9 +536,22 @@ void UI::createSettingsScreen() {
                     ui.showNotification("Dark Theme", 1500);
                 }
                 break;
+            case SETTINGS_WIFI:
+                // Enter WiFi setup mode - callback will reset to DHCP and start AP
+                ui.triggerWifiSetup();
+                break;
             case SETTINGS_ABOUT:
                 // Show device info notification
                 ui.showNotification("BrewOS v1.0", 3000);
+                break;
+            case SETTINGS_EXIT:
+                // Return to appropriate screen based on state
+                if (ui.getState().machine_state == UI_STATE_IDLE || 
+                    ui.getState().machine_state == UI_STATE_INIT) {
+                    ui.showScreen(SCREEN_IDLE);
+                } else {
+                    ui.showScreen(SCREEN_HOME);
+                }
                 break;
             default:
                 break;
@@ -589,6 +626,10 @@ void UI::createAlarmScreen() {
     _screens[SCREEN_ALARM] = screen_alarm_create();
 }
 
+void UI::createSplashScreen() {
+    _screens[SCREEN_SPLASH] = screen_splash_create();
+}
+
 // =============================================================================
 // Screen Update Methods
 // =============================================================================
@@ -628,7 +669,7 @@ void UI::updateAlarmScreen() {
 void UI::checkAutoScreenSwitch() {
     // Handle alarm screen transitions with debouncing
     // Debounce alarm state changes to prevent rapid toggling (min 500ms between changes)
-    uint32_t now = millis();
+    uint32_t now = platform_millis();
     bool alarm_state_changed = (_state.alarm_active != last_alarm_state);
     
     if (alarm_state_changed && (now - last_alarm_change_time) > 500) {
@@ -637,7 +678,12 @@ void UI::checkAutoScreenSwitch() {
         
         if (_state.alarm_active) {
             // Alarm just activated - show alarm screen
-            if (_currentScreen != SCREEN_ALARM) {
+            // Don't interrupt settings navigation
+            if (_currentScreen != SCREEN_ALARM && 
+                _currentScreen != SCREEN_SETTINGS && 
+                _currentScreen != SCREEN_TEMP_SETTINGS && 
+                _currentScreen != SCREEN_SCALE && 
+                _currentScreen != SCREEN_CLOUD) {
                 showAlarm(_state.alarm_code, nullptr);
             }
         } else {
@@ -661,7 +707,10 @@ void UI::checkAutoScreenSwitch() {
     }
     
     // Show alarm screen if alarm is active (fallback for initial state)
-    if (_state.alarm_active && _currentScreen != SCREEN_ALARM && !alarm_state_changed) {
+    // Don't interrupt settings navigation
+    if (_state.alarm_active && _currentScreen != SCREEN_ALARM && !alarm_state_changed &&
+        _currentScreen != SCREEN_SETTINGS && _currentScreen != SCREEN_TEMP_SETTINGS && 
+        _currentScreen != SCREEN_SCALE && _currentScreen != SCREEN_CLOUD) {
         showAlarm(_state.alarm_code, nullptr);
         last_alarm_state = true;
         return;
@@ -673,19 +722,42 @@ void UI::checkAutoScreenSwitch() {
         return;
     }
     
-    // Show setup screen if in AP mode AND not connected to WiFi
-    // If WiFi is connected (AP+STA mode), don't auto-switch - user can manually access setup
+    // Show setup screen if in AP-only mode (not AP+STA)
+    // Only auto-switch if we're truly in setup mode (AP only, no WiFi connection)
+    // Don't auto-switch if user manually triggered setup (they're already on setup screen)
+    // Don't auto-switch if we're in AP+STA mode (WiFi is still connected)
     if (_state.wifi_ap_mode && !_state.wifi_connected && _currentScreen != SCREEN_SETUP) {
-        showScreen(SCREEN_SETUP);
-        return;
+        // Only auto-show if we're not already on a settings/setup screen
+        // This prevents interrupting user navigation
+        if (_currentScreen != SCREEN_SETTINGS && _currentScreen != SCREEN_TEMP_SETTINGS && 
+            _currentScreen != SCREEN_SCALE && _currentScreen != SCREEN_CLOUD) {
+            showScreen(SCREEN_SETUP);
+            return;
+        }
     }
     
-    // Show idle screen if machine is off
-    if (_state.machine_state == UI_STATE_IDLE && 
+    // Auto-dismiss splash screen when machine is active
+    if (_currentScreen == SCREEN_SPLASH && 
+        _state.machine_state >= UI_STATE_HEATING &&
+        _state.machine_state <= UI_STATE_ECO) {
+        showScreen(SCREEN_HOME);
+        return;
+    }
+
+    // Show idle screen if machine is off or initializing
+    if ((_state.machine_state == UI_STATE_IDLE || _state.machine_state == UI_STATE_INIT) && 
         _currentScreen != SCREEN_IDLE && 
         _currentScreen != SCREEN_SETTINGS) {
+        
+        // If currently on Splash screen, ensure we show it for at least 2 seconds
+        if (_currentScreen == SCREEN_SPLASH) {
+            static unsigned long splashStart = 0;
+            if (splashStart == 0) splashStart = platform_millis();
+            if (platform_millis() - splashStart < 3000) return; // 3 seconds splash
+        }
+        
         // Only auto-switch to idle if not in settings
-        // showScreen(SCREEN_IDLE);
+        showScreen(SCREEN_IDLE);
         return;
     }
 }
