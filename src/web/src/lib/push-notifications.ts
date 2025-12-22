@@ -63,6 +63,65 @@ export function activateNewServiceWorker(): void {
 }
 
 /**
+ * Check if service worker is healthy and responding
+ */
+async function checkServiceWorkerHealth(): Promise<boolean> {
+  if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) {
+    return true; // No controller means no SW, which is fine
+  }
+
+  try {
+    // Try to send a message and wait for response (with timeout)
+    const messageChannel = new MessageChannel();
+    const healthCheckPromise = new Promise<boolean>((resolve) => {
+      const timeout = setTimeout(() => resolve(false), 2000); // 2 second timeout
+      
+      messageChannel.port1.onmessage = (event) => {
+        clearTimeout(timeout);
+        resolve(event.data === 'pong');
+      };
+      
+      navigator.serviceWorker.controller?.postMessage(
+        { type: 'HEALTH_CHECK' },
+        [messageChannel.port2]
+      );
+    });
+
+    return await healthCheckPromise;
+  } catch (error) {
+    console.warn('[PWA] Health check failed:', error);
+    return false;
+  }
+}
+
+/**
+ * Recover from broken service worker by unregistering and clearing caches
+ */
+async function recoverFromBrokenServiceWorker(): Promise<void> {
+  console.warn('[PWA] Service worker appears broken, attempting recovery...');
+  
+  try {
+    // Unregister all service workers
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(registrations.map(reg => reg.unregister()));
+    console.log('[PWA] Unregistered all service workers');
+    
+    // Clear all caches
+    const cacheNames = await caches.keys();
+    await Promise.all(cacheNames.map(name => caches.delete(name)));
+    console.log('[PWA] Cleared all caches');
+    
+    // Reload the page to get fresh service worker
+    console.log('[PWA] Reloading page to re-register service worker...');
+    window.location.reload();
+  } catch (error) {
+    console.error('[PWA] Recovery failed:', error);
+    // Last resort: force reload
+    window.location.reload();
+  }
+}
+
+/**
  * Register service worker for PWA
  */
 export async function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
@@ -72,6 +131,16 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
   }
 
   try {
+    // Check if there's an existing controller that might be broken
+    if (navigator.serviceWorker.controller) {
+      const isHealthy = await checkServiceWorkerHealth();
+      if (!isHealthy) {
+        console.warn('[PWA] Service worker health check failed, recovering...');
+        await recoverFromBrokenServiceWorker();
+        return null; // Will reload, so return null
+      }
+    }
+
     const registration = await navigator.serviceWorker.register('/sw.js', {
       scope: '/',
       // CRITICAL: Always fetch sw.js from network, never use HTTP cache

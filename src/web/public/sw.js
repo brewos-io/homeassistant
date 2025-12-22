@@ -15,9 +15,11 @@ const RUNTIME_CACHE_NAME = `brewos-runtime-${CACHE_VERSION}`;
 const APP_SHELL = [
   "/",
   "/index.html",
-  "/favicon.svg",
-  "/logo-icon.svg",
-  "/logo.png",
+  "/favicon-32x32.png",
+  "/favicon-16x16.png",
+  "/apple-touch-icon.png",
+  "/icons/icon-192.png",
+  "/icons/icon-512.png",
   "/manifest.json",
 ];
 
@@ -45,9 +47,40 @@ self.addEventListener("install", (event) => {
       .open(STATIC_CACHE_NAME)
       .then((cache) => {
         console.log("[SW] Caching app shell");
-        return cache.addAll(APP_SHELL);
+        // Cache resources individually to handle partial failures gracefully
+        return Promise.allSettled(
+          APP_SHELL.map((url) =>
+            fetch(url)
+              .then((response) => {
+                if (response.ok) {
+                  return cache.put(url, response);
+                } else {
+                  console.warn(
+                    `[SW] Failed to cache ${url}: ${response.status}`
+                  );
+                }
+              })
+              .catch((error) => {
+                console.warn(`[SW] Failed to fetch ${url}:`, error);
+                // Try to use existing cache if available
+                return cache.match(url).then((cached) => {
+                  if (!cached) {
+                    console.error(`[SW] No cache available for ${url}`);
+                  }
+                });
+              })
+          )
+        );
       })
-      .then(() => self.skipWaiting())
+      .then(() => {
+        console.log("[SW] Installation complete");
+        self.skipWaiting();
+      })
+      .catch((error) => {
+        console.error("[SW] Installation failed:", error);
+        // Still skip waiting to allow activation even if cache fails
+        self.skipWaiting();
+      })
   );
 });
 
@@ -102,10 +135,10 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Navigation requests - use network-first with short timeout
+  // Navigation requests - use network-first with timeout and multiple fallbacks
   // This ensures users get fresh content after deployments, with fallback to cache if offline
   if (request.mode === "navigate") {
-    event.respondWith(networkFirstWithTimeout(request, 2000));
+    event.respondWith(navigateWithFallback(request));
     return;
   }
 
@@ -202,6 +235,96 @@ async function networkFirstWithTimeout(request, timeout) {
   }
 }
 
+// Navigation handler with multiple fallback strategies
+async function navigateWithFallback(request) {
+  // Strategy 1: Try network with timeout (3 seconds)
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+    const response = await fetch(request, {
+      signal: controller.signal,
+      cache: "no-store", // Always try fresh
+    });
+    clearTimeout(timeoutId);
+
+    if (response.ok) {
+      // Cache the response for offline use
+      const cache = await caches.open(RUNTIME_CACHE_NAME);
+      cache.put(request, response.clone());
+      return response;
+    }
+  } catch (error) {
+    console.log("[SW] Network fetch failed, trying cache...");
+  }
+
+  // Strategy 2: Try runtime cache
+  try {
+    const cached = await caches.match(request);
+    if (cached) {
+      console.log("[SW] Serving from runtime cache");
+      return cached;
+    }
+  } catch (error) {
+    console.warn("[SW] Runtime cache check failed:", error);
+  }
+
+  // Strategy 3: Try static cache (app shell)
+  try {
+    const staticCache = await caches.open(STATIC_CACHE_NAME);
+    const cached = await staticCache.match("/index.html");
+    if (cached) {
+      console.log("[SW] Serving index.html from static cache");
+      return cached;
+    }
+  } catch (error) {
+    console.warn("[SW] Static cache check failed:", error);
+  }
+
+  // Strategy 4: Try any cache for index.html
+  try {
+    const cached = await caches.match("/index.html");
+    if (cached) {
+      console.log("[SW] Serving index.html from any cache");
+      return cached;
+    }
+  } catch (error) {
+    console.warn("[SW] Fallback cache check failed:", error);
+  }
+
+  // Strategy 5: Last resort - return a basic HTML page that will reload
+  console.error("[SW] All cache strategies failed, returning fallback HTML");
+  return new Response(
+    `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>BrewOS - Loading...</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script>
+    // Force reload and clear service worker if stuck
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(registrations => {
+        registrations.forEach(reg => reg.unregister());
+        setTimeout(() => window.location.reload(), 100);
+      });
+    } else {
+      window.location.reload();
+    }
+  </script>
+</head>
+<body>
+  <p>Loading BrewOS...</p>
+  <p>If this page doesn't reload automatically, please refresh manually.</p>
+</body>
+</html>`,
+    {
+      status: 200,
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+    }
+  );
+}
+
 // Push notification handling
 self.addEventListener("push", (event) => {
   console.log("[SW] Push notification received");
@@ -209,8 +332,8 @@ self.addEventListener("push", (event) => {
   let notificationData = {
     title: "BrewOS",
     body: "You have a new notification",
-    icon: "/logo-icon.svg",
-    badge: "/logo-icon.svg",
+    icon: "/icons/icon-192.png",
+    badge: "/icons/icon-192.png",
     tag: "brewos-notification",
     requireInteraction: false,
     data: {},
@@ -273,6 +396,12 @@ self.addEventListener("notificationclick", (event) => {
 self.addEventListener("message", (event) => {
   if (event.data?.type === "SKIP_WAITING") {
     self.skipWaiting();
+  }
+
+  // Health check - respond immediately to verify SW is working
+  if (event.data?.type === "HEALTH_CHECK") {
+    event.ports[0]?.postMessage("pong");
+    return;
   }
 
   // Clear caches on demand
