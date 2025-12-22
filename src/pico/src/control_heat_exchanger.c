@@ -2,9 +2,14 @@
  * Pico Firmware - Heat Exchanger Control Implementation
  * 
  * Control logic for heat exchanger machines (e.g., E61 HX):
- * - Steam boiler only has active PID control
+ * - Steam boiler only has active PID control via NTC
  * - Brew water temperature is passive (heated via heat exchanger)
- * - Group thermocouple monitors brew water temperature
+ * - No brew NTC - steam boiler temp determines HX water temperature
+ * 
+ * Hardware sensors:
+ * - Steam boiler NTC (temperature)
+ * - Pressurestat (mechanical pressure control)
+ * - Water level probe
  * 
  * Supports three control modes:
  * - HX_CONTROL_TEMPERATURE: PID based on steam NTC (modern retrofit)
@@ -157,10 +162,9 @@ void control_update_machine(
     
     *steam_duty = demand;
     
-    // Future enhancement: Cascade control using group_temp
-    // Could adjust steam_setpoint based on group_temp deviation
-    // from target to improve brew water temperature stability
-    (void)group_temp;
+    // Note: HX has no group temp sensor - brew water temp is controlled
+    // indirectly via steam boiler temp. Flush before brewing if needed.
+    (void)group_temp;  // Not available on HX hardware
 }
 
 // =============================================================================

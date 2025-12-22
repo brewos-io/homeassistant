@@ -152,7 +152,8 @@ typedef enum {
 
 /**
  * Configuration specific to heat exchanger machines.
- * Steam boiler provides heat, brew temp is monitored via group thermocouple.
+ * Steam boiler provides heat for passive HX. Only steam NTC for temperature.
+ * Hardware: pressurestat, NTC (steam boiler), water level probe.
  */
 typedef struct {
     // Control mode

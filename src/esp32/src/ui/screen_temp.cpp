@@ -232,8 +232,8 @@ void screen_temp_update(const ui_state_t* state) {
     // Update current temperature displays
     char buf[32];
     
-    // For HX: brew temp comes from group_temp
-    float display_brew_temp = (state->machine_type == 3) ? state->group_temp : state->brew_temp;
+    // For HX: brew_card is hidden, so brew_temp isn't displayed (HX has no brew NTC)
+    float display_brew_temp = state->brew_temp;
     snprintf(buf, sizeof(buf), "Current: %.1f°C", display_brew_temp);
     lv_label_set_text(brew_temp_label, buf);
     

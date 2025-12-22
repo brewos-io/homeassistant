@@ -957,10 +957,11 @@ int main(void) {
             const machine_features_t* machine_features = machine_get_features();
             
             if (machine_features && machine_features->type == MACHINE_TYPE_HEAT_EXCHANGER) {
-                // HX: brew_temp not available, report group_temp as brew indicator
-                new_status.brew_temp = sensor_data.group_temp;  // Use group as brew proxy
+                // HX: No brew NTC, no group temp sensor - only steam boiler NTC
+                // brew_temp = 0 indicates no sensor (UI shows only steam boiler)
+                new_status.brew_temp = 0;
                 new_status.steam_temp = sensor_data.steam_temp;
-                new_status.group_temp = sensor_data.group_temp;
+                new_status.group_temp = 0;  // No group temp sensor on HX
             } else if (machine_features && machine_features->type == MACHINE_TYPE_SINGLE_BOILER) {
                 // Single boiler: use brew NTC for both (same physical sensor)
                 new_status.brew_temp = sensor_data.brew_temp;

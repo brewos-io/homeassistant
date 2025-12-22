@@ -1,4 +1,4 @@
-# ECM Synchronika Control Board - Component Reference Guide
+# BrewOS Control Board - Component Reference Guide
 
 **Document Purpose:** Standardized component numbering scheme and cross-reference  
 **Revision:** 2.28  

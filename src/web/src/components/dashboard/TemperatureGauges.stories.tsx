@@ -123,6 +123,8 @@ export const SingleBoiler_Cold: Story = {
 
 // =============================================================================
 // HEAT EXCHANGER STORIES
+// HX machines have: pressurestat, NTC on steam boiler, water level probe
+// No direct brew temp sensor - brew water temp controlled via steam boiler
 // =============================================================================
 
 export const HeatExchanger_Ready: Story = {
@@ -131,7 +133,7 @@ export const HeatExchanger_Ready: Story = {
     machineType: "heat_exchanger",
     brewTemp: { current: 0, setpoint: 0, max: 105 },
     steamTemp: { current: 125, setpoint: 125, max: 160 },
-    groupTemp: 93,
+    groupTemp: 0, // Not used - HX has no group temp sensor
   },
 };
 
@@ -141,17 +143,7 @@ export const HeatExchanger_Heating: Story = {
     machineType: "heat_exchanger",
     brewTemp: { current: 0, setpoint: 0, max: 105 },
     steamTemp: { current: 80, setpoint: 125, max: 160 },
-    groupTemp: 55,
-  },
-};
-
-export const HeatExchanger_GroupHot: Story = {
-  name: "Heat Exchanger / Group Too Hot (Flush Needed)",
-  args: {
-    machineType: "heat_exchanger",
-    brewTemp: { current: 0, setpoint: 0, max: 105 },
-    steamTemp: { current: 125, setpoint: 125, max: 160 },
-    groupTemp: 98,
+    groupTemp: 0,
   },
 };
 
@@ -161,7 +153,7 @@ export const HeatExchanger_Cold: Story = {
     machineType: "heat_exchanger",
     brewTemp: { current: 0, setpoint: 0, max: 105 },
     steamTemp: { current: 25, setpoint: 125, max: 160 },
-    groupTemp: 22,
+    groupTemp: 0,
   },
 };
 

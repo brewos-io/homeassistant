@@ -19,8 +19,9 @@ export const TemperatureGauges = memo(function TemperatureGauges({
   machineType,
   brewTemp,
   steamTemp,
-  groupTemp,
+  groupTemp: _groupTemp, // Reserved for future optional group temp sensor
 }: TemperatureGaugesProps) {
+  void _groupTemp; // Intentionally unused - HX has no group temp sensor
   // For single boiler: detect if in steam mode based on setpoint (>120°C = steam mode)
   const singleBoilerInSteamMode = useMemo(() => {
     if (machineType !== "single_boiler") return false;
@@ -83,9 +84,9 @@ export const TemperatureGauges = memo(function TemperatureGauges({
         </div>
       )}
 
-      {/* Heat Exchanger: Steam Boiler + Group Head */}
+      {/* Heat Exchanger: Steam Boiler only (HX uses pressurestat, no brew temp sensor) */}
       {machineType === "heat_exchanger" && (
-        <>
+        <div className="md:col-span-2">
           <Gauge
             value={steamTemp.current}
             max={steamTemp.max}
@@ -94,15 +95,7 @@ export const TemperatureGauges = memo(function TemperatureGauges({
             icon={<Wind className="w-5 h-5" />}
             variant="steam"
           />
-          <Gauge
-            value={groupTemp}
-            max={105}
-            setpoint={93}
-            label="Group Head"
-            icon={<Flame className="w-5 h-5" />}
-            variant="default"
-          />
-        </>
+        </div>
       )}
 
       {/* Unknown machine type - show both as fallback */}
@@ -129,4 +122,3 @@ export const TemperatureGauges = memo(function TemperatureGauges({
     </div>
   );
 });
-

@@ -1,4 +1,4 @@
-# ECM Synchronika Control Board - Schematic Reference
+# BrewOS Control Board - Schematic Reference
 
 ## Detailed Circuit Schematics for PCB Design
 

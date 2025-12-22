@@ -201,10 +201,11 @@ void screen_home_update(lv_obj_t* scr, const ui_state_t* state) {
             lv_obj_add_flag(steam_label, LV_OBJ_FLAG_HIDDEN);
             lv_obj_add_flag(steam_temp_label, LV_OBJ_FLAG_HIDDEN);
         } else if (state->machine_type == 3) {  // Heat exchanger
-            lv_label_set_text(brew_label_text, "GROUP");
-            lv_obj_clear_flag(steam_label, LV_OBJ_FLAG_HIDDEN);
-            lv_obj_clear_flag(steam_temp_label, LV_OBJ_FLAG_HIDDEN);
-            lv_label_set_text(steam_label, "BOILER");
+            // HX: Only steam boiler with NTC (no brew NTC, no group temp sensor)
+            lv_label_set_text(brew_label_text, "BOILER");
+            // Hide secondary display - HX has only one temperature sensor
+            lv_obj_add_flag(steam_label, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(steam_temp_label, LV_OBJ_FLAG_HIDDEN);
         } else {  // Dual boiler or unknown
             lv_label_set_text(brew_label_text, "BREW");
             lv_obj_clear_flag(steam_label, LV_OBJ_FLAG_HIDDEN);
@@ -218,10 +219,10 @@ void screen_home_update(lv_obj_t* scr, const ui_state_t* state) {
     float main_temp = state->brew_temp;
     float main_setpoint = state->brew_setpoint;
     
-    // For HX machines, main display shows group temp
+    // For HX machines, main display shows steam boiler temp (only sensor available)
     if (state->machine_type == 3) {
-        main_temp = state->group_temp;
-        main_setpoint = 93.0f;  // Typical group target
+        main_temp = state->steam_temp;
+        main_setpoint = state->steam_setpoint;
     }
     
     snprintf(temp_str, sizeof(temp_str), "%.1f°", main_temp);

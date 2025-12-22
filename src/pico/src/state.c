@@ -34,23 +34,40 @@
 #define TEMP_COLD_THRESHOLD_C        5.0f    // 5°C below setpoint = cold, need heating
 
 // =============================================================================
-// Machine-Type Aware Temperature Reading
+// Machine-Type Aware Temperature/Setpoint Reading
 // =============================================================================
 
 /**
  * Get the brew-relevant temperature for the current machine type.
  * - Dual Boiler: brew_temp (brew boiler NTC)
  * - Single Boiler: brew_temp (shared NTC)
- * - Heat Exchanger: group_temp (passive HX, no brew NTC)
+ * - Heat Exchanger: steam_temp (no brew NTC, steam boiler controls HX)
  */
-static float get_brew_temp_for_machine(float brew_temp, float group_temp) {
+static float get_brew_temp_for_machine(float brew_temp, float steam_temp) {
     const machine_features_t* features = machine_get_features();
     if (features && features->type == MACHINE_TYPE_HEAT_EXCHANGER) {
-        // HX: Use group temp as brew water indicator (no brew NTC)
-        return group_temp;
+        // HX: No brew NTC - use steam temp as control reference
+        // Steam boiler temp determines HX water temp
+        return steam_temp;
     }
     // Dual boiler and single boiler: use brew NTC
     return brew_temp;
+}
+
+/**
+ * Get the brew-relevant setpoint for the current machine type.
+ * - Dual Boiler: brew_sp (brew boiler setpoint)
+ * - Single Boiler: brew_sp (same boiler, different setpoints for brew/steam)
+ * - Heat Exchanger: steam_sp (steam boiler controls HX water temp)
+ */
+static float get_brew_setpoint_for_machine(float brew_sp, float steam_sp) {
+    const machine_features_t* features = machine_get_features();
+    if (features && features->type == MACHINE_TYPE_HEAT_EXCHANGER) {
+        // HX: Steam boiler setpoint determines brew water temp
+        return steam_sp;
+    }
+    // Dual boiler and single boiler: use brew setpoint
+    return brew_sp;
 }
 
 // =============================================================================
@@ -350,15 +367,16 @@ void state_update(void) {
     
     float brew_temp_raw = sensors.brew_temp / 10.0f;
     float steam_temp = sensors.steam_temp / 10.0f;
-    float group_temp = sensors.group_temp / 10.0f;
     
-    // Get machine-appropriate brew temperature
-    // HX: use group_temp (no brew NTC), others: use brew_temp
-    float brew_temp = get_brew_temp_for_machine(brew_temp_raw, group_temp);
-    
-    // Get setpoints
-    float brew_sp = control_get_setpoint(0) / 10.0f;
+    // Get setpoints (raw values)
+    float brew_sp_raw = control_get_setpoint(0) / 10.0f;
     float steam_sp = control_get_setpoint(1) / 10.0f;
+    
+    // Get machine-appropriate brew temperature and setpoint
+    // HX: use steam_temp and steam_sp (steam boiler controls HX water temp)
+    // Others: use brew_temp and brew_sp
+    float brew_temp = get_brew_temp_for_machine(brew_temp_raw, steam_temp);
+    float brew_sp = get_brew_setpoint_for_machine(brew_sp_raw, steam_sp);
     
     machine_state_t new_state = g_state;
     uint32_t now = to_ms_since_boot(get_absolute_time());

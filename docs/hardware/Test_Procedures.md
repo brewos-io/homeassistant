@@ -1,4 +1,4 @@
-# ECM Synchronika Control Board - Test Procedures
+# BrewOS Control Board - Test Procedures
 
 ## Pre-Manufacturing Validation & Prototype Testing Guide
 
