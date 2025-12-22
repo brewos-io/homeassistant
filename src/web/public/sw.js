@@ -17,6 +17,7 @@ const APP_SHELL = [
   "/index.html",
   "/favicon.svg",
   "/logo-icon.svg",
+  "/logo-app.svg",
   "/logo.png",
   "/manifest.json",
 ];
@@ -330,8 +331,8 @@ self.addEventListener("push", (event) => {
   let notificationData = {
     title: "BrewOS",
     body: "You have a new notification",
-    icon: "/logo-icon.svg",
-    badge: "/logo-icon.svg",
+    icon: "/logo-app.svg",
+    badge: "/logo-app.svg",
     tag: "brewos-notification",
     requireInteraction: false,
     data: {},
