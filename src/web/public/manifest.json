@@ -24,7 +24,7 @@
   ],
   "icons": [
     {
-      "src": "/logo-icon.svg",
+      "src": "/logo-app.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
@@ -44,21 +44,21 @@
       "short_name": "Dashboard",
       "description": "View machine status",
       "url": "/",
-      "icons": [{ "src": "/logo-icon.svg", "sizes": "any" }]
+      "icons": [{ "src": "/logo-app.svg", "sizes": "any" }]
     },
     {
       "name": "Brewing",
       "short_name": "Brew",
       "description": "Start brewing",
       "url": "/brewing",
-      "icons": [{ "src": "/logo-icon.svg", "sizes": "any" }]
+      "icons": [{ "src": "/logo-app.svg", "sizes": "any" }]
     },
     {
       "name": "Settings",
       "short_name": "Settings",
       "description": "Configure machine",
       "url": "/settings",
-      "icons": [{ "src": "/logo-icon.svg", "sizes": "any" }]
+      "icons": [{ "src": "/logo-app.svg", "sizes": "any" }]
     }
   ]
 }
