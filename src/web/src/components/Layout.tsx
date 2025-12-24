@@ -246,8 +246,8 @@ export function Layout({ onExitDemo }: LayoutProps) {
       {/* Header - hides on scroll down (mobile only) */}
       <header
         className={cn(
-          "sticky z-50 relative header-glass border-b border-theme transition-all duration-300",
-          headerVisible ? "top-0" : "-top-16"
+          "sticky top-0 z-50 header-glass border-b border-theme transition-transform duration-300",
+          headerVisible ? "translate-y-0" : "-translate-y-full"
         )}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -321,8 +321,8 @@ export function Layout({ onExitDemo }: LayoutProps) {
       {!isDeviceOffline && (
         <nav
           className={cn(
-            "sticky z-40 nav-bg border-b border-theme transition-all duration-300",
-            headerVisible ? "top-16" : "top-0"
+            "sticky top-16 z-40 nav-bg border-b border-theme transition-transform duration-300",
+            headerVisible ? "translate-y-0" : "-translate-y-16"
           )}
         >
           <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8">
