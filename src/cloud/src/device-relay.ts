@@ -1,7 +1,11 @@
 import { WebSocketServer, WebSocket, RawData } from "ws";
 import { IncomingMessage } from "http";
 import type { DeviceMessage } from "./types.js";
-import { verifyDeviceKey, updateDeviceStatus, syncOnlineDevicesWithConnections } from "./services/device.js";
+import {
+  verifyDeviceKey,
+  updateDeviceStatus,
+  syncOnlineDevicesWithConnections,
+} from "./services/device.js";
 
 interface DeviceConnection {
   ws: WebSocket;
@@ -57,9 +61,11 @@ export class DeviceRelay {
     try {
       const connectedIds = new Set(this.devices.keys());
       const staleCount = syncOnlineDevicesWithConnections(connectedIds);
-      
+
       if (staleCount > 0) {
-        console.log(`[DeviceRelay] DB sync: marked ${staleCount} stale device(s) as offline`);
+        console.log(
+          `[DeviceRelay] DB sync: marked ${staleCount} stale device(s) as offline`
+        );
       }
     } catch (err) {
       console.error("[DeviceRelay] Failed to sync database state:", err);
@@ -196,7 +202,10 @@ export class DeviceRelay {
 
     // Request device to send full state immediately after connection
     // This ensures any already-connected browser clients get the state
-    this.sendToDevice(deviceId, { type: "request_state", timestamp: Date.now() });
+    this.sendToDevice(deviceId, {
+      type: "request_state",
+      timestamp: Date.now(),
+    });
 
     // Notify handlers of connection
     this.notifyHandlers(deviceId, { type: "device_online" });
@@ -206,6 +215,13 @@ export class DeviceRelay {
     // Add device ID to message
     message.deviceId = deviceId;
     message.timestamp = message.timestamp || Date.now();
+
+    // Log important message types for debugging
+    if (message.type === "status" || message.type === "device_info") {
+      console.log(
+        `[Device] Received ${message.type} from ${deviceId}, forwarding to ${this.messageHandlers.size} handler(s)`
+      );
+    }
 
     // Forward to all handlers (client proxy will receive these)
     this.notifyHandlers(deviceId, message);
@@ -287,7 +303,9 @@ export class DeviceRelay {
       return false;
     }
 
-    console.log(`[Device] Force disconnecting device ${deviceId} (admin action)`);
+    console.log(
+      `[Device] Force disconnecting device ${deviceId} (admin action)`
+    );
     connection.ws.close(4000, "Disconnected by admin");
     return true;
   }

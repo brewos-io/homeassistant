@@ -244,11 +244,19 @@ export class ClientProxy {
     });
 
     // Request device to send full state if online
+    // This ensures the browser client gets state even if it connects after device
     if (deviceOnline) {
+      console.log(
+        `[Client] Requesting state from device ${deviceId} for new client ${sessionId}`
+      );
       this.deviceRelay.sendToDevice(deviceId, {
         type: "request_state",
         timestamp: Date.now(),
       });
+    } else {
+      console.log(
+        `[Client] Device ${deviceId} is offline - client ${sessionId} will wait for device to come online`
+      );
     }
   }
 
@@ -366,7 +374,9 @@ export class ClientProxy {
         messageQueued: true,
         queuedMessages: queuedCount,
         queueTTL: MESSAGE_QUEUE_TTL_MS / 1000,
-        message: `Device offline. Message queued (${queuedCount} pending, ${MESSAGE_QUEUE_TTL_MS / 1000}s TTL).`,
+        message: `Device offline. Message queued (${queuedCount} pending, ${
+          MESSAGE_QUEUE_TTL_MS / 1000
+        }s TTL).`,
       });
     }
   }
@@ -586,14 +596,30 @@ export class ClientProxy {
     message: DeviceMessage
   ): void {
     const sessions = this.deviceClients.get(deviceId);
-    if (!sessions) return;
+    if (!sessions) {
+      console.log(
+        `[Client] No clients registered for device ${deviceId}, dropping message type: ${message.type}`
+      );
+      return;
+    }
 
     const payload = JSON.stringify(message);
+    let sentCount = 0;
     for (const sessionId of sessions) {
       const client = this.clients.get(sessionId);
       if (client?.ws.readyState === WebSocket.OPEN) {
         client.ws.send(payload);
+        sentCount++;
       }
+    }
+    if (sentCount > 0) {
+      console.log(
+        `[Client] Forwarded ${message.type} from device ${deviceId} to ${sentCount} client(s)`
+      );
+    } else {
+      console.log(
+        `[Client] No open clients for device ${deviceId}, message type: ${message.type}`
+      );
     }
   }
 

@@ -427,6 +427,9 @@ void MQTTClient::publishHomeAssistantDiscovery() {
     String powerTopic = topic("power");
     String shotTopic = topic("shot");
     
+    // Counter for pacing publishes (prevents network stack saturation)
+    int publishCount = 0;
+    
     // Device info helper - returns a consistent device object
     auto addDeviceInfo = [&](JsonDocument& doc) {
         JsonObject device = doc["device"].to<JsonObject>();
@@ -439,10 +442,14 @@ void MQTTClient::publishHomeAssistantDiscovery() {
     };
     
     // Helper to publish a sensor discovery message
+    // Use StaticJsonDocument on stack to avoid heap fragmentation (called 35+ times)
     auto publishSensor = [&](const char* name, const char* sensorId, const char* valueTemplate, 
                              const char* unit, const char* deviceClass, const char* stateClass,
                              const char* stateTopic = nullptr, const char* icon = nullptr) {
-        JsonDocument doc;
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+        StaticJsonDocument<512> doc;
+        #pragma GCC diagnostic pop
         addDeviceInfo(doc);
         
         doc["name"] = name;
@@ -458,20 +465,32 @@ void MQTTClient::publishHomeAssistantDiscovery() {
         doc["payload_available"] = "online";
         doc["payload_not_available"] = "offline";
         
-        String payload;
-        serializeJson(doc, payload);
+        // Serialize to stack buffer (avoid String heap allocation)
+        char payloadBuffer[512];
+        size_t payloadLen = serializeJson(doc, payloadBuffer, sizeof(payloadBuffer));
         
-        String configTopic = "homeassistant/sensor/brewos_" + deviceId + "/" + String(sensorId) + "/config";
+        // Build topic on stack (avoid String heap allocation)
+        char configTopic[128];
+        snprintf(configTopic, sizeof(configTopic), "homeassistant/sensor/brewos_%s/%s/config", 
+                 deviceId.c_str(), sensorId);
         
-        if (!_client.publish(configTopic.c_str(), (const uint8_t*)payload.c_str(), payload.length(), true)) {
+        if (!_client.publish(configTopic, (const uint8_t*)payloadBuffer, payloadLen, true)) {
             LOG_W("Failed to publish HA discovery for %s", sensorId);
+        }
+        yield();  // Yield to prevent blocking network stack
+        // Small delay every 5 publishes to prevent network stack saturation
+        if (++publishCount % 5 == 0) {
+            delay(10);  // 10ms delay every 5 publishes
         }
     };
     
     // Publish binary sensors for status
     auto publishBinarySensor = [&](const char* name, const char* sensorId, const char* valueTemplate, 
                                    const char* deviceClass, const char* icon = nullptr) {
-        JsonDocument doc;
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+        StaticJsonDocument<512> doc;
+        #pragma GCC diagnostic pop
         addDeviceInfo(doc);
         
         doc["name"] = name;
@@ -487,18 +506,29 @@ void MQTTClient::publishHomeAssistantDiscovery() {
         doc["payload_off"] = "False";
         doc["availability_topic"] = availTopic;
         
-        String payload;
-        serializeJson(doc, payload);
+        // Serialize to stack buffer
+        char payloadBuffer[512];
+        size_t payloadLen = serializeJson(doc, payloadBuffer, sizeof(payloadBuffer));
         
-        String configTopic = "homeassistant/binary_sensor/brewos_" + deviceId + "/" + String(sensorId) + "/config";
-        _client.publish(configTopic.c_str(), (const uint8_t*)payload.c_str(), payload.length(), true);
+        // Build topic on stack
+        char configTopic[128];
+        snprintf(configTopic, sizeof(configTopic), "homeassistant/binary_sensor/brewos_%s/%s/config",
+                 deviceId.c_str(), sensorId);
+        _client.publish(configTopic, (const uint8_t*)payloadBuffer, payloadLen, true);
+        yield();  // Yield to prevent blocking network stack
+        if (++publishCount % 5 == 0) {
+            delay(10);
+        }
     };
     
     // Helper to publish a switch
     auto publishSwitch = [&](const char* name, const char* switchId, const char* icon,
                              const char* payloadOn, const char* payloadOff, 
                              const char* stateTemplate) {
-        JsonDocument doc;
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+        StaticJsonDocument<512> doc;
+        #pragma GCC diagnostic pop
         addDeviceInfo(doc);
         
         doc["name"] = name;
@@ -514,17 +544,28 @@ void MQTTClient::publishHomeAssistantDiscovery() {
         doc["icon"] = icon;
         doc["availability_topic"] = availTopic;
         
-        String payload;
-        serializeJson(doc, payload);
+        // Serialize to stack buffer
+        char payloadBuffer[512];
+        size_t payloadLen = serializeJson(doc, payloadBuffer, sizeof(payloadBuffer));
         
-        String configTopic = "homeassistant/switch/brewos_" + deviceId + "/" + String(switchId) + "/config";
-        _client.publish(configTopic.c_str(), (const uint8_t*)payload.c_str(), payload.length(), true);
+        // Build topic on stack
+        char configTopic[128];
+        snprintf(configTopic, sizeof(configTopic), "homeassistant/switch/brewos_%s/%s/config",
+                 deviceId.c_str(), switchId);
+        _client.publish(configTopic, (const uint8_t*)payloadBuffer, payloadLen, true);
+        yield();  // Yield to prevent blocking network stack
+        if (++publishCount % 5 == 0) {
+            delay(10);
+        }
     };
     
     // Helper to publish a button
     auto publishButton = [&](const char* name, const char* buttonId, const char* icon,
                              const char* payload) {
-        JsonDocument doc;
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+        StaticJsonDocument<512> doc;
+        #pragma GCC diagnostic pop
         addDeviceInfo(doc);
         
         doc["name"] = name;
@@ -535,18 +576,29 @@ void MQTTClient::publishHomeAssistantDiscovery() {
         doc["icon"] = icon;
         doc["availability_topic"] = availTopic;
         
-        String jsonPayload;
-        serializeJson(doc, jsonPayload);
+        // Serialize to stack buffer
+        char payloadBuffer[512];
+        size_t payloadLen = serializeJson(doc, payloadBuffer, sizeof(payloadBuffer));
         
-        String configTopic = "homeassistant/button/brewos_" + deviceId + "/" + String(buttonId) + "/config";
-        _client.publish(configTopic.c_str(), (const uint8_t*)jsonPayload.c_str(), jsonPayload.length(), true);
+        // Build topic on stack
+        char configTopic[128];
+        snprintf(configTopic, sizeof(configTopic), "homeassistant/button/brewos_%s/%s/config",
+                 deviceId.c_str(), buttonId);
+        _client.publish(configTopic, (const uint8_t*)payloadBuffer, payloadLen, true);
+        yield();  // Yield to prevent blocking network stack
+        if (++publishCount % 5 == 0) {
+            delay(10);
+        }
     };
     
     // Helper to publish a number entity
     auto publishNumber = [&](const char* name, const char* numberId, const char* icon,
                              float min, float max, float step, const char* unit,
                              const char* valueTemplate, const char* commandTemplate) {
-        JsonDocument doc;
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+        StaticJsonDocument<512> doc;
+        #pragma GCC diagnostic pop
         addDeviceInfo(doc);
         
         doc["name"] = name;
@@ -564,18 +616,29 @@ void MQTTClient::publishHomeAssistantDiscovery() {
         doc["mode"] = "slider";
         doc["availability_topic"] = availTopic;
         
-        String payload;
-        serializeJson(doc, payload);
+        // Serialize to stack buffer
+        char payloadBuffer[512];
+        size_t payloadLen = serializeJson(doc, payloadBuffer, sizeof(payloadBuffer));
         
-        String configTopic = "homeassistant/number/brewos_" + deviceId + "/" + String(numberId) + "/config";
-        _client.publish(configTopic.c_str(), (const uint8_t*)payload.c_str(), payload.length(), true);
+        // Build topic on stack
+        char configTopic[128];
+        snprintf(configTopic, sizeof(configTopic), "homeassistant/number/brewos_%s/%s/config",
+                 deviceId.c_str(), numberId);
+        _client.publish(configTopic, (const uint8_t*)payloadBuffer, payloadLen, true);
+        yield();  // Yield to prevent blocking network stack
+        if (++publishCount % 5 == 0) {
+            delay(10);
+        }
     };
     
     // Helper to publish a select entity
     auto publishSelect = [&](const char* name, const char* selectId, const char* icon,
                              std::initializer_list<const char*> options, const char* valueTemplate,
                              const char* commandTemplate) {
-        JsonDocument doc;
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+        StaticJsonDocument<512> doc;
+        #pragma GCC diagnostic pop
         addDeviceInfo(doc);
         
         doc["name"] = name;
@@ -593,11 +656,19 @@ void MQTTClient::publishHomeAssistantDiscovery() {
             optionsArr.add(opt);
         }
         
-        String payload;
-        serializeJson(doc, payload);
+        // Serialize to stack buffer
+        char payloadBuffer[512];
+        size_t payloadLen = serializeJson(doc, payloadBuffer, sizeof(payloadBuffer));
         
-        String configTopic = "homeassistant/select/brewos_" + deviceId + "/" + String(selectId) + "/config";
-        _client.publish(configTopic.c_str(), (const uint8_t*)payload.c_str(), payload.length(), true);
+        // Build topic on stack
+        char configTopic[128];
+        snprintf(configTopic, sizeof(configTopic), "homeassistant/select/brewos_%s/%s/config",
+                 deviceId.c_str(), selectId);
+        _client.publish(configTopic, (const uint8_t*)payloadBuffer, payloadLen, true);
+        yield();  // Yield to prevent blocking network stack
+        if (++publishCount % 5 == 0) {
+            delay(10);
+        }
     };
     
     // ==========================================================================
