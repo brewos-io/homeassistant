@@ -32,18 +32,23 @@ import {
   type UpdateCheckResult,
 } from "@/lib/updates";
 import { useDevMode } from "@/lib/dev-mode";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useBackendInfo } from "@/lib/backend-info";
+import { useAppStore } from "@/lib/mode";
 
 export function SystemSettings() {
   const navigate = useNavigate();
+  const { deviceId } = useParams<{ deviceId?: string }>();
+  const mode = useAppStore((s) => s.mode);
+  const isCloud = mode === "cloud";
+  const basePath = isCloud && deviceId ? `/machine/${deviceId}` : "";
   const esp32 = useStore((s) => s.esp32);
   const pico = useStore((s) => s.pico);
   const connectionState = useStore((s) => s.connectionState);
   const clearLogs = useStore((s) => s.clearLogs);
   const startOTAOverlay = useStore((s) => s.startOTA);
   const { sendCommandWithConfirm } = useCommand();
-  
+
   const isConnected = connectionState === "connected";
   const devMode = useDevMode();
   const backendInfo = useBackendInfo((s) => s.info);
@@ -60,7 +65,9 @@ export function SystemSettings() {
 
   const handleCheckForUpdates = useCallback(async () => {
     if (!esp32.version) {
-      setUpdateError("Device version not available. Please connect to the device and try again.");
+      setUpdateError(
+        "Device version not available. Please connect to the device and try again."
+      );
       return;
     }
     const version = esp32.version;
@@ -136,7 +143,7 @@ export function SystemSettings() {
         successMessage: `Installing v${version}...`,
       }
     );
-    
+
     // If command was sent successfully, immediately show the OTA overlay
     // This provides instant feedback before the ESP32 sends its first progress message
     if (confirmed) {
@@ -169,7 +176,8 @@ export function SystemSettings() {
         title: "Factory Reset?",
         variant: "danger",
         confirmText: "Reset Everything",
-        successMessage: "Factory reset initiated. Device is restarting in setup mode...",
+        successMessage:
+          "Factory reset initiated. Device is restarting in setup mode...",
       }
     );
   };
@@ -180,7 +188,9 @@ export function SystemSettings() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle icon={<Cpu className="w-5 h-5" />}>Network Controller</CardTitle>
+            <CardTitle icon={<Cpu className="w-5 h-5" />}>
+              Network Controller
+            </CardTitle>
             <Badge variant={isConnected ? "success" : "error"}>
               {isConnected ? "Online" : "Offline"}
             </Badge>
@@ -192,11 +202,7 @@ export function SystemSettings() {
               mono
             />
             {channel === "dev" && backendInfo?.buildDate && (
-              <StatusRow
-                label="Build"
-                value={backendInfo.buildDate}
-                mono
-              />
+              <StatusRow label="Build" value={backendInfo.buildDate} mono />
             )}
             <StatusRow label="Free Heap" value={formatBytes(esp32.freeHeap)} />
           </div>
@@ -218,11 +224,7 @@ export function SystemSettings() {
               mono
             />
             {channel === "dev" && backendInfo?.picoBuildDate && (
-              <StatusRow
-                label="Build"
-                value={backendInfo.picoBuildDate}
-                mono
-              />
+              <StatusRow label="Build" value={backendInfo.picoBuildDate} mono />
             )}
             <StatusRow
               label="Status"
@@ -395,14 +397,20 @@ export function SystemSettings() {
         )}
 
         {/* No Releases Found */}
-        {updateResult && !updateResult.stable && !updateResult.beta && !updateResult.dev && (
-          <div className="p-4 rounded-xl border border-theme bg-theme-secondary mb-4">
-            <div className="flex items-center gap-2 text-theme-muted">
-              <Info className="w-4 h-4" />
-              <span className="text-sm">No releases found. Check your internet connection or try again later.</span>
+        {updateResult &&
+          !updateResult.stable &&
+          !updateResult.beta &&
+          !updateResult.dev && (
+            <div className="p-4 rounded-xl border border-theme bg-theme-secondary mb-4">
+              <div className="flex items-center gap-2 text-theme-muted">
+                <Info className="w-4 h-4" />
+                <span className="text-sm">
+                  No releases found. Check your internet connection or try again
+                  later.
+                </span>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
         {/* Available Updates */}
         {updateResult && (
@@ -448,7 +456,9 @@ export function SystemSettings() {
                       <Button
                         size="sm"
                         onClick={() => startOTA(updateResult.stable!.version)}
-                        variant={updateResult.hasStableUpdate ? "primary" : "secondary"}
+                        variant={
+                          updateResult.hasStableUpdate ? "primary" : "secondary"
+                        }
                       >
                         <Download className="w-4 h-4" />
                         {updateResult.hasStableUpdate ? "Install" : "Reinstall"}
@@ -496,7 +506,10 @@ export function SystemSettings() {
                     </div>
                     <p className="text-xs text-theme-muted mb-2">
                       Released{" "}
-                      {formatReleaseDate(updateResult.beta.assetUpdatedAt || updateResult.beta.releaseDate)}
+                      {formatReleaseDate(
+                        updateResult.beta.assetUpdatedAt ||
+                          updateResult.beta.releaseDate
+                      )}
                     </p>
                     {updateResult.hasBetaUpdate ? (
                       <p className="text-sm text-warning flex items-center gap-1">
@@ -527,7 +540,9 @@ export function SystemSettings() {
                         onClick={() => startOTA(updateResult.beta!.version)}
                       >
                         <Download className="w-4 h-4" />
-                        {updateResult.hasBetaUpdate ? "Install Beta" : "Reinstall Beta"}
+                        {updateResult.hasBetaUpdate
+                          ? "Install Beta"
+                          : "Reinstall Beta"}
                       </Button>
                     )}
                     {updateResult.beta.downloadUrl && (
@@ -562,7 +577,11 @@ export function SystemSettings() {
                       )}
                     </div>
                     <p className="text-xs text-theme-muted mb-2">
-                      Built {formatReleaseDate(updateResult.dev.assetUpdatedAt || updateResult.dev.releaseDate)}
+                      Built{" "}
+                      {formatReleaseDate(
+                        updateResult.dev.assetUpdatedAt ||
+                          updateResult.dev.releaseDate
+                      )}
                     </p>
                     <p className="text-sm text-purple-400 flex items-center gap-1">
                       <RefreshCw className="w-4 h-4" />
@@ -714,7 +733,7 @@ export function SystemSettings() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => navigate("/logs")}
+                onClick={() => navigate(`${basePath}/logs`)}
                 title="View full screen"
               >
                 <Maximize2 className="w-4 h-4" />

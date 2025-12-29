@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useStore } from "@/lib/store";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
+import { useAppStore } from "@/lib/mode";
 import { getActiveConnection } from "@/lib/connection";
 import { Card, CardHeader, CardTitle } from "@/components/Card";
 import { Input } from "@/components/Input";
@@ -30,6 +31,10 @@ import { formatTemperatureWithUnit } from "@/lib/temperature";
 
 export function MachineSettings() {
   const navigate = useNavigate();
+  const { deviceId } = useParams<{ deviceId?: string }>();
+  const mode = useAppStore((s) => s.mode);
+  const isCloud = mode === "cloud";
+  const basePath = isCloud && deviceId ? `/machine/${deviceId}` : "";
   const device = useStore((s) => s.device);
   const temperatureUnit = useStore((s) => s.preferences.temperatureUnit);
   const connectionState = useStore((s) => s.connectionState);
@@ -262,7 +267,7 @@ export function MachineSettings() {
               {/* Diagnostics Link */}
               <DiagnosticsRow
                 diagnostics={diagnostics}
-                onClick={() => navigate("/diagnostics")}
+                onClick={() => navigate(`${basePath}/diagnostics`)}
               />
             </div>
           </div>

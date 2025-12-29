@@ -633,6 +633,14 @@ function App() {
                 </Suspense>
               }
             />
+            <Route
+              path="logs"
+              element={
+                <Suspense fallback={<Loading />}>
+                  <Logs />
+                </Suspense>
+              }
+            />
             <Route path="setup" element={<Setup />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
@@ -904,6 +912,14 @@ function App() {
             element={
               <Suspense fallback={<Loading />}>
                 <Diagnostics />
+              </Suspense>
+            }
+          />
+          <Route
+            path="logs"
+            element={
+              <Suspense fallback={<Loading />}>
+                <Logs />
               </Suspense>
             }
           />
