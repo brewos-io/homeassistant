@@ -112,11 +112,14 @@ jobs:
             # Build new container without stopping old one
             cd ..
             
-            # Clear Docker BuildKit cache to prevent corruption issues
-            echo "Clearing Docker build cache..."
-            docker builder prune -af || true
+            # Fix corrupted Docker BuildKit snapshotter state
+            echo "Stopping Docker and clearing BuildKit state..."
+            systemctl stop docker || true
+            rm -rf /var/lib/docker/buildkit || true
+            systemctl start docker
+            sleep 2
             
-            docker compose build
+            docker compose build --no-cache
 
             # Only restart after successful build
             docker compose down
