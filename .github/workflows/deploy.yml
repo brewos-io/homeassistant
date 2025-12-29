@@ -111,6 +111,11 @@ jobs:
 
             # Build new container without stopping old one
             cd ..
+            
+            # Clear Docker BuildKit cache to prevent corruption issues
+            echo "Clearing Docker build cache..."
+            docker builder prune -af || true
+            
             docker compose build
 
             # Only restart after successful build
