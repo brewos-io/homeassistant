@@ -399,16 +399,16 @@ fi
 # Track flash success across both paths
 FLASH_SUCCESS=false
 
-# OTA data partition address and size (from default_8MB.csv partition table)
+# OTA data partition address and size (from partitions_16MB.csv partition table)
 # This partition stores which OTA slot to boot from
-# IMPORTANT: Must match partition table - default_8MB.csv uses 0xe000
+# IMPORTANT: Must match partition table - partitions_16MB.csv uses 0xe000
 OTADATA_ADDR="0xe000"
 OTADATA_SIZE="0x2000"
 
-# OTA app1 partition address and size (from default_8MB.csv)
+# OTA app1 partition address and size (from partitions_16MB.csv)
 # This partition may contain old firmware from previous OTA that causes fallback issues
-APP1_ADDR="0x340000"
-APP1_SIZE="0x330000"
+APP1_ADDR="0x310000"
+APP1_SIZE="0x300000"
 
 # Factory reset: erase entire flash first
 if [ "$FACTORY_RESET" = true ]; then
@@ -450,14 +450,14 @@ fi
 if [ "$FIRMWARE_ONLY" = false ] && [ -f "$LITTLEFS_IMAGE" ]; then
     echo -e "${YELLOW}⚡ Flashing firmware and filesystem together (one bootloader session)...${NC}"
     
-    # Get LittleFS partition address from PlatformIO (default_8MB.csv uses 0x670000)
+    # Get LittleFS partition address from PlatformIO (partitions_16MB.csv uses 0x610000)
     # Try to get it from partition table, fallback to default
-    LITTLEFS_ADDR="0x670000"
+    LITTLEFS_ADDR="0x610000"
     PARTITION_TABLE="$ESP32_DIR/.pio/build/esp32s3/partitions.bin"
     if [ -f "$PARTITION_TABLE" ]; then
-        # Try to extract from partition table (this is a fallback - PlatformIO uses 0x670000 for default_8MB.csv)
-        # For now, we'll use the known address for default_8MB.csv
-        LITTLEFS_ADDR="0x670000"
+        # Try to extract from partition table (this is a fallback - PlatformIO uses 0x610000 for partitions_16MB.csv)
+        # For now, we'll use the known address for partitions_16MB.csv
+        LITTLEFS_ADDR="0x610000"
     fi
     
     # Verify Python has pyserial before attempting flash
@@ -482,7 +482,7 @@ if [ "$FIRMWARE_ONLY" = false ] && [ -f "$LITTLEFS_IMAGE" ]; then
     echo ""
     
     # Use esptool.py to flash both partitions in one session
-    # Firmware goes to 0x10000 (app partition), LittleFS goes to 0x670000 (for 8MB flash with default partition table)
+    # Firmware goes to 0x10000 (app partition), LittleFS goes to 0x610000 (for 16MB flash with partitions_16MB.csv)
     # write_flash automatically erases sectors before writing, so no explicit erase needed
     echo -e "${BLUE}Flashing firmware to 0x10000 and filesystem to $LITTLEFS_ADDR...${NC}"
     echo -e "${YELLOW}(Sectors will be automatically erased before writing)${NC}"
@@ -502,7 +502,8 @@ if [ "$FIRMWARE_ONLY" = false ] && [ -f "$LITTLEFS_IMAGE" ]; then
     # Build flash command arguments
     # Use --after hard-reset to automatically reset ESP32 after flashing (boots firmware)
     # Note: --verify removed in esptool v5.x (verification is automatic)
-    FLASH_ARGS="--chip esp32s3 --port $PORT --baud 921600 --after hard-reset write-flash --flash-mode dio --flash-freq 80m --flash-size 8MB"
+    # Flash size is 16MB for UEDX48480021-MD80E (ESP32-S3-WROOM-1-N16R8)
+    FLASH_ARGS="--chip esp32s3 --port $PORT --baud 921600 --after hard-reset write-flash --flash-mode dio --flash-freq 80m --flash-size 16MB"
     
     # Include bootloader if it exists (at 0x0) - REQUIRED for ESP32-S3
     BOOTLOADER="$ESP32_DIR/.pio/build/esp32s3/bootloader.bin"
