@@ -356,7 +356,9 @@ jobs:
 
             # Build new container without stopping old one
             cd ..
-            docker compose build
+
+            # Use shared build script (handles BuildKit cache issues)
+            bash /root/brewos/scripts/docker-build.sh
 
             # Only restart after successful build
             docker compose down

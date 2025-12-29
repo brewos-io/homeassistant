@@ -112,14 +112,8 @@ jobs:
             # Build new container without stopping old one
             cd ..
             
-            # Fix corrupted Docker BuildKit snapshotter state
-            echo "Stopping Docker and clearing BuildKit state..."
-            systemctl stop docker || true
-            rm -rf /var/lib/docker/buildkit || true
-            systemctl start docker
-            sleep 2
-            
-            docker compose build --no-cache
+            # Use shared build script (handles BuildKit cache issues)
+            bash /root/brewos/scripts/docker-build.sh
 
             # Only restart after successful build
             docker compose down
