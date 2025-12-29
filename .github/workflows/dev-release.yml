@@ -83,7 +83,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install PlatformIO
-        run: pip install platformio
+        run: pip install platformio pyyaml
 
       - name: Build ESP32 Firmware
         run: |

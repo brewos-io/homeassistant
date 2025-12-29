@@ -415,7 +415,7 @@ if [ "$FACTORY_RESET" = true ]; then
     echo -e "${YELLOW}🔄 Factory reset: Erasing entire flash...${NC}"
     echo -e "${BLUE}This will take about 30-60 seconds...${NC}"
     
-    if ! "$PYTHON_CMD" "$ESPTOOL_PY" --chip esp32s3 --port "$PORT" erase_flash; then
+    if ! "$PYTHON_CMD" "$ESPTOOL_PY" --chip esp32s3 --port "$PORT" erase-flash; then
         echo -e "${RED}✗ Flash erase failed!${NC}"
         echo -e "${YELLOW}Make sure ESP32 is in bootloader mode and try again${NC}"
         exit 1
@@ -427,7 +427,7 @@ else
     echo -e "${YELLOW}🔄 Erasing OTA data partition (ensures fresh firmware boots)...${NC}"
     echo -e "${BLUE}Erasing ${OTADATA_SIZE} bytes at ${OTADATA_ADDR}...${NC}"
     
-    if ! "$PYTHON_CMD" "$ESPTOOL_PY" --chip esp32s3 --port "$PORT" erase_region "$OTADATA_ADDR" "$OTADATA_SIZE" 2>&1; then
+    if ! "$PYTHON_CMD" "$ESPTOOL_PY" --chip esp32s3 --port "$PORT" erase-region "$OTADATA_ADDR" "$OTADATA_SIZE" 2>&1; then
         echo -e "${YELLOW}⚠ OTA data erase failed (may need bootloader mode), continuing...${NC}"
     else
         echo -e "${GREEN}✓ OTA data partition erased${NC}"
@@ -438,7 +438,7 @@ else
     echo -e "${YELLOW}🔄 Erasing OTA app1 partition (removes old OTA firmware)...${NC}"
     echo -e "${BLUE}Erasing ${APP1_SIZE} bytes at ${APP1_ADDR}...${NC}"
     
-    if ! "$PYTHON_CMD" "$ESPTOOL_PY" --chip esp32s3 --port "$PORT" erase_region "$APP1_ADDR" "$APP1_SIZE" 2>&1; then
+    if ! "$PYTHON_CMD" "$ESPTOOL_PY" --chip esp32s3 --port "$PORT" erase-region "$APP1_ADDR" "$APP1_SIZE" 2>&1; then
         echo -e "${YELLOW}⚠ App1 erase failed, continuing...${NC}"
     else
         echo -e "${GREEN}✓ App1 partition erased${NC}"
@@ -500,8 +500,9 @@ if [ "$FIRMWARE_ONLY" = false ] && [ -f "$LITTLEFS_IMAGE" ]; then
     echo -e "${BLUE}Starting flash operation...${NC}"
     
     # Build flash command arguments
-    # Use --after hard_reset to automatically reset ESP32 after flashing (boots firmware)
-    FLASH_ARGS="--chip esp32s3 --port $PORT --baud 921600 --after hard_reset write_flash --verify --flash_mode dio --flash_freq 80m --flash_size 8MB"
+    # Use --after hard-reset to automatically reset ESP32 after flashing (boots firmware)
+    # Note: --verify removed in esptool v5.x (verification is automatic)
+    FLASH_ARGS="--chip esp32s3 --port $PORT --baud 921600 --after hard-reset write-flash --flash-mode dio --flash-freq 80m --flash-size 8MB"
     
     # Include bootloader if it exists (at 0x0) - REQUIRED for ESP32-S3
     BOOTLOADER="$ESP32_DIR/.pio/build/esp32s3/bootloader.bin"
