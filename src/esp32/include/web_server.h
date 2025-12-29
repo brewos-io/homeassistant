@@ -14,6 +14,10 @@ class MQTTClient;
 class PairingManager;
 class CloudConnection;
 
+// Initialize pre-allocated broadcast buffers in PSRAM
+// Call this once during setup() to avoid repeated allocations
+void initBroadcastBuffers();
+
 class WebServer {
 public:
     WebServer(WiFiManager& wifiManager, PicoUART& picoUart, MQTTClient& mqttClient, PairingManager* pairingManager = nullptr);
@@ -115,6 +119,10 @@ private:
     
     // OTA in progress flag - suppresses non-essential broadcasts
     bool _otaInProgress = false;
+    
+    // Deferred cloud state broadcast (when heap is low right after SSL connect)
+    bool _pendingCloudStateBroadcast = false;
+    unsigned long _pendingCloudStateBroadcastTime = 0;
 };
 
 #endif // WEB_SERVER_H

@@ -1,5 +1,6 @@
 #include "web_server.h"
 #include "config.h"
+#include "memory_utils.h"
 #include "pico_uart.h"
 #include "mqtt_client.h"
 #include "brew_by_weight.h"
@@ -123,8 +124,22 @@ void WebServer::processCommand(JsonDocument& doc) {
         _picoUart.sendPing();
     }
     else if (type == "request_state") {
-        // Cloud client requesting full state - send everything
-        LOG_I("Cloud: Sending full state to cloud client");
+        // Cloud client requesting full state - check heap first
+        // We use pre-allocated PSRAM buffers, so we mainly need enough for the send queue
+        size_t freeHeap = ESP.getFreeHeap();
+        const size_t MIN_HEAP_FOR_STATE_BROADCAST = 35000;  // Need 35KB (state uses PSRAM buffers)
+        
+        if (freeHeap < MIN_HEAP_FOR_STATE_BROADCAST) {
+            // Heap critically low - schedule deferred broadcast
+            LOG_W("Cloud: Scheduling deferred state broadcast (heap=%zu, need %zu)", 
+                  freeHeap, MIN_HEAP_FOR_STATE_BROADCAST);
+            _pendingCloudStateBroadcast = true;
+            _pendingCloudStateBroadcastTime = millis() + 3000;  // Try in 3 seconds
+            return;
+        }
+        
+        LOG_I("Cloud: Sending full state to cloud client (heap=%zu)", freeHeap);
+        _pendingCloudStateBroadcast = false;
         broadcastFullStatus(machineState);
         broadcastDeviceInfo();
     }

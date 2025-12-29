@@ -119,6 +119,7 @@ private:
     bool _connecting = false;
     unsigned long _lastConnectAttempt = 0;
     unsigned long _reconnectDelay = 5000;  // 5 seconds between retries
+    unsigned long _connectedAt = 0;        // Track when connection established for grace period
     
     CommandCallback _onCommand = nullptr;
     RegisterCallback _onRegister = nullptr;
@@ -126,6 +127,10 @@ private:
     unsigned long _lastUserActivity = 0;  // For deferring connection during user interaction
     unsigned long _pausedUntil = 0;       // For pausing connection during web server activity
     int _failureCount = 0;                // Track consecutive failures for backoff
+    
+    // Initial state broadcast after cloud connection
+    bool _pendingInitialStateBroadcast = false;
+    unsigned long _initialStateBroadcastTime = 0;
     
     // FreeRTOS task for non-blocking operation
     TaskHandle_t _taskHandle = nullptr;

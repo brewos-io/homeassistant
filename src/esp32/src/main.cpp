@@ -26,6 +26,7 @@
 #include <freertos/task.h>  // For vTaskDelay
 #include <esp_wifi.h>       // For esp_wifi_set_ps, esp_wifi_get_ps
 #include "config.h"
+#include "memory_utils.h"   // For heap fragmentation monitoring
 #include "wifi_manager.h"
 #include "web_server.h"
 #include "pico_uart.h"
@@ -989,6 +990,11 @@ void setup() {
     // Serial.flush(); // Removed - can block on USB CDC
     webServer->begin();
     Serial.println("Web server started OK");
+    
+    // Initialize pre-allocated broadcast buffers in PSRAM
+    // This avoids repeated allocations in broadcastFullStatus (called every 500ms)
+    initBroadcastBuffers();
+    Serial.println("Broadcast buffers initialized");
     // Serial.flush(); // Removed - can block on USB CDC
     
     // Stagger initialization
@@ -1568,17 +1574,30 @@ void loop() {
         size_t freePsram = ESP.getFreePsram();
         size_t totalPsram = ESP.getPsramSize();
         
+        // Get heap fragmentation metric using memory_utils.h helpers
+        size_t largestBlock = get_largest_free_block();
+        int fragmentation = calculate_fragmentation(freeHeap, largestBlock);
+        
         // Log both internal heap (critical for SSL) and PSRAM (for large buffers)
-        LOG_I("Memory: heap=%zu/%zu, PSRAM=%zuKB/%zuKB, maxLoop=%lums, slowLoops=%lu", 
-              freeHeap, minFreeHeap, freePsram/1024, totalPsram/1024, maxLoopTime, slowLoopCount);
+        // Fragmentation metric: 0% = perfect, 100% = completely fragmented
+        LOG_I("Memory: heap=%zu/%zu (frag=%d%%, largest=%zu), PSRAM=%zuKB/%zuKB, maxLoop=%lums, slowLoops=%lu", 
+              freeHeap, minFreeHeap, fragmentation, largestBlock, 
+              freePsram/1024, totalPsram/1024, maxLoopTime, slowLoopCount);
         
         // Reset stats
         maxLoopTime = 0;
         slowLoopCount = 0;
         
-        // Only warn if internal heap is dangerously low
+        // Warn if internal heap is dangerously low
         if (freeHeap < 10000) {
             LOG_W("Low internal heap: %zu bytes", freeHeap);
+        }
+        
+        // Warn if heap is highly fragmented (can't allocate SSL buffers even with "enough" free heap)
+        // SSL handshake typically needs ~16KB contiguous block
+        if (largestBlock < 20000 && freeHeap > 30000) {
+            LOG_W("Heap fragmentation: %d%% (largest block=%zu, need 20KB for SSL)", 
+                  fragmentation, largestBlock);
         }
     }
     

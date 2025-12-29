@@ -1,4 +1,5 @@
 #include "cloud_connection.h"
+#include "memory_utils.h"
 #include <WiFi.h>
 
 // Logging macros (match project convention)
@@ -11,7 +12,7 @@
 #define RECONNECT_DELAY_MS 5000  // 5s between attempts
 #define STARTUP_GRACE_PERIOD_MS 15000  // 15s grace period after WiFi for local access
 #define MIN_HEAP_FOR_CONNECT 50000  // Need 50KB heap for SSL buffers + web server headroom
-#define MIN_HEAP_TO_STAY_CONNECTED 35000  // Disconnect if heap drops below this
+#define MIN_HEAP_TO_STAY_CONNECTED 28000  // Disconnect if heap drops below this (state broadcast temporarily uses ~7KB)
 #define SSL_HANDSHAKE_TIMEOUT_MS 15000  // 15s timeout (RSA should take 5-10s)
 #define CLOUD_TASK_STACK_SIZE 6144  // 6KB stack for SSL operations (reduced from 8KB)
 #define CLOUD_TASK_PRIORITY 1  // Low priority - below web server
@@ -123,8 +124,12 @@ void CloudConnection::taskCode(void* parameter) {
         
         // Emergency heap check - disconnect if memory is critically low
         // This ensures web server has enough memory to serve requests
+        // BUT: Give a 10-second grace period after connection for SSL + state broadcast to complete
+        // (SSL handshake uses ~40KB, state broadcast temporarily uses ~7KB more)
         size_t currentHeap = ESP.getFreeHeap();
-        if (currentHeap < MIN_HEAP_TO_STAY_CONNECTED && (self->_connected || self->_connecting)) {
+        bool recentlyConnected = (self->_connectedAt > 0 && (now - self->_connectedAt) < 10000);
+        
+        if (currentHeap < MIN_HEAP_TO_STAY_CONNECTED && (self->_connected || self->_connecting) && !recentlyConnected) {
             LOG_W("Critical heap (%d bytes) - disconnecting cloud, retry in 30s", currentHeap);
             if (xSemaphoreTake(self->_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
                 self->_ws.disconnect();
@@ -132,6 +137,7 @@ void CloudConnection::taskCode(void* parameter) {
             }
             self->_connected = false;
             self->_connecting = false;
+            self->_connectedAt = 0;
             self->_lastConnectAttempt = now;
             self->_reconnectDelay = 30000;  // Wait 30s before retrying after heap issue
             vTaskDelay(pdMS_TO_TICKS(30000));  // Sleep 30s to let heap recover
@@ -253,6 +259,29 @@ void CloudConnection::taskCode(void* parameter) {
             }
             
             xSemaphoreGive(self->_mutex);
+        }
+        
+        // Handle proactive initial state broadcast after cloud connects
+        // This ensures state is synced even if request_state message is delayed/lost
+        if (self->_connected && self->_pendingInitialStateBroadcast && 
+            millis() >= self->_initialStateBroadcastTime) {
+            self->_pendingInitialStateBroadcast = false;
+            
+            // Check heap before broadcasting
+            size_t freeHeap = ESP.getFreeHeap();
+            if (freeHeap >= 35000 && self->_onCommand) {
+                LOG_I("Proactive state broadcast to cloud (heap=%zu)", freeHeap);
+                // Create synthetic request_state command
+                JsonDocument doc;
+                doc["type"] = "request_state";
+                doc["source"] = "proactive";  // Mark as proactive for debugging
+                self->_onCommand("request_state", doc);
+            } else if (freeHeap < 35000) {
+                // Defer if heap too low
+                self->_pendingInitialStateBroadcast = true;
+                self->_initialStateBroadcastTime = millis() + 2000;
+                LOG_W("Deferring proactive state broadcast (heap=%zu)", freeHeap);
+            }
         }
         
         // Yield to other tasks
@@ -455,6 +484,8 @@ void CloudConnection::handleEvent(WStype_t type, uint8_t* payload, size_t length
             }
             _connected = false;
             _connecting = false;
+            _connectedAt = 0;  // Reset connection timestamp
+            _pendingInitialStateBroadcast = false;  // Cancel pending broadcast
             
             // Only set quick retry if not already set to longer delay (e.g., from heap issue)
             if (_reconnectDelay < 30000) {
@@ -471,6 +502,9 @@ void CloudConnection::handleEvent(WStype_t type, uint8_t* payload, size_t length
             _connecting = false;
             _failureCount = 0; // Reset failures
             _reconnectDelay = RECONNECT_DELAY_MS; // Reset to default (2 min)
+            _connectedAt = millis();  // Track connection time for grace period
+            _pendingInitialStateBroadcast = true;  // Schedule state broadcast after stabilization
+            _initialStateBroadcastTime = millis() + 3000;  // Wait 3s for heap to stabilize after SSL
             break;
             
         case WStype_TEXT:

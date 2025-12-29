@@ -1,4 +1,5 @@
 #include "state/state_manager.h"
+#include "memory_utils.h"
 #include <LittleFS.h>
 #include <time.h>
 
@@ -519,7 +520,8 @@ void StateManager::loadShotHistory() {
         return;
     }
     
-    JsonDocument doc;
+    // Use PSRAM for large shot history (up to 50KB)
+    SpiRamJsonDocument doc(fileSize + 256);  // Size based on file + some overhead
     DeserializationError error = deserializeJson(doc, file);
     file.close();
     
@@ -556,7 +558,8 @@ void StateManager::saveShotHistory() {
         return;
     }
     
-    JsonDocument doc;
+    // Use PSRAM for large shot history serialization
+    SpiRamJsonDocument doc(8192);
     JsonArray arr = doc.to<JsonArray>();
     _shotHistory.toJson(arr);
     
@@ -883,7 +886,8 @@ void StateManager::saveScheduleSettings() {
         return;
     }
     
-    JsonDocument doc;
+    // Use PSRAM for schedule serialization
+    SpiRamJsonDocument doc(4096);
     JsonObject obj = doc.to<JsonObject>();
     _settings.schedule.toJson(obj);
     
@@ -918,7 +922,8 @@ void StateManager::loadScheduleSettings() {
         return;
     }
     
-    JsonDocument doc;
+    // Use PSRAM for schedule parsing (up to 10KB)
+    SpiRamJsonDocument doc(fileSize + 256);
     DeserializationError error = deserializeJson(doc, file);
     file.close();
     

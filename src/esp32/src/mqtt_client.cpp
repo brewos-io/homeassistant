@@ -4,6 +4,7 @@
 
 #include "mqtt_client.h"
 #include "config.h"
+#include "memory_utils.h"
 #include "ui/ui.h"  // For ui_state_t definition
 #include "power_meter/power_meter.h"
 #include <ArduinoJson.h>
@@ -246,8 +247,11 @@ void MQTTClient::setEnabled(bool enabled) {
 void MQTTClient::publishStatus(const ui_state_t& state) {
     if (!_connected) return;
     
-    // Build comprehensive status JSON
-    JsonDocument doc;
+    // Build comprehensive status JSON - use StaticJsonDocument on stack
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+    StaticJsonDocument<1024> doc;
+    #pragma GCC diagnostic pop
     
     // Machine state - convert to string for HA templates
     const char* stateStr = "unknown";
@@ -266,27 +270,37 @@ void MQTTClient::publishStatus(const ui_state_t& state) {
     doc["mode"] = modeStr;
     doc["heating_strategy"] = state.heating_strategy;  // 0-3 for HA template
     
-    // Temperature readings
-    doc["brew_temp"] = serialized(String(state.brew_temp, 1));
-    doc["brew_setpoint"] = serialized(String(state.brew_setpoint, 1));
-    doc["steam_temp"] = serialized(String(state.steam_temp, 1));
-    doc["steam_setpoint"] = serialized(String(state.steam_setpoint, 1));
+    // Temperature readings - use stack buffers instead of String
+    char tempBuf[16];
+    snprintf(tempBuf, sizeof(tempBuf), "%.1f", state.brew_temp);
+    doc["brew_temp"] = serialized(tempBuf);
+    snprintf(tempBuf, sizeof(tempBuf), "%.1f", state.brew_setpoint);
+    doc["brew_setpoint"] = serialized(tempBuf);
+    snprintf(tempBuf, sizeof(tempBuf), "%.1f", state.steam_temp);
+    doc["steam_temp"] = serialized(tempBuf);
+    snprintf(tempBuf, sizeof(tempBuf), "%.1f", state.steam_setpoint);
+    doc["steam_setpoint"] = serialized(tempBuf);
     
     // Pressure
-    doc["pressure"] = serialized(String(state.pressure, 2));
+    snprintf(tempBuf, sizeof(tempBuf), "%.2f", state.pressure);
+    doc["pressure"] = serialized(tempBuf);
     
     // Scale data - use brew_weight as scale weight when brewing
-    doc["scale_weight"] = serialized(String(state.brew_weight, 1));
-    doc["flow_rate"] = serialized(String(state.flow_rate, 1));
+    snprintf(tempBuf, sizeof(tempBuf), "%.1f", state.brew_weight);
+    doc["scale_weight"] = serialized(tempBuf);
+    snprintf(tempBuf, sizeof(tempBuf), "%.1f", state.flow_rate);
+    doc["flow_rate"] = serialized(tempBuf);
     doc["scale_connected"] = state.scale_connected;
     
     // Active shot data
     doc["shot_duration"] = state.brew_time_ms / 1000.0f;
-    doc["shot_weight"] = serialized(String(state.brew_weight, 1));
+    snprintf(tempBuf, sizeof(tempBuf), "%.1f", state.brew_weight);
+    doc["shot_weight"] = serialized(tempBuf);
     doc["is_brewing"] = state.is_brewing;
     
     // Target weight (for BBW)
-    doc["target_weight"] = serialized(String(state.target_weight, 1));
+    snprintf(tempBuf, sizeof(tempBuf), "%.1f", state.target_weight);
+    doc["target_weight"] = serialized(tempBuf);
     
     // Status flags
     doc["is_heating"] = state.is_heating;
@@ -295,12 +309,14 @@ void MQTTClient::publishStatus(const ui_state_t& state) {
     doc["pico_connected"] = state.pico_connected;
     doc["wifi_connected"] = state.wifi_connected;
     
-    String status;
-    serializeJson(doc, status);
+    // Serialize to stack buffer (avoid String allocation)
+    char statusBuffer[1024];
+    size_t len = serializeJson(doc, statusBuffer, sizeof(statusBuffer));
     
     // Publish to status topic (retained)
-    String statusTopic = topic("status");
-    if (!_client.publish(statusTopic.c_str(), (const uint8_t*)status.c_str(), status.length(), true)) {
+    char statusTopic[64];
+    snprintf(statusTopic, sizeof(statusTopic), "brewos/%s/status", _config.ha_device_id);
+    if (!_client.publish(statusTopic, (const uint8_t*)statusBuffer, len, true)) {
         LOG_W("Failed to publish status");
     }
 }
@@ -326,18 +342,25 @@ void MQTTClient::publishStatisticsJson(const char* stats_json) {
 void MQTTClient::publishStatistics(uint16_t shotsToday, uint32_t totalShots, float kwhToday) {
     if (!_connected) return;
     
-    // Build stats JSON and add to status topic for HA sensors
-    JsonDocument doc;
+    // Build stats JSON - use stack allocation
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+    StaticJsonDocument<128> doc;
+    #pragma GCC diagnostic pop
     doc["shots_today"] = shotsToday;
     doc["total_shots"] = totalShots;
-    doc["kwh_today"] = serialized(String(kwhToday, 3));
+    char kwhBuf[16];
+    snprintf(kwhBuf, sizeof(kwhBuf), "%.3f", kwhToday);
+    doc["kwh_today"] = serialized(kwhBuf);
     
-    String stats;
-    serializeJson(doc, stats);
+    // Serialize to stack buffer
+    char statsBuffer[128];
+    size_t len = serializeJson(doc, statsBuffer, sizeof(statsBuffer));
     
     // Publish to statistics topic (retained)
-    String statsTopic = topic("statistics");
-    if (!_client.publish(statsTopic.c_str(), (const uint8_t*)stats.c_str(), stats.length(), true)) {
+    char statsTopic[64];
+    snprintf(statsTopic, sizeof(statsTopic), "brewos/%s/statistics", _config.ha_device_id);
+    if (!_client.publish(statsTopic, (const uint8_t*)statsBuffer, len, true)) {
         LOG_W("Failed to publish statistics");
     }
 }
@@ -345,22 +368,36 @@ void MQTTClient::publishStatistics(uint16_t shotsToday, uint32_t totalShots, flo
 void MQTTClient::publishPowerMeter(const PowerMeterReading& reading) {
     if (!_connected) return;
     
-    // Build power JSON
-    JsonDocument doc;
-    doc["voltage"] = serialized(String(reading.voltage, 1));
-    doc["current"] = serialized(String(reading.current, 2));
-    doc["power"] = serialized(String(reading.power, 0));
-    doc["energy_import"] = serialized(String(reading.energy_import, 3));
-    doc["energy_export"] = serialized(String(reading.energy_export, 3));
-    doc["frequency"] = serialized(String(reading.frequency, 1));
-    doc["power_factor"] = serialized(String(reading.power_factor, 2));
+    // Build power JSON - use stack allocation
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+    StaticJsonDocument<256> doc;
+    #pragma GCC diagnostic pop
     
-    String powerJson;
-    serializeJson(doc, powerJson);
+    char valBuf[16];
+    snprintf(valBuf, sizeof(valBuf), "%.1f", reading.voltage);
+    doc["voltage"] = serialized(valBuf);
+    snprintf(valBuf, sizeof(valBuf), "%.2f", reading.current);
+    doc["current"] = serialized(valBuf);
+    snprintf(valBuf, sizeof(valBuf), "%.0f", reading.power);
+    doc["power"] = serialized(valBuf);
+    snprintf(valBuf, sizeof(valBuf), "%.3f", reading.energy_import);
+    doc["energy_import"] = serialized(valBuf);
+    snprintf(valBuf, sizeof(valBuf), "%.3f", reading.energy_export);
+    doc["energy_export"] = serialized(valBuf);
+    snprintf(valBuf, sizeof(valBuf), "%.1f", reading.frequency);
+    doc["frequency"] = serialized(valBuf);
+    snprintf(valBuf, sizeof(valBuf), "%.2f", reading.power_factor);
+    doc["power_factor"] = serialized(valBuf);
+    
+    // Serialize to stack buffer
+    char powerBuffer[256];
+    size_t len = serializeJson(doc, powerBuffer, sizeof(powerBuffer));
     
     // Publish to power topic (retained)
-    String powerTopic = topic("power");
-    if (!_client.publish(powerTopic.c_str(), (const uint8_t*)powerJson.c_str(), powerJson.length(), true)) {
+    char powerTopic[64];
+    snprintf(powerTopic, sizeof(powerTopic), "brewos/%s/power", _config.ha_device_id);
+    if (!_client.publish(powerTopic, (const uint8_t*)powerBuffer, len, true)) {
         LOG_W("Failed to publish power meter data");
     }
 }

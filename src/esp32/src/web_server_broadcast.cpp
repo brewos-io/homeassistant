@@ -1,5 +1,6 @@
 #include "web_server.h"
 #include "config.h"
+#include "memory_utils.h"
 #include "cloud_connection.h"
 #include "state/state_manager.h"
 #include "statistics/statistics_manager.h"
@@ -13,6 +14,22 @@
 // External references for status broadcast
 extern BrewByWeight* brewByWeight;
 extern ui_state_t machineState;
+
+// =============================================================================
+// Pre-allocated Broadcast Buffers (initialized in initBroadcastBuffers)
+// =============================================================================
+static SpiRamJsonDocument* g_statusDoc = nullptr;
+static char* g_statusBuffer = nullptr;
+static const size_t STATUS_BUFFER_SIZE = 4096;
+
+void initBroadcastBuffers() {
+    if (!g_statusDoc) {
+        g_statusDoc = new SpiRamJsonDocument(STATUS_BUFFER_SIZE);
+    }
+    if (!g_statusBuffer) {
+        g_statusBuffer = (char*)psram_malloc(STATUS_BUFFER_SIZE);
+    }
+}
 
 // Internal helper to broadcast a formatted log message
 // CRITICAL: During OTA, the WebSocket queue can fill up quickly.
@@ -155,6 +172,7 @@ void WebServer::broadcastRaw(const char* json) {
 
 // =============================================================================
 // Unified Status Broadcast - Single comprehensive message
+// Uses pre-allocated PSRAM buffers to avoid repeated allocation every 500ms
 // =============================================================================
 void WebServer::broadcastFullStatus(const ui_state_t& state) {
     // Skip status broadcasts during OTA to prevent WebSocket queue overflow
@@ -167,21 +185,18 @@ void WebServer::broadcastFullStatus(const ui_state_t& state) {
         return;  // No one to send to
     }
     
-    // Use PSRAM for JSON document to preserve internal RAM for SSL
-    #pragma GCC diagnostic push
-    #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-    void* mem = heap_caps_malloc(4096 + sizeof(DynamicJsonDocument), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!mem) {
-        // Fallback to internal RAM if PSRAM fails
-        mem = malloc(4096 + sizeof(DynamicJsonDocument));
+    // Initialize pre-allocated buffers if not already done
+    if (!g_statusDoc || !g_statusBuffer) {
+        initBroadcastBuffers();
+        if (!g_statusDoc || !g_statusBuffer) {
+            LOG_E("Failed to allocate broadcast buffers");
+            return;
+        }
     }
-    if (!mem) {
-        LOG_E("Failed to allocate JSON document for status broadcast");
-        return;
-    }
-    DynamicJsonDocument* docPtr = new (mem) DynamicJsonDocument(4096);
-    DynamicJsonDocument& doc = *docPtr;
-    #pragma GCC diagnostic pop
+    
+    // Clear the pre-allocated document for reuse
+    g_statusDoc->clear();
+    JsonDocument& doc = *g_statusDoc;
     doc["type"] = "status";
     
     // Timestamps - track machine on time and last shot
@@ -450,33 +465,25 @@ void WebServer::broadcastFullStatus(const ui_state_t& state) {
     esp32["freeHeap"] = ESP.getFreeHeap();
     esp32["uptime"] = millis();
     
-    // Allocate JSON buffer in internal RAM (not PSRAM) to avoid crashes
+    // Serialize to pre-allocated PSRAM buffer (no allocation per broadcast)
     size_t jsonSize = measureJson(doc) + 1;
-    char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!jsonBuffer) {
-        // Fallback to regular malloc if heap_caps_malloc fails
-        jsonBuffer = (char*)malloc(jsonSize);
-    }
-    
-    if (jsonBuffer) {
-        serializeJson(doc, jsonBuffer, jsonSize);
+    if (jsonSize <= STATUS_BUFFER_SIZE) {
+        serializeJson(doc, g_statusBuffer, STATUS_BUFFER_SIZE);
         
         // Send to WebSocket clients (check count again to be safe)
         if (_ws.count() > 0) {
-            _ws.textAll(jsonBuffer);
+            _ws.textAll(g_statusBuffer);
         }
         
-        // Also send to cloud - use jsonBuffer directly to avoid String allocation
+        // Also send to cloud - use buffer directly to avoid String allocation
         if (_cloudConnection && _cloudConnection->isConnected()) {
-            _cloudConnection->send(jsonBuffer);
+            _cloudConnection->send(g_statusBuffer);
         }
-        
-        free(jsonBuffer);
+    } else {
+        LOG_W("Status JSON too large: %d > %d", jsonSize, STATUS_BUFFER_SIZE);
     }
     
-    // Free the JSON document (was allocated with placement new in PSRAM)
-    docPtr->~DynamicJsonDocument();
-    free(mem);
+    // Note: No cleanup needed - we're using pre-allocated reusable buffers
 }
 
 void WebServer::broadcastDeviceInfo() {

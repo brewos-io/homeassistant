@@ -194,6 +194,10 @@ export class DeviceRelay {
     // Send welcome
     this.sendToDevice(deviceId, { type: "connected", timestamp: Date.now() });
 
+    // Request device to send full state immediately after connection
+    // This ensures any already-connected browser clients get the state
+    this.sendToDevice(deviceId, { type: "request_state", timestamp: Date.now() });
+
     // Notify handlers of connection
     this.notifyHandlers(deviceId, { type: "device_online" });
   }

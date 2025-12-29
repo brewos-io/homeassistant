@@ -1,5 +1,6 @@
 #include "web_server.h"
 #include "config.h"
+#include "memory_utils.h"
 #include "pico_uart.h"
 #include "mqtt_client.h"
 #include "brew_by_weight.h"
@@ -155,6 +156,24 @@ void WebServer::loop() {
         _wifiConnectRequestTime = 0;
         LOG_I("Starting WiFi connection (deferred)");
         _wifiManager.connectToWiFi();
+    }
+    
+    // Handle deferred cloud state broadcast
+    // This is triggered when cloud requests state but heap is too low (right after SSL connect)
+    if (_pendingCloudStateBroadcast && millis() >= _pendingCloudStateBroadcastTime) {
+        size_t freeHeap = ESP.getFreeHeap();
+        const size_t MIN_HEAP_FOR_STATE_BROADCAST = 35000;  // Match threshold in websocket handler
+        
+        if (freeHeap >= MIN_HEAP_FOR_STATE_BROADCAST) {
+            LOG_I("Cloud: Sending deferred state broadcast (heap=%zu)", freeHeap);
+            _pendingCloudStateBroadcast = false;
+            broadcastFullStatus(machineState);
+            broadcastDeviceInfo();
+        } else {
+            // Still not enough heap, try again in 2 seconds
+            _pendingCloudStateBroadcastTime = millis() + 2000;
+            LOG_I("Cloud: State broadcast still deferred (heap=%zu, need %zu)", freeHeap, MIN_HEAP_FOR_STATE_BROADCAST);
+        }
     }
 }
 
@@ -747,9 +766,9 @@ void WebServer::setupRoutes() {
         }
     });
     
-    // Get brew history
+    // Get brew history - use PSRAM for large array
     _server.on("/api/stats/brews", HTTP_GET, [](AsyncWebServerRequest* request) {
-        JsonDocument doc;
+        SpiRamJsonDocument doc(8192);  // 8KB in PSRAM for brew history
         JsonArray arr = doc.to<JsonArray>();
         
         // Check for limit parameter
@@ -761,9 +780,16 @@ void WebServer::setupRoutes() {
         
         Stats.getBrewHistory(arr, limit);
         
-        String response;
-        serializeJson(doc, response);
-        request->send(200, "application/json", response);
+        // Serialize to PSRAM buffer
+        size_t jsonSize = measureJson(doc) + 1;
+        char* jsonBuffer = (char*)psram_malloc(jsonSize);
+        if (jsonBuffer) {
+            serializeJson(doc, jsonBuffer, jsonSize);
+            request->send(200, "application/json", jsonBuffer);
+            safe_free(jsonBuffer);
+        } else {
+            request->send(500, "application/json", "{\"error\":\"Out of memory\"}");
+        }
     });
     
     // Get power history
@@ -902,9 +928,12 @@ void WebServer::setupRoutes() {
         handleTestMQTT(request);
     });
     
-    // Brew-by-Weight settings
+    // Brew-by-Weight settings - small fixed-size response
     _server.on("/api/scale/settings", HTTP_GET, [](AsyncWebServerRequest* request) {
-        JsonDocument doc;
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+        StaticJsonDocument<256> doc;
+        #pragma GCC diagnostic pop
         bbw_settings_t settings = brewByWeight ? brewByWeight->getSettings() : bbw_settings_t{};
         
         doc["target_weight"] = settings.target_weight;
@@ -913,8 +942,8 @@ void WebServer::setupRoutes() {
         doc["auto_stop"] = settings.auto_stop;
         doc["auto_tare"] = settings.auto_tare;
         
-        String response;
-        serializeJson(doc, response);
+        char response[256];
+        serializeJson(doc, response, sizeof(response));
         request->send(200, "application/json", response);
     });
     
@@ -922,7 +951,10 @@ void WebServer::setupRoutes() {
         [](AsyncWebServerRequest* request) {},
         nullptr,
         [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
-            JsonDocument doc;
+            #pragma GCC diagnostic push
+            #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+            StaticJsonDocument<256> doc;
+            #pragma GCC diagnostic pop
             if (deserializeJson(doc, data, len)) {
                 request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
                 return;
@@ -949,7 +981,10 @@ void WebServer::setupRoutes() {
     );
     
     _server.on("/api/scale/state", HTTP_GET, [](AsyncWebServerRequest* request) {
-        JsonDocument doc;
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+        StaticJsonDocument<256> doc;
+        #pragma GCC diagnostic pop
         bbw_state_t state = brewByWeight ? brewByWeight->getState() : bbw_state_t{};
         bbw_settings_t settings = brewByWeight ? brewByWeight->getSettings() : bbw_settings_t{};
         
@@ -961,8 +996,8 @@ void WebServer::setupRoutes() {
         doc["target_reached"] = state.target_reached;
         doc["stop_signaled"] = state.stop_signaled;
         
-        String response;
-        serializeJson(doc, response);
+        char response[256];
+        serializeJson(doc, response, sizeof(response));
         request->send(200, "application/json", response);
     });
     
@@ -971,9 +1006,12 @@ void WebServer::setupRoutes() {
         request->send(200, "application/json", "{\"status\":\"ok\"}");
     });
     
-    // Scale connection status
+    // Scale connection status - small fixed-size response
     _server.on("/api/scale/status", HTTP_GET, [](AsyncWebServerRequest* request) {
-        JsonDocument doc;
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+        StaticJsonDocument<384> doc;
+        #pragma GCC diagnostic pop
         scale_state_t state = scaleManager ? scaleManager->getState() : scale_state_t{};
         
         doc["connected"] = scaleManager ? scaleManager->isConnected() : false;
@@ -986,8 +1024,8 @@ void WebServer::setupRoutes() {
         doc["flow_rate"] = state.flow_rate;
         doc["battery"] = state.battery_percent;
         
-        String response;
-        serializeJson(doc, response);
+        char response[384];
+        serializeJson(doc, response, sizeof(response));
         request->send(200, "application/json", response);
     });
     
@@ -1012,9 +1050,9 @@ void WebServer::setupRoutes() {
         request->send(200, "application/json", "{\"status\":\"ok\"}");
     });
     
-    // Get discovered scales
+    // Get discovered scales - use PSRAM for potentially large device list
     _server.on("/api/scale/devices", HTTP_GET, [](AsyncWebServerRequest* request) {
-        JsonDocument doc;
+        SpiRamJsonDocument doc(2048);
         JsonArray devices = doc["devices"].to<JsonArray>();
         
         static const std::vector<scale_info_t> empty_devices;
@@ -1032,9 +1070,15 @@ void WebServer::setupRoutes() {
         doc["scanning"] = scaleManager ? scaleManager->isScanning() : false;
         doc["count"] = discovered.size();
         
-        String response;
-        serializeJson(doc, response);
-        request->send(200, "application/json", response);
+        size_t jsonSize = measureJson(doc) + 1;
+        char* response = (char*)psram_malloc(jsonSize);
+        if (response) {
+            serializeJson(doc, response, jsonSize);
+            request->send(200, "application/json", response);
+            safe_free(response);
+        } else {
+            request->send(500, "application/json", "{\"error\":\"Out of memory\"}");
+        }
     });
     
     // Connect to scale by address or index
