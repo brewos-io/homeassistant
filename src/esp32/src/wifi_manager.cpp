@@ -3,6 +3,9 @@
 #include "lwip/dns.h"  // For direct DNS server configuration
 #include "esp_wifi.h"  // For esp_wifi_set_ps()
 
+// Command queue size
+#define WIFI_COMMAND_QUEUE_SIZE 8
+
 // Helper to validate function pointers before calling
 // On ESP32-S3, valid code addresses are in flash (0x40000000-0x42FFFFFF)
 // PSRAM data is at 0x3C000000-0x3DFFFFFF - calling this would crash
@@ -33,10 +36,22 @@ WiFiManager::WiFiManager()
     , _connectStartTime(0)
     , _onConnected(nullptr)
     , _onDisconnected(nullptr)
-    , _onAPStarted(nullptr) {
+    , _onAPStarted(nullptr)
+    , _taskHandle(nullptr)
+    , _mutex(nullptr)
+    , _commandQueue(nullptr) {
     // Initialize credential buffers
     _storedSSID[0] = '\0';
     _storedPassword[0] = '\0';
+    _pendingSSID[0] = '\0';
+    _pendingPassword[0] = '\0';
+    _pendingNtpServer[0] = '\0';
+    
+    // Create mutex for thread-safe access
+    _mutex = xSemaphoreCreateMutex();
+    
+    // Create command queue
+    _commandQueue = xQueueCreate(WIFI_COMMAND_QUEUE_SIZE, sizeof(WiFiCommand));
 }
 
 void WiFiManager::begin() {
@@ -46,7 +61,21 @@ void WiFiManager::begin() {
     loadCredentials();
     loadStaticIPConfig();
     
-    // Try to connect if we have credentials
+    // Start background task on Core 0
+    if (_taskHandle == nullptr) {
+        xTaskCreatePinnedToCore(
+            taskCode,
+            "WiFiTask",
+            WIFI_TASK_STACK_SIZE,
+            this,
+            WIFI_TASK_PRIORITY,
+            &_taskHandle,
+            WIFI_TASK_CORE
+        );
+        LOG_I("WiFi task started on Core %d", WIFI_TASK_CORE);
+    }
+    
+    // Try to connect if we have credentials (send command to task)
     if (hasStoredCredentials()) {
         LOG_I("Found stored WiFi credentials for: %s", _storedSSID);
         connectToWiFi();
@@ -56,87 +85,164 @@ void WiFiManager::begin() {
     }
 }
 
-void WiFiManager::loop() {
-    switch (_mode) {
-        case WiFiManagerMode::STA_CONNECTING:
-            // Check connection status
-            if (WiFi.status() == WL_CONNECTED) {
-                _mode = WiFiManagerMode::STA_MODE;
-                // Get IP using direct format to avoid String allocation
-                IPAddress ip = WiFi.localIP();
-                char ipStr[16];
-                snprintf(ipStr, sizeof(ipStr), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
-                int rssi = WiFi.RSSI();
-                LOG_I("WiFi connected! IP: %s, RSSI: %d dBm, Channel: %d", 
-                    ipStr, rssi, WiFi.channel());
-                
-                // Warn if signal is weak (can cause slow SSL and packet loss)
-                if (rssi < -70) {
-                    LOG_W("Weak WiFi signal! RSSI=%d dBm (should be > -70)", rssi);
-                }
-                
-                // CRITICAL: Aggressively disable power save mode
-                // WiFi power save causes massive delays (packets buffered by router for 100ms-DTIM beacon interval)
-                // The ESP32 only wakes up periodically in power save mode, causing ping/web timeouts
-                WiFi.setSleep(false);
-                
-                // Use ESP-IDF API directly - this is more reliable than Arduino's setSleep()
-                esp_err_t ps_result = esp_wifi_set_ps(WIFI_PS_NONE);
-                if (ps_result == ESP_OK) {
-                    LOG_I("WiFi power save DISABLED successfully");
-                } else {
-                    LOG_E("Failed to disable WiFi power save: %d", ps_result);
-                }
-                
-                // Verify the setting
-                wifi_ps_type_t ps_type;
-                esp_wifi_get_ps(&ps_type);
-                LOG_I("WiFi power save state: %d (0=NONE, 1=MIN_MODEM, 2=MAX_MODEM)", ps_type);
-                
-                // Set Cloudflare DNS directly using lwip for reliable resolution
-                ip_addr_t dns1, dns2;
-                IP4_ADDR(&dns1.u_addr.ip4, 1, 1, 1, 1);      // Cloudflare primary
-                IP4_ADDR(&dns2.u_addr.ip4, 1, 0, 0, 1);      // Cloudflare secondary
-                dns1.type = IPADDR_TYPE_V4;
-                dns2.type = IPADDR_TYPE_V4;
-                dns_setserver(0, &dns1);
-                dns_setserver(1, &dns2);
-                LOG_I("DNS set to Cloudflare: 1.1.1.1, 1.0.0.1");
-                
-                safeCallback(_onConnected);
-            } 
-            else if (millis() - _connectStartTime > WIFI_CONNECT_TIMEOUT_MS) {
-                LOG_W("WiFi connection timeout, starting AP mode");
-                startAP();
+// =============================================================================
+// FreeRTOS Task Implementation
+// =============================================================================
+
+void WiFiManager::taskCode(void* parameter) {
+    WiFiManager* self = static_cast<WiFiManager*>(parameter);
+    self->taskLoop();
+}
+
+void WiFiManager::taskLoop() {
+    WiFiCommand cmd;
+    
+    while (true) {
+        // Check for commands with a short timeout (allows state machine to run)
+        if (xQueueReceive(_commandQueue, &cmd, pdMS_TO_TICKS(100)) == pdTRUE) {
+            processCommand(cmd);
+        }
+        
+        // Run the WiFi state machine
+        if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+            switch (_mode) {
+                case WiFiManagerMode::STA_CONNECTING:
+                    // Check connection status
+                    if (WiFi.status() == WL_CONNECTED) {
+                        _mode = WiFiManagerMode::STA_MODE;
+                        // Get IP using direct format to avoid String allocation
+                        IPAddress ip = WiFi.localIP();
+                        char ipStr[16];
+                        snprintf(ipStr, sizeof(ipStr), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+                        int rssi = WiFi.RSSI();
+                        LOG_I("WiFi connected! IP: %s, RSSI: %d dBm, Channel: %d", 
+                            ipStr, rssi, WiFi.channel());
+                        
+                        // Warn if signal is weak (can cause slow SSL and packet loss)
+                        if (rssi < -70) {
+                            LOG_W("Weak WiFi signal! RSSI=%d dBm (should be > -70)", rssi);
+                        }
+                        
+                        // CRITICAL: Aggressively disable power save mode
+                        WiFi.setSleep(false);
+                        esp_err_t ps_result = esp_wifi_set_ps(WIFI_PS_NONE);
+                        if (ps_result == ESP_OK) {
+                            LOG_I("WiFi power save DISABLED successfully");
+                        } else {
+                            LOG_E("Failed to disable WiFi power save: %d", ps_result);
+                        }
+                        
+                        // Verify the setting
+                        wifi_ps_type_t ps_type;
+                        esp_wifi_get_ps(&ps_type);
+                        LOG_I("WiFi power save state: %d (0=NONE, 1=MIN_MODEM, 2=MAX_MODEM)", ps_type);
+                        
+                        // Set Cloudflare DNS directly using lwip for reliable resolution
+                        ip_addr_t dns1, dns2;
+                        IP4_ADDR(&dns1.u_addr.ip4, 1, 1, 1, 1);      // Cloudflare primary
+                        IP4_ADDR(&dns2.u_addr.ip4, 1, 0, 0, 1);      // Cloudflare secondary
+                        dns1.type = IPADDR_TYPE_V4;
+                        dns2.type = IPADDR_TYPE_V4;
+                        dns_setserver(0, &dns1);
+                        dns_setserver(1, &dns2);
+                        LOG_I("DNS set to Cloudflare: 1.1.1.1, 1.0.0.1");
+                        
+                        safeCallback(_onConnected);
+                    } 
+                    else if (millis() - _connectStartTime > WIFI_CONNECT_TIMEOUT_MS) {
+                        LOG_W("WiFi connection timeout, starting AP mode");
+                        xSemaphoreGive(_mutex);
+                        doStartAP();
+                        continue;  // Skip the semaphore give below
+                    }
+                    break;
+                    
+                case WiFiManagerMode::STA_MODE:
+                    // Check if still connected
+                    if (WiFi.status() != WL_CONNECTED) {
+                        LOG_W("WiFi disconnected");
+                        _mode = WiFiManagerMode::DISCONNECTED;
+                        safeCallback(_onDisconnected);
+                        
+                        // Try to reconnect after interval
+                        if (millis() - _lastConnectAttempt > WIFI_RECONNECT_INTERVAL) {
+                            xSemaphoreGive(_mutex);
+                            doConnectToWiFi();
+                            continue;  // Skip the semaphore give below
+                        }
+                    }
+                    break;
+                    
+                case WiFiManagerMode::AP_MODE:
+                    // AP mode is stable, nothing to do
+                    break;
+                    
+                case WiFiManagerMode::DISCONNECTED:
+                    // Try to reconnect if we have credentials
+                    if (hasStoredCredentials() && 
+                        millis() - _lastConnectAttempt > WIFI_RECONNECT_INTERVAL) {
+                        xSemaphoreGive(_mutex);
+                        doConnectToWiFi();
+                        continue;  // Skip the semaphore give below
+                    }
+                    break;
+            }
+            xSemaphoreGive(_mutex);
+        }
+        
+        // Small delay to prevent tight looping
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+}
+
+void WiFiManager::processCommand(WiFiCommand cmd) {
+    switch (cmd) {
+        case WiFiCommand::CONNECT:
+            doConnectToWiFi();
+            break;
+        case WiFiCommand::START_AP:
+            doStartAP();
+            break;
+        case WiFiCommand::SET_CREDENTIALS:
+            if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
+                // Copy pending credentials to stored
+                strncpy(_storedSSID, _pendingSSID, sizeof(_storedSSID) - 1);
+                _storedSSID[sizeof(_storedSSID) - 1] = '\0';
+                strncpy(_storedPassword, _pendingPassword, sizeof(_storedPassword) - 1);
+                _storedPassword[sizeof(_storedPassword) - 1] = '\0';
+                // Save to NVS
+                _prefs.begin("wifi", false);
+                _prefs.putString("ssid", _storedSSID);
+                _prefs.putString("password", _storedPassword);
+                _prefs.end();
+                LOG_I("Credentials saved for: %s", _storedSSID);
+                xSemaphoreGive(_mutex);
             }
             break;
-            
-        case WiFiManagerMode::STA_MODE:
-            // Check if still connected
-            if (WiFi.status() != WL_CONNECTED) {
-                LOG_W("WiFi disconnected");
-                _mode = WiFiManagerMode::DISCONNECTED;
-                safeCallback(_onDisconnected);
-                
-                // Try to reconnect after interval
-                if (millis() - _lastConnectAttempt > WIFI_RECONNECT_INTERVAL) {
-                    connectToWiFi();
-                }
+        case WiFiCommand::CLEAR_CREDENTIALS:
+            if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
+                _prefs.begin("wifi", false);
+                _prefs.clear();
+                _prefs.end();
+                _storedSSID[0] = '\0';
+                _storedPassword[0] = '\0';
+                LOG_I("Credentials cleared");
+                xSemaphoreGive(_mutex);
             }
             break;
-            
-        case WiFiManagerMode::AP_MODE:
-            // AP mode is stable, nothing to do
+        case WiFiCommand::CONFIGURE_NTP:
+            doConfigureNTP();
             break;
-            
-        case WiFiManagerMode::DISCONNECTED:
-            // Try to reconnect if we have credentials
-            if (hasStoredCredentials() && 
-                millis() - _lastConnectAttempt > WIFI_RECONNECT_INTERVAL) {
-                connectToWiFi();
-            }
+        case WiFiCommand::SYNC_NTP:
+            doSyncNTP();
             break;
     }
+}
+
+void WiFiManager::loop() {
+    // The main loop() now just provides API compatibility
+    // All WiFi work happens in the background task
+    // This prevents WiFi operations from blocking the main loop on Core 1
 }
 
 bool WiFiManager::hasStoredCredentials() {
@@ -157,31 +263,51 @@ bool WiFiManager::setCredentials(const String& ssid, const String& password) {
         return false;
     }
     
-    saveCredentials(ssid, password);
-    strncpy(_storedSSID, ssid.c_str(), sizeof(_storedSSID) - 1);
-    _storedSSID[sizeof(_storedSSID) - 1] = '\0';
-    strncpy(_storedPassword, password.c_str(), sizeof(_storedPassword) - 1);
-    _storedPassword[sizeof(_storedPassword) - 1] = '\0';
+    // Copy to pending buffers (thread-safe)
+    if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
+        strncpy(_pendingSSID, ssid.c_str(), sizeof(_pendingSSID) - 1);
+        _pendingSSID[sizeof(_pendingSSID) - 1] = '\0';
+        strncpy(_pendingPassword, password.c_str(), sizeof(_pendingPassword) - 1);
+        _pendingPassword[sizeof(_pendingPassword) - 1] = '\0';
+        xSemaphoreGive(_mutex);
+    }
     
-    LOG_I("Credentials saved for: %s", ssid.c_str());
+    // Queue command to task
+    WiFiCommand cmd = WiFiCommand::SET_CREDENTIALS;
+    xQueueSend(_commandQueue, &cmd, pdMS_TO_TICKS(1000));
+    
     return true;
 }
 
 void WiFiManager::clearCredentials() {
-    _prefs.begin("wifi", false);
-    _prefs.clear();
-    _prefs.end();
-    
-    _storedSSID[0] = '\0';
-    _storedPassword[0] = '\0';
-    
-    LOG_I("Credentials cleared");
+    // Queue command to task
+    WiFiCommand cmd = WiFiCommand::CLEAR_CREDENTIALS;
+    xQueueSend(_commandQueue, &cmd, pdMS_TO_TICKS(1000));
 }
 
 bool WiFiManager::connectToWiFi() {
     if (!hasStoredCredentials()) {
         LOG_E("No credentials to connect with");
         return false;
+    }
+    
+    // Queue command to task
+    WiFiCommand cmd = WiFiCommand::CONNECT;
+    xQueueSend(_commandQueue, &cmd, pdMS_TO_TICKS(1000));
+    
+    return true;
+}
+
+void WiFiManager::doConnectToWiFi() {
+    if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(1000)) != pdTRUE) {
+        LOG_E("Failed to acquire mutex for WiFi connect");
+        return;
+    }
+    
+    if (!hasStoredCredentials()) {
+        LOG_E("No credentials to connect with");
+        xSemaphoreGive(_mutex);
+        return;
     }
     
     LOG_I("Connecting to WiFi: %s", _storedSSID);
@@ -214,23 +340,25 @@ bool WiFiManager::connectToWiFi() {
     // Connect with optimized settings
     WiFi.begin(_storedSSID, _storedPassword);
     
-    // Lower MTU to 1400 to prevent fragmentation issues with some ISPs/routers (Cloudflare)
-    // This often fixes "start_ssl_client: -1" timeouts
-    // Note: Must be called before begin() on some versions, or after on others. 
-    // Calling it here (before begin) sets the interface config.
-    // We also call it in the connected callback to be sure.
-    // Note: Arduino ESP32 2.x doesn't expose setMTU on WiFi directly easily, 
-    // but we can use the lwip interface if needed. 
-    // For now, we rely on standard behavior or add tcp_mss check if needed.
-    
     _mode = WiFiManagerMode::STA_CONNECTING;
     _connectStartTime = millis();
     _lastConnectAttempt = millis();
     
-    return true;
+    xSemaphoreGive(_mutex);
 }
 
 void WiFiManager::startAP() {
+    // Queue command to task
+    WiFiCommand cmd = WiFiCommand::START_AP;
+    xQueueSend(_commandQueue, &cmd, pdMS_TO_TICKS(1000));
+}
+
+void WiFiManager::doStartAP() {
+    if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(1000)) != pdTRUE) {
+        LOG_E("Failed to acquire mutex for AP start");
+        return;
+    }
+    
     LOG_I("Starting AP mode: %s", WIFI_AP_SSID);
     
     // Use AP+STA mode to keep existing WiFi connection while starting AP
@@ -262,11 +390,12 @@ void WiFiManager::startAP() {
     
     if (!ap_started) {
         LOG_E("Failed to start AP!");
+        xSemaphoreGive(_mutex);
         return;
     }
     
     // Give AP time to initialize and start broadcasting
-    delay(100);
+    vTaskDelay(pdMS_TO_TICKS(100));
     
     // Update mode - if we have STA connection, we're in AP+STA mode
     if (WiFi.status() == WL_CONNECTED) {
@@ -282,6 +411,8 @@ void WiFiManager::startAP() {
     snprintf(apIPStr, sizeof(apIPStr), "%d.%d.%d.%d", apIP[0], apIP[1], apIP[2], apIP[3]);
     LOG_I("AP started. IP: %s", apIPStr);
     LOG_I("AP SSID: %s, Channel: %d, Power: 19.5dBm", WIFI_AP_SSID, WIFI_AP_CHANNEL);
+    
+    xSemaphoreGive(_mutex);
     
     safeCallback(_onAPStarted);
 }
@@ -453,24 +584,60 @@ void WiFiManager::saveStaticIPConfig() {
 // =============================================================================
 
 void WiFiManager::configureNTP(const char* server, int16_t utcOffsetMinutes, bool dstEnabled, int16_t dstOffsetMinutes) {
-    strncpy(_ntpServer, server, sizeof(_ntpServer) - 1);
-    _utcOffsetSec = utcOffsetMinutes * 60;
-    _dstOffsetSec = dstEnabled ? (dstOffsetMinutes * 60) : 0;
+    // Copy to pending buffers (thread-safe)
+    if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
+        strncpy(_pendingNtpServer, server, sizeof(_pendingNtpServer) - 1);
+        _pendingNtpServer[sizeof(_pendingNtpServer) - 1] = '\0';
+        _pendingUtcOffsetMinutes = utcOffsetMinutes;
+        _pendingDstEnabled = dstEnabled;
+        _pendingDstOffsetMinutes = dstOffsetMinutes;
+        xSemaphoreGive(_mutex);
+    }
+    
+    // Queue command to task
+    WiFiCommand cmd = WiFiCommand::CONFIGURE_NTP;
+    xQueueSend(_commandQueue, &cmd, pdMS_TO_TICKS(1000));
+}
+
+void WiFiManager::doConfigureNTP() {
+    if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(1000)) != pdTRUE) {
+        return;
+    }
+    
+    strncpy(_ntpServer, _pendingNtpServer, sizeof(_ntpServer) - 1);
+    _ntpServer[sizeof(_ntpServer) - 1] = '\0';
+    _utcOffsetSec = _pendingUtcOffsetMinutes * 60;
+    _dstOffsetSec = _pendingDstEnabled ? (_pendingDstOffsetMinutes * 60) : 0;
     _ntpConfigured = true;
     
     LOG_I("NTP configured: server=%s, UTC offset=%d min, DST=%s (%d min)",
-          _ntpServer, utcOffsetMinutes, dstEnabled ? "on" : "off", dstOffsetMinutes);
+          _ntpServer, _pendingUtcOffsetMinutes, _pendingDstEnabled ? "on" : "off", _pendingDstOffsetMinutes);
     
     // Apply configuration immediately if WiFi connected
-    if (_mode == WiFiManagerMode::STA_MODE) {
-        syncNTP();
+    bool shouldSync = (_mode == WiFiManagerMode::STA_MODE);
+    xSemaphoreGive(_mutex);
+    
+    if (shouldSync) {
+        doSyncNTP();
     }
 }
 
 void WiFiManager::syncNTP() {
+    // Queue command to task
+    WiFiCommand cmd = WiFiCommand::SYNC_NTP;
+    xQueueSend(_commandQueue, &cmd, pdMS_TO_TICKS(1000));
+}
+
+void WiFiManager::doSyncNTP() {
+    if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(1000)) != pdTRUE) {
+        return;
+    }
+    
     if (!_ntpConfigured) {
+        xSemaphoreGive(_mutex);
         // Use defaults if not configured
         configureNTP("pool.ntp.org", 0, false, 0);
+        return;
     }
     
     LOG_I("Configuring NTP: %s (UTC%+d)", _ntpServer, _utcOffsetSec / 3600);
@@ -480,7 +647,6 @@ void WiFiManager::syncNTP() {
     // For UTC+2: "UTC-2" because POSIX uses the opposite sign
     char tzStr[32];
     int hours = _utcOffsetSec / 3600;
-    int mins = abs((_utcOffsetSec % 3600) / 60);
     
     if (_dstOffsetSec > 0) {
         // With DST - format: STD-offset DST for simple rule
@@ -489,8 +655,15 @@ void WiFiManager::syncNTP() {
         snprintf(tzStr, sizeof(tzStr), "UTC%+d", -hours);
     }
     
+    // Copy server name before releasing mutex
+    char serverCopy[64];
+    strncpy(serverCopy, _ntpServer, sizeof(serverCopy) - 1);
+    serverCopy[sizeof(serverCopy) - 1] = '\0';
+    
+    xSemaphoreGive(_mutex);
+    
     // Set timezone and NTP server
-    configTzTime(tzStr, _ntpServer);
+    configTzTime(tzStr, serverCopy);
     
     LOG_I("NTP sync started, timezone: %s", tzStr);
 }

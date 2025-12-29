@@ -10,6 +10,10 @@
 
 #include <ArduinoJson.h>
 #include <esp_heap_caps.h>
+#include <esp_log.h>
+
+// Tag for ESP-IDF logging
+static const char* MEMORY_TAG = "PSRAM";
 
 // =============================================================================
 // PSRAM Allocator for ArduinoJson
@@ -30,8 +34,19 @@ struct SpiRamAllocator {
         if (ptr) {
             return ptr;
         }
+        // Log PSRAM allocation failure for diagnostics
+        ESP_LOGW(MEMORY_TAG, "Alloc failed: %u bytes (PSRAM free: %u, internal free: %u)",
+                 (unsigned)size, 
+                 (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM),
+                 (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
         // Fallback to internal RAM if PSRAM fails
-        return malloc(size);
+        ptr = malloc(size);
+        if (ptr) {
+            ESP_LOGW(MEMORY_TAG, "Fallback to internal RAM succeeded for %u bytes", (unsigned)size);
+        } else {
+            ESP_LOGE(MEMORY_TAG, "CRITICAL: Both PSRAM and internal alloc failed for %u bytes!", (unsigned)size);
+        }
+        return ptr;
     }
     
     void deallocate(void* ptr) {
@@ -45,11 +60,16 @@ struct SpiRamAllocator {
         if (new_ptr) {
             return new_ptr;
         }
-        // Fallback: allocate new block in internal RAM and copy
+        // Log realloc failure
+        ESP_LOGW(MEMORY_TAG, "Realloc failed: %u bytes (PSRAM free: %u)",
+                 (unsigned)new_size, 
+                 (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+        // Fallback: allocate new block in internal RAM
         new_ptr = malloc(new_size);
-        if (new_ptr && ptr) {
-            // Note: We don't know the old size, but realloc handles this internally
-            // This fallback path should rarely be hit
+        if (new_ptr) {
+            ESP_LOGW(MEMORY_TAG, "Realloc fallback to internal RAM for %u bytes", (unsigned)new_size);
+        } else {
+            ESP_LOGE(MEMORY_TAG, "CRITICAL: Realloc failed completely for %u bytes!", (unsigned)new_size);
         }
         return new_ptr;
     }
@@ -145,6 +165,44 @@ inline int calculate_fragmentation(size_t free_heap, size_t largest_block) {
     if (free_heap == 0) return 100;
     return 100 - (int)((largest_block * 100) / free_heap);
 }
+
+// =============================================================================
+// JSON Parsing Optimization Guidelines
+// =============================================================================
+
+/**
+ * JSON Filter Usage for Large Payloads
+ * 
+ * When parsing large JSON payloads where only a few fields are needed,
+ * use ArduinoJson's Filter feature to reduce memory allocation:
+ * 
+ * Example - Parsing only specific fields from a large payload:
+ * 
+ *   // Define filter document (only fields you need)
+ *   StaticJsonDocument<64> filter;
+ *   filter["schedule"]["enabled"] = true;
+ *   filter["schedule"]["time"] = true;
+ *   // Other fields will be ignored during parsing
+ *   
+ *   // Parse with filter
+ *   JsonDocument doc;
+ *   deserializeJson(doc, payload, DeserializationOption::Filter(filter));
+ *   
+ * Benefits:
+ * - Reduces memory allocation (only stores filtered fields)
+ * - Faster parsing (skips unwanted fields)
+ * - Lower PSRAM/internal RAM pressure
+ * 
+ * When to use:
+ * - Large incoming payloads (>1KB) where only a few fields are needed
+ * - Memory-constrained situations (low heap)
+ * - High-frequency parsing operations
+ * 
+ * When NOT to use:
+ * - Small payloads (<512 bytes) - overhead not worth it
+ * - When all fields are needed
+ * - Simple command messages
+ */
 
 #endif // MEMORY_UTILS_H
 

@@ -13,6 +13,15 @@
 #include <PubSubClient.h>
 #include <Preferences.h>
 #include <ArduinoJson.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <freertos/semphr.h>
+#include <freertos/queue.h>
+
+// MQTT task configuration
+#define MQTT_TASK_STACK_SIZE 4096
+#define MQTT_TASK_PRIORITY 3  // Lower than WiFi task
+#define MQTT_TASK_CORE 0      // Run on Core 0 with other network tasks
 
 // Include ui_state_t definition
 #include "ui/ui.h"
@@ -163,6 +172,11 @@ private:
     mqtt_event_callback_t _onDisconnected = nullptr;
     mqtt_command_callback_t _commandCallback = nullptr;
     
+    // FreeRTOS task management
+    TaskHandle_t _taskHandle = nullptr;
+    SemaphoreHandle_t _mutex = nullptr;
+    volatile bool _taskRunning = false;
+    
     // Internal methods
     void loadConfig();
     void saveConfig();
@@ -182,6 +196,10 @@ private:
     
     // Generate device ID from MAC address
     void generateDeviceID();
+    
+    // FreeRTOS task
+    static void taskCode(void* parameter);
+    void taskLoop();
 };
 
 // Global instance

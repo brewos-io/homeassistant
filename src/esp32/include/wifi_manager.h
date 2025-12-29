@@ -5,6 +5,10 @@
 #include <WiFi.h>
 #include <Preferences.h>
 #include <time.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <freertos/semphr.h>
+#include <freertos/queue.h>
 
 // WiFi modes
 enum class WiFiManagerMode {
@@ -49,6 +53,21 @@ struct TimeStatus {
 
 // Simple function pointer types to avoid std::function PSRAM allocation issues
 typedef void (*WiFiEventCallback)();
+
+// WiFi task configuration
+#define WIFI_TASK_STACK_SIZE 4096
+#define WIFI_TASK_PRIORITY 5
+#define WIFI_TASK_CORE 0  // Run on Core 0 with other network tasks
+
+// WiFi command types for the task queue
+enum class WiFiCommand {
+    CONNECT,           // Connect to stored WiFi
+    START_AP,          // Start access point mode
+    SET_CREDENTIALS,   // Update credentials
+    CLEAR_CREDENTIALS, // Clear stored credentials
+    CONFIGURE_NTP,     // Configure NTP settings
+    SYNC_NTP           // Sync time with NTP
+};
 
 class WiFiManager {
 public:
@@ -108,6 +127,10 @@ private:
     char _storedSSID[64];
     char _storedPassword[128];
     
+    // Pending credentials (for async set from main loop)
+    char _pendingSSID[64];
+    char _pendingPassword[128];
+    
     // Static IP configuration
     StaticIPConfig _staticIP = {false, IPAddress(), IPAddress(), IPAddress(255,255,255,0), IPAddress(), IPAddress()};
     
@@ -120,15 +143,36 @@ private:
     int32_t _dstOffsetSec = 0;
     bool _ntpConfigured = false;
     
+    // Pending NTP config (for async configure from main loop)
+    char _pendingNtpServer[64];
+    int16_t _pendingUtcOffsetMinutes = 0;
+    bool _pendingDstEnabled = false;
+    int16_t _pendingDstOffsetMinutes = 0;
+    
     // Simple function pointers - no dynamic allocation
     WiFiEventCallback _onConnected = nullptr;
     WiFiEventCallback _onDisconnected = nullptr;
     WiFiEventCallback _onAPStarted = nullptr;
     
+    // FreeRTOS task management
+    TaskHandle_t _taskHandle = nullptr;
+    SemaphoreHandle_t _mutex = nullptr;
+    QueueHandle_t _commandQueue = nullptr;
+    
+    // Internal methods
     void loadCredentials();
     void saveCredentials(const String& ssid, const String& password);
     void loadStaticIPConfig();
     void saveStaticIPConfig();
+    
+    // Task implementation
+    static void taskCode(void* parameter);
+    void taskLoop();
+    void processCommand(WiFiCommand cmd);
+    void doConnectToWiFi();
+    void doStartAP();
+    void doConfigureNTP();
+    void doSyncNTP();
 };
 
 #endif // WIFI_MANAGER_H

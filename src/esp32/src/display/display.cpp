@@ -286,7 +286,27 @@ void Display::initHardware() {
     panel_config.data_gpio_nums[14] = 2;   // DATA14 - R6
     panel_config.data_gpio_nums[15] = 1;   // DATA15 - R7
     panel_config.flags.fb_in_psram = 1;
-    // WiFi stability achieved via GPIO_DRIVE_CAP_0 (see below)
+    
+    // =========================================================================
+    // DOUBLE BUFFERING FOR TEAR-FREE DISPLAY
+    // =========================================================================
+    // Use 2 frame buffers in PSRAM for double buffering:
+    // - DMA reads from Buffer A while CPU draws to Buffer B
+    // - Buffers swap on VSYNC, eliminating tearing
+    // - Requires ~900KB additional PSRAM (480*480*2 bytes per buffer)
+    // - With 8MB PSRAM, this is easily accommodated
+    panel_config.num_fbs = 2;
+    LOG_I("Double buffering enabled: 2 frame buffers in PSRAM (~1.8MB total)");
+    
+    // =========================================================================
+    // BOUNCE BUFFER FOR WIFI STABILITY
+    // =========================================================================
+    // Allocate ~9.6KB of internal SRAM as intermediate buffer between PSRAM framebuffer
+    // and LCD DMA. This decouples display refresh from PSRAM bus contention during
+    // WiFi/Flash operations, preventing visual glitches when WiFi is active.
+    // 10 scanlines * 480 pixels * 2 bytes = 9600 bytes
+    panel_config.bounce_buffer_size_px = 480 * 10;
+    LOG_I("Bounce buffer enabled: 10 scanlines (~9.6KB internal SRAM)");
     
     // Register callback to synchronize with DMA transfers
     panel_config.on_frame_trans_done = on_frame_trans_done;

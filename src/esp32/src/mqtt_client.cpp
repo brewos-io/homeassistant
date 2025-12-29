@@ -32,11 +32,17 @@ MQTTClient::MQTTClient()
     , _lastReconnectAttempt(0)
     , _lastStatusPublish(0)
     , _reconnectDelay(1000)
-    , _wasConnected(false) {
+    , _wasConnected(false)
+    , _taskHandle(nullptr)
+    , _mutex(nullptr)
+    , _taskRunning(false) {
     
     _instance = this;
     _client.setCallback(messageCallback);
     _client.setBufferSize(MQTT_BUFFER_SIZE);
+    
+    // Create mutex for thread-safe access
+    _mutex = xSemaphoreCreateMutex();
 }
 
 bool MQTTClient::begin() {
@@ -66,43 +72,86 @@ bool MQTTClient::begin() {
     LOG_I("MQTT configured: broker=%s:%d, client_id=%s", 
           _config.broker, _config.port, _config.client_id);
     
-    // Try initial connection
-    if (WiFi.status() == WL_CONNECTED) {
-        connect();
+    // Start background task on Core 0
+    if (_taskHandle == nullptr && _config.enabled) {
+        _taskRunning = true;
+        xTaskCreatePinnedToCore(
+            taskCode,
+            "MQTTTask",
+            MQTT_TASK_STACK_SIZE,
+            this,
+            MQTT_TASK_PRIORITY,
+            &_taskHandle,
+            MQTT_TASK_CORE
+        );
+        LOG_I("MQTT task started on Core %d", MQTT_TASK_CORE);
     }
     
     return true;
 }
 
-void MQTTClient::loop() {
-    if (!_config.enabled) return;
-    
-    // Check for disconnect event
-    bool clientConnected = _client.connected();
-    if (_wasConnected && !clientConnected) {
-        _connected = false;
-        _wasConnected = false;
-        LOG_W("MQTT connection lost");
-        if (_onDisconnected) {
-            _onDisconnected();
+// =============================================================================
+// FreeRTOS Task Implementation
+// =============================================================================
+
+void MQTTClient::taskCode(void* parameter) {
+    MQTTClient* self = static_cast<MQTTClient*>(parameter);
+    self->taskLoop();
+}
+
+void MQTTClient::taskLoop() {
+    while (_taskRunning) {
+        if (!_config.enabled) {
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            continue;
         }
-    }
-    
-    if (!clientConnected) {
-        unsigned long now = millis();
-        if (now - _lastReconnectAttempt > (unsigned long)_reconnectDelay) {
-            _lastReconnectAttempt = now;
-            if (connect()) {
-                _reconnectDelay = 1000;  // Reset delay on success
-            } else {
-                // Exponential backoff, max 60 seconds
-                _reconnectDelay = min(_reconnectDelay * 2, 60000);
+        
+        if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+            // Check for disconnect event
+            bool clientConnected = _client.connected();
+            if (_wasConnected && !clientConnected) {
+                _connected = false;
+                _wasConnected = false;
+                LOG_W("MQTT connection lost");
+                xSemaphoreGive(_mutex);
+                if (_onDisconnected) {
+                    _onDisconnected();
+                }
+                continue;
             }
+            
+            if (!clientConnected) {
+                unsigned long now = millis();
+                if (now - _lastReconnectAttempt > (unsigned long)_reconnectDelay) {
+                    _lastReconnectAttempt = now;
+                    xSemaphoreGive(_mutex);
+                    if (connect()) {
+                        _reconnectDelay = 1000;  // Reset delay on success
+                    } else {
+                        // Exponential backoff, max 60 seconds
+                        _reconnectDelay = min(_reconnectDelay * 2, 60000);
+                    }
+                    continue;
+                }
+            } else {
+                _client.loop();
+                _wasConnected = true;
+            }
+            xSemaphoreGive(_mutex);
         }
-    } else {
-        _client.loop();
-        _wasConnected = true;
+        
+        // Small delay to prevent tight looping
+        vTaskDelay(pdMS_TO_TICKS(50));
     }
+    
+    // Task is ending
+    vTaskDelete(nullptr);
+}
+
+void MQTTClient::loop() {
+    // The main loop() now provides API compatibility only
+    // All MQTT work happens in the background task on Core 0
+    // This prevents MQTT operations from blocking the main loop on Core 1
 }
 
 bool MQTTClient::setConfig(const MQTTConfig& config) {
