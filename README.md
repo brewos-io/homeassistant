@@ -1,5 +1,14 @@
 # BrewOS Home Assistant Integration
 
+## Related Repositories
+
+- [Firmware](https://github.com/brewos-io/firmware) - Main firmware repository
+- [Web Site](https://github.com/brewos-io/web) - Project website
+
+---
+
+# BrewOS Home Assistant Integration
+
 This folder contains Home Assistant integration components for BrewOS espresso machines.
 
 ## Contents
