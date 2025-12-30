@@ -1,328 +1,190 @@
-<p align="center">
-  <img src="assets/1080/horizontal/full-color/Brewos-1080.png" alt="BrewOS Logo" width="400">
-</p>
+# BrewOS Home Assistant Integration
 
-<p align="center">
-  <strong>Open-source firmware for espresso machine control</strong>
-</p>
+This folder contains Home Assistant integration components for BrewOS espresso machines.
 
-<p align="center">
-  <a href="#features">Features</a> •
-  <a href="#supported-machines">Supported Machines</a> •
-  <a href="#quick-start">Quick Start</a> •
-  <a href="#documentation">Documentation</a> •
-  <a href="#contributing">Contributing</a>
-</p>
-
-<p align="center">
-  <a href="https://github.com/mizrachiran/brewos/blob/main/LICENSE">
-    <img src="https://img.shields.io/badge/license-Apache%202.0%20+%20Commons%20Clause-blue.svg" alt="License: Apache 2.0 + Commons Clause">
-  </a>
-  <a href="https://github.com/mizrachiran/brewos/releases">
-    <img src="https://img.shields.io/github/v/release/mizrachiran/brewos?include_prereleases" alt="Release">
-  </a>
-  <img src="https://img.shields.io/badge/platform-RP2350%20%7C%20ESP32-brightgreen" alt="Platform">
-  <img src="https://img.shields.io/badge/status-development-orange" alt="Status">
-</p>
-
----
-
-## What is BrewOS?
-
-BrewOS is an open-source control system designed to replace factory controllers in espresso machines. It provides enhanced temperature control, real-time monitoring, and modern features while maintaining safety as the top priority.
-
-**Why BrewOS?**
-
-- 🎯 **Precise PID Control** - Sub-degree temperature stability for consistent shots
-- 📱 **WiFi Connected** - Monitor and control via web interface
-- 🔧 **Multi-Machine Support** - One firmware for dual boiler, single boiler, and HX machines
-- 🛡️ **Safety First** - Hardware watchdogs, interlocks, and fail-safe design
-- 📊 **Data Logging** - Track shots, temperatures, and machine statistics
-- 🔄 **OTA Updates** - Update firmware wirelessly via web interface
-
----
-
-## Features
-
-### Temperature Control
-
-- Dual independent PID loops for brew and steam boilers
-- Configurable heating strategies (parallel, sequential, smart stagger)
-- Group head temperature monitoring via thermocouple
-- Pre-infusion support with configurable timing
-
-### Connectivity
-
-- Built-in WiFi access point for initial setup
-- Web-based dashboard for monitoring and control
-- Real-time WebSocket updates
-- REST API for integration
-- **Progressive Web App (PWA)** - Install on any device, works offline
-- **Push Notifications** - Receive alerts when your machine needs attention
-- **Home Assistant Integration** - MQTT auto-discovery with 35+ entities
-- **Cloud Remote Access** - Control from anywhere via cloud relay
-
-### Safety
-
-- Hardware watchdog timer (2-second timeout)
-- Water level interlocks
-- Over-temperature protection (165°C max)
-- Automatic safe-state on any fault
-- Extensive error logging
-
-### Monitoring
-
-- Real-time temperature graphs
-- Pressure monitoring
-- Shot timer with statistics
-- Power consumption tracking (PZEM-004T)
-- Brew counter with cleaning reminders
-
----
-
-## Architecture
-
-![BrewOS System Architecture](docs/images/architecture.png)
-
-| Layer           | Components                        | Purpose                           |
-| --------------- | --------------------------------- | --------------------------------- |
-| **Cloud**       | Google OAuth, Node.js, SQLite     | Remote access via WebSocket relay |
-| **ESP32-S3**    | WiFi, Web Server, MQTT, BLE, LVGL | Connectivity & UI hub             |
-| **Pico RP2350** | PID, Boiler, Pump, Valve control  | Real-time machine control         |
-| **Hardware**    | SSRs, Sensors, Valves             | Physical machine interface        |
-
-**Pico Dual-Core Design:**
-| Core | Responsibility | Timing |
-|------|----------------|--------|
-| **Core 0** | Safety, sensors, PID control, outputs | 100ms deterministic loop |
-| **Core 1** | UART communication, protocol handling | Async, interrupt-driven |
-
-📖 See [Full Architecture Documentation](docs/Architecture.md) for details.
-
----
-
-## Supported Machines
-
-BrewOS supports multiple espresso machine architectures through compile-time configuration:
-
-| Machine Type       | Status       | Examples                                         |
-| ------------------ | ------------ | ------------------------------------------------ |
-| **Dual Boiler**    | ✅ Supported | ECM Synchronika, Profitec Pro 700, Lelit Bianca  |
-| **Single Boiler**  | ✅ Supported | ECM Barista, Profitec Pro 300, Rancilio Silvia   |
-| **Heat Exchanger** | ✅ Supported | ECM Mechanika, Profitec Pro 500, E61 HX machines |
-| **Thermoblock**    | 🔮 Planned   | -                                                |
-
-**👉 [Full Compatibility List](docs/Compatibility.md)** - See validated machines and expected compatible models.
-
-### Reference Implementation
-
-The **ECM Synchronika** serves as the reference implementation with complete schematics and documentation:
-
-| Resource                                                         | Description                     |
-| ---------------------------------------------------------------- | ------------------------------- |
-| [Schematic](docs/hardware/schematics/ECM_Schematic_Reference.md) | Complete circuit diagrams       |
-| [Netlist](docs/hardware/schematics/ECM_Netlist.csv)              | Component list for PCB          |
-| [Wiring Guide](docs/hardware/ESP32_Display_Wiring.md)            | Connection details              |
-| [Compatibility](docs/Compatibility.md)                           | Validated & compatible machines |
-
----
-
-## Quick Start
-
-### Prerequisites
-
-- [Pico SDK](https://github.com/raspberrypi/pico-sdk) (v1.5.0+)
-- [ARM GCC Toolchain](https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads)
-- [PlatformIO](https://platformio.org/) (for ESP32)
-- CMake 3.13+
-
-### Building
-
-```bash
-# Clone the repository
-git clone https://github.com/mizrachiran/brewos.git
-cd brewos
-
-# Build Pico firmware (all machine types)
-cd src/pico
-mkdir build && cd build
-cmake -DBUILD_ALL_MACHINES=ON ..
-make -j4
-
-# Output files:
-# - brewos_dual_boiler.uf2
-# - brewos_single_boiler.uf2
-# - brewos_heat_exchanger.uf2
-```
-
-```bash
-# Build ESP32 firmware
-cd src/esp32
-pio run
-
-# Flash everything (firmware + web files)
-cd ../scripts
-./flash_esp32.sh
-
-# Or manually:
-cd ../esp32
-pio run -t upload        # Upload firmware
-pio run -t uploadfs      # Upload web UI files
-```
-
-### Flashing
-
-**Pico (USB):**
-
-1. Hold BOOTSEL button
-2. Connect USB cable
-3. Release button - Pico mounts as drive
-4. Copy `brewos_*.uf2` to the drive
-
-**Pico (OTA via ESP32):**
-
-1. Connect to `BrewOS-Setup` WiFi network (password: `brewoscoffee`)
-2. Open http://192.168.4.1
-3. Upload firmware via web interface
-
-See [SETUP.md](SETUP.md) for detailed instructions.
-
----
-
-## Documentation
-
-| Document                                                        | Description                                |
-| --------------------------------------------------------------- | ------------------------------------------ |
-| **Getting Started**                                             |                                            |
-| [Setup Guide](SETUP.md)                                         | Development environment setup              |
-| [System Architecture](docs/Architecture.md)                     | Full system overview with cloud            |
-| **Pico Firmware**                                               |                                            |
-| [Architecture](docs/pico/Architecture.md)                       | Module structure, dual-core design         |
-| [Requirements](docs/pico/Requirements.md)                       | Functional and safety requirements         |
-| [Machine Configurations](docs/pico/Machine_Configurations.md)   | Multi-machine support                      |
-| **ESP32 Firmware**                                              |                                            |
-| [State Management](docs/esp32/State_Management.md)              | Settings, stats, shot history              |
-| [MQTT Integration](docs/esp32/integrations/MQTT.md)             | MQTT protocol and auto-discovery           |
-| [Home Assistant](homeassistant/README.md)                       | Custom card, native integration, examples  |
-| [BLE Scales](docs/esp32/integrations/BLE_Scales.md)             | Bluetooth scale integration                |
-| **Web & Cloud**                                                 |                                            |
-| [Web Interface](docs/web/README.md)                             | React dashboard development                |
-| [PWA & Push Notifications](docs/web/QUICK_START_PWA.md)         | Quick start for PWA and push notifications |
-| [Cloud Service](docs/cloud/README.md)                           | Remote access architecture                 |
-| [WebSocket Protocol](docs/web/WebSocket_Protocol.md)            | Message format reference                   |
-| **Shared**                                                      |                                            |
-| [Communication Protocol](docs/shared/Communication_Protocol.md) | Binary protocol Pico ↔ ESP32               |
-| **Hardware**                                                    |                                            |
-| [Specification](docs/hardware/Specification.md)                 | PCB design, component selection            |
-| [Compatibility](docs/Compatibility.md)                          | Validated machines list                    |
-
----
-
-## 🧪 Call for Testers
-
-**Help us expand machine compatibility!** We're looking for espresso enthusiasts to test BrewOS on their machines.
-
-### ✅ Validated
-
-| Brand | Model           | Notes             |
-| ----- | --------------- | ----------------- |
-| ECM   | **Synchronika** | Reference machine |
-
-### 🔷 Same Platform (Need Validation)
-
-These use the same GICAR board and should work - we need testers to confirm!
-
-| Brand        | Models                                                                                       |
-| ------------ | -------------------------------------------------------------------------------------------- |
-| **ECM**      | Barista, Technika, Technika Profi, Mechanika, Mechanika Profi, Mechanika V Slim, Controvento |
-| **Profitec** | Pro 300, Pro 500, Pro 700                                                                    |
-
-### 🔲 Other Brands (Wanted)
-
-| Brand           | Models                                    |
-| --------------- | ----------------------------------------- |
-| **Lelit**       | MaraX, Bianca, Elizabeth                  |
-| **Rocket**      | Appartamento, Mozzafiato, R58, R Nine One |
-| **Bezzera**     | BZ10, BZ13, Duo, Matrix                   |
-| **La Marzocco** | Linea Mini, GS3                           |
-| **Other**       | Any E61 group head machine                |
-
-**👉 [Become a Tester](TESTERS.md)** - See how you can help!
-
----
-
-## Safety Notice
+## Contents
 
 ```
-⚠️  WARNING: MAINS VOLTAGE
-
-This project involves 100-240V AC mains electricity.
-Improper handling can result in death or serious injury.
-
-• Only qualified individuals should work on mains circuits
-• Always use isolation transformers during development
-• Never work alone on energized equipment
-• Disconnect power before making any changes
-• Follow all local electrical codes and regulations
+homeassistant/
+├── custom_components/brewos/   # Native HA integration
+├── lovelace/brewos-card.js     # Custom dashboard card
+├── examples/
+│   ├── automations.yaml        # Example automations
+│   └── dashboard.yaml          # Example dashboard config
+└── hacs.json                   # HACS metadata
 ```
 
-**Safety is not optional.** The firmware includes multiple safety layers, but hardware installation must be performed by qualified individuals. See [Safety Requirements](docs/pico/Requirements.md#2-safety-requirements-critical) for details.
+## Integration Methods
 
----
+### MQTT Auto-Discovery
 
-## Contributing
+BrewOS publishes Home Assistant MQTT discovery messages. When enabled, entities are automatically created in Home Assistant.
 
-We welcome contributions! Please read our guidelines before getting started:
+**Requirements:**
 
-1. **Read the docs** - Understand the [Architecture](docs/pico/Architecture.md) and [Requirements](docs/pico/Requirements.md)
-2. **Check existing issues** - See what's being worked on
-3. **Follow code style** - Match existing patterns
-4. **Test thoroughly** - Especially safety-critical code
-5. **Update documentation** - Keep docs in sync with changes
+- MQTT broker accessible to both HA and BrewOS
+- HA MQTT integration configured
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
+**Configuration (BrewOS Settings → MQTT):**
 
-### Development Priorities
+- Enable MQTT
+- Set broker address and credentials
+- Enable "Home Assistant Discovery"
 
-| Priority    | Area         | Description                       |
-| ----------- | ------------ | --------------------------------- |
-| 🔴 Critical | Safety       | Any safety improvements           |
-| 🟠 High     | Stability    | Bug fixes, reliability            |
-| 🟡 Medium   | Features     | New machine support, integrations |
-| 🟢 Normal   | Enhancements | UI improvements, optimizations    |
+### Custom Lovelace Card
 
----
+A dashboard card component displaying machine status, temperatures, and controls.
 
-## Community
+**Installation:**
 
-- **Discussions:** [GitHub Discussions](https://github.com/mizrachiran/brewos/discussions)
-- **Issues:** [GitHub Issues](https://github.com/mizrachiran/brewos/issues)
-- **Discord:** Coming soon
+1. Copy `lovelace/brewos-card.js` to your HA `config/www/` directory
+2. Add the resource in HA (Settings → Dashboards → Resources):
+   - URL: `/local/brewos-card.js`
+   - Type: JavaScript Module
+3. Add the card to a dashboard
 
----
+**Card Configuration:**
 
-## License
+```yaml
+type: custom:brewos-card
+entity_prefix: brewos # MQTT entity prefix
+name: "My Machine" # Display name
+show_name: true # Show/hide name
+show_stats: true # Show/hide statistics
+show_actions: true # Show/hide action buttons
+compact: false # Compact layout mode
+```
 
-This project is licensed under the **Apache License 2.0 with Commons Clause** - see the [LICENSE](LICENSE) file for details.
+### Native Integration
 
-**What this means:**
+A full Home Assistant custom component providing sensors, controls, and services.
 
-- ✅ You can use, modify, and distribute the software for personal use
-- ✅ You can use it for your own espresso machine
-- ✅ You can contribute improvements back to the project
-- ❌ You cannot sell the software or services based primarily on the software
+**Installation:**
 
----
+1. Copy `custom_components/brewos/` to your HA `config/custom_components/` directory
+2. Restart Home Assistant
+3. Add integration: Settings → Devices & Services → Add Integration → BrewOS
+4. Configure the MQTT topic prefix
 
-## Acknowledgments
+**Configuration Options:**
+| Option | Description | Default |
+|--------|-------------|---------|
+| `topic_prefix` | MQTT topic prefix | `brewos` |
+| `device_id` | Device identifier (for multi-device setups) | ``|
+|`name`| Device display name |`BrewOS Espresso Machine` |
 
-- [Raspberry Pi Pico SDK](https://github.com/raspberrypi/pico-sdk)
-- [ESP-IDF](https://github.com/espressif/esp-idf) & Arduino ESP32
-- [PlatformIO](https://platformio.org/)
-- The espresso enthusiast community
+## Entity Reference
 
----
+### Sensors
 
-<p align="center">
-  <sub>Built with ☕ by espresso enthusiasts, for espresso enthusiasts</sub>
-</p>
+| Entity ID                      | Description              | Unit  |
+| ------------------------------ | ------------------------ | ----- |
+| `sensor.brewos_brew_temp`      | Brew boiler temperature  | °C    |
+| `sensor.brewos_steam_temp`     | Steam boiler temperature | °C    |
+| `sensor.brewos_brew_setpoint`  | Brew target temperature  | °C    |
+| `sensor.brewos_steam_setpoint` | Steam target temperature | °C    |
+| `sensor.brewos_pressure`       | Brew pressure            | bar   |
+| `sensor.brewos_scale_weight`   | Scale weight             | g     |
+| `sensor.brewos_flow_rate`      | Flow rate                | g/s   |
+| `sensor.brewos_shot_duration`  | Active shot duration     | s     |
+| `sensor.brewos_shot_weight`    | Active shot weight       | g     |
+| `sensor.brewos_target_weight`  | BBW target weight        | g     |
+| `sensor.brewos_shots_today`    | Daily shot count         | shots |
+| `sensor.brewos_total_shots`    | Lifetime shot count      | shots |
+| `sensor.brewos_energy_today`   | Daily energy consumption | kWh   |
+| `sensor.brewos_power`          | Current power draw       | W     |
+| `sensor.brewos_voltage`        | Line voltage             | V     |
+| `sensor.brewos_current`        | Current draw             | A     |
+| `sensor.brewos_state`          | Machine state            | text  |
+
+### Binary Sensors
+
+| Entity ID                              | Description               | Device Class |
+| -------------------------------------- | ------------------------- | ------------ |
+| `binary_sensor.brewos_is_brewing`      | Brewing in progress       | running      |
+| `binary_sensor.brewos_is_heating`      | Boilers heating           | heat         |
+| `binary_sensor.brewos_ready`           | At target temperature     | -            |
+| `binary_sensor.brewos_water_low`       | Water tank low            | problem      |
+| `binary_sensor.brewos_alarm_active`    | Alarm condition           | problem      |
+| `binary_sensor.brewos_pico_connected`  | Pico controller connected | connectivity |
+| `binary_sensor.brewos_scale_connected` | Bluetooth scale connected | connectivity |
+
+### Controls
+
+| Entity ID                         | Type   | Description                   |
+| --------------------------------- | ------ | ----------------------------- |
+| `switch.brewos_power_switch`      | Switch | Machine power on/off          |
+| `button.brewos_start_brew`        | Button | Start brewing                 |
+| `button.brewos_stop_brew`         | Button | Stop brewing                  |
+| `button.brewos_tare_scale`        | Button | Tare scale                    |
+| `button.brewos_enter_eco`         | Button | Enter eco mode                |
+| `button.brewos_exit_eco`          | Button | Exit eco mode                 |
+| `number.brewos_brew_temp_target`  | Number | Brew temperature (85-100°C)   |
+| `number.brewos_steam_temp_target` | Number | Steam temperature (120-160°C) |
+| `number.brewos_bbw_target`        | Number | Target weight (18-100g)       |
+| `select.brewos_mode_select`       | Select | Mode: standby, on, eco        |
+| `select.brewos_heating_strategy`  | Select | Heating strategy              |
+
+## MQTT Topics
+
+BrewOS uses the following MQTT topic structure:
+
+```
+{prefix}/{device_id}/status       # Machine status (JSON)
+{prefix}/{device_id}/power        # Power meter readings (JSON)
+{prefix}/{device_id}/statistics   # Shot/energy statistics (JSON)
+{prefix}/{device_id}/command      # Command input
+{prefix}/{device_id}/availability # Online/offline status
+```
+
+**Command Format:**
+
+```json
+{ "cmd": "command_name", "param": "value" }
+```
+
+**Available Commands:**
+| Command | Parameters | Description |
+|---------|------------|-------------|
+| `set_mode` | `mode`: standby/on/eco, `strategy`: 0-3 (optional) | Set machine mode |
+| `set_temp` | `boiler`: brew/steam, `temp`: float | Set temperature |
+| `set_target_weight` | `weight`: float | Set BBW target |
+| `set_heating_strategy` | `strategy`: 0-3 | Set heating strategy |
+| `brew_start` | - | Start brewing |
+| `brew_stop` | - | Stop brewing |
+| `tare` | - | Tare scale |
+| `enter_eco` | - | Enter eco mode |
+| `exit_eco` | - | Exit eco mode |
+
+**Heating Strategies:**
+| Value | Name | Description |
+|-------|------|-------------|
+| 0 | `brew_only` | Heat brew boiler only |
+| 1 | `sequential` | Heat brew first, then steam |
+| 2 | `parallel` | Heat both boilers simultaneously |
+| 3 | `smart_stagger` | Intelligent staggered heating |
+
+## Examples
+
+See `examples/` directory for:
+
+- `automations.yaml` - Morning routines, auto power-off, notifications
+- `dashboard.yaml` - Complete dashboard configuration
+
+## Troubleshooting
+
+**Entities not appearing:**
+
+1. Verify MQTT broker connection in BrewOS settings
+2. Check "Home Assistant Discovery" is enabled
+3. Confirm HA MQTT integration is connected to the same broker
+4. Use MQTT Explorer to verify topics are being published
+
+**Stale or missing data:**
+
+1. Check BrewOS device is powered and connected to WiFi
+2. Verify MQTT broker is accessible
+3. Check HA logs for connection errors
+
+**Entity naming:**
+Entity IDs follow the pattern `{domain}.brewos_{entity_key}`. The prefix can be customized in BrewOS MQTT settings.
