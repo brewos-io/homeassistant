@@ -120,11 +120,13 @@ export function Layout({ onExitDemo }: LayoutProps) {
   // This is the source of truth for real-time connection status
   const machineState = useStore((s) => s.machine.state);
   const isDeviceOffline = isCloud && machineState === "offline";
-  
+
   // Determine if device is truly online for the status indicator
   // Use real-time machine state as source of truth, fallback to selectedDevice.isOnline
-  const isDeviceOnline = isCloud 
-    ? (machineState !== "offline" && machineState !== "unknown" && selectedDevice?.isOnline)
+  const isDeviceOnline = isCloud
+    ? machineState !== "offline" &&
+      machineState !== "unknown" &&
+      selectedDevice?.isOnline
     : true;
 
   // Get current page title from navigation
@@ -196,9 +198,7 @@ export function Layout({ onExitDemo }: LayoutProps) {
                 >
                   <div
                     className={`w-2 h-2 rounded-full flex-shrink-0 transition-colors ${
-                      isDeviceOnline
-                        ? "bg-emerald-500"
-                        : "bg-theme-muted"
+                      isDeviceOnline ? "bg-emerald-500" : "bg-theme-muted"
                     }`}
                   />
                   <span className="text-xs font-medium text-theme-secondary group-hover:text-theme truncate max-w-[100px]">
@@ -247,6 +247,7 @@ export function Layout({ onExitDemo }: LayoutProps) {
       <header
         className={cn(
           "sticky top-0 z-50 header-glass border-b border-theme transition-transform duration-300",
+          "pt-[env(safe-area-inset-top)]",
           headerVisible ? "translate-y-0" : "-translate-y-full"
         )}
       >
@@ -266,9 +267,7 @@ export function Layout({ onExitDemo }: LayoutProps) {
                 >
                   <div
                     className={`w-2 h-2 rounded-full transition-colors ${
-                      isDeviceOnline
-                        ? "bg-emerald-500"
-                        : "bg-theme-muted"
+                      isDeviceOnline ? "bg-emerald-500" : "bg-theme-muted"
                     }`}
                   />
                   <span className="text-sm font-medium text-theme-secondary group-hover:text-theme max-w-[150px] truncate">
@@ -321,7 +320,8 @@ export function Layout({ onExitDemo }: LayoutProps) {
       {!isDeviceOffline && (
         <nav
           className={cn(
-            "sticky top-16 z-40 nav-bg border-b border-theme transition-transform duration-300",
+            "sticky z-40 nav-bg border-b border-theme transition-transform duration-300",
+            "top-[calc(4rem+env(safe-area-inset-top))]",
             headerVisible ? "translate-y-0" : "-translate-y-16"
           )}
         >
