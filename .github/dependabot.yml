@@ -4,23 +4,11 @@
 
 version: 2
 updates:
-  # PlatformIO dependencies (ESP32)
-  - package-ecosystem: "pip"
-    directory: "/src/esp32"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "esp32"
-
-  # GitHub Actions
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 3
-    labels:
-      - "dependencies"
-      - "ci"
+  # Note: This repository doesn't use GitHub Actions workflows,
+  # so the github-actions ecosystem is not included.
+  # If workflows are added in the future, add:
+  # - package-ecosystem: "github-actions"
+  #   directory: "/"
+  #   schedule:
+  #     interval: "weekly"
 
