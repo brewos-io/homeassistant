@@ -9,7 +9,7 @@
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/brewos/brewos/issues",
   "loggers": ["brewos"],
-  "mqtt": ["brewos/#"],
+  "mqtt": ["brewos/#", "homeassistant/sensor/brewos_+/+/config", "homeassistant/binary_sensor/brewos_+/+/config", "homeassistant/switch/brewos_+/+/config", "homeassistant/button/brewos_+/+/config", "homeassistant/number/brewos_+/+/config", "homeassistant/select/brewos_+/+/config"],
   "requirements": [],
   "version": "1.0.0"
 }

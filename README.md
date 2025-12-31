@@ -44,13 +44,18 @@ BrewOS publishes Home Assistant MQTT discovery messages. When enabled, entities 
 
 A dashboard card component displaying machine status, temperatures, and controls.
 
-**Installation:**
+**Automatic Installation:**
 
-1. Copy `lovelace/brewos-card.js` to your HA `config/www/` directory
-2. Add the resource in HA (Settings → Dashboards → Resources):
+When you set up the native integration, the Lovelace card is automatically copied to your `config/www/` directory. You just need to:
+
+1. Add the resource in HA (Settings → Dashboards → Resources):
    - URL: `/local/brewos-card.js`
    - Type: JavaScript Module
-3. Add the card to a dashboard
+2. Add the card to your dashboard
+
+**Manual Installation (if needed):**
+
+If the card wasn't automatically installed, you can manually copy `lovelace/brewos-card.js` to your HA `config/www/` directory, then add it as a resource as described above.
 
 **Card Configuration:**
 
@@ -66,14 +71,30 @@ compact: false # Compact layout mode
 
 ### Native Integration
 
-A full Home Assistant custom component providing sensors, controls, and services.
+A full Home Assistant custom component providing sensors, controls, and services with **automatic device discovery**.
 
 **Installation:**
 
 1. Copy `custom_components/brewos/` to your HA `config/custom_components/` directory
 2. Restart Home Assistant
-3. Add integration: Settings → Devices & Services → Add Integration → BrewOS
-4. Configure the MQTT topic prefix
+3. **Auto-Discovery**: If your BrewOS device has MQTT and Home Assistant Discovery enabled, the integration will automatically appear in Settings → Devices & Services → Add Integration
+4. **Manual Setup**: If auto-discovery doesn't work, manually add the integration:
+   - Go to Settings → Devices & Services → Add Integration
+   - Search for "BrewOS"
+   - Enter your MQTT topic prefix and device ID (if applicable)
+
+**Auto-Discovery Requirements:**
+
+- MQTT broker configured in Home Assistant
+- BrewOS device has MQTT enabled
+- Home Assistant Discovery enabled in BrewOS MQTT settings
+- Device must be powered on and connected to WiFi
+
+When these conditions are met, Home Assistant will automatically detect your BrewOS device and prompt you to configure it. The integration extracts device information (name, model, manufacturer) directly from the MQTT discovery messages.
+
+**Lovelace Card:**
+
+The integration automatically installs the Lovelace card to your `config/www/` directory during setup. You'll need to add it as a resource in Settings → Dashboards → Resources (URL: `/local/brewos-card.js`, Type: JavaScript Module) before you can use it in your dashboard.
 
 **Configuration Options:**
 | Option | Description | Default |
@@ -81,6 +102,8 @@ A full Home Assistant custom component providing sensors, controls, and services
 | `topic_prefix` | MQTT topic prefix | `brewos` |
 | `device_id` | Device identifier (for multi-device setups) | ``|
 |`name`| Device display name |`BrewOS Espresso Machine` |
+|`model`| Device model (auto-detected from discovery) |`ECM Controller` |
+|`manufacturer`| Manufacturer (auto-detected from discovery) |`BrewOS` |
 
 ## Entity Reference
 
@@ -182,18 +205,63 @@ See `examples/` directory for:
 
 ## Troubleshooting
 
+### Auto-Discovery Issues
+
+**Device not discovered automatically:**
+
+1. **Verify MQTT is configured:**
+
+   - Check that MQTT integration is set up in Home Assistant
+   - Verify MQTT broker is accessible from both HA and BrewOS device
+
+2. **Check BrewOS MQTT settings:**
+
+   - MQTT must be enabled in BrewOS device settings
+   - "Home Assistant Discovery" must be enabled
+   - Device must be powered on and connected to WiFi
+
+3. **Verify discovery messages are published:**
+
+   - Use MQTT Explorer or similar tool
+   - Check for messages on `homeassistant/sensor/brewos_*/+/config` topics
+   - Messages should appear when device connects to MQTT broker
+
+4. **Check Home Assistant logs:**
+
+   - Look for errors related to MQTT or BrewOS integration
+   - Check if discovery messages are being received
+
+5. **Manual configuration:**
+   - If auto-discovery doesn't work, you can manually add the integration
+   - Go to Settings → Devices & Services → Add Integration → BrewOS
+   - Enter your MQTT topic prefix (default: `brewos`)
+   - Enter device ID if you have multiple devices
+
+### Entity Issues
+
 **Entities not appearing:**
 
 1. Verify MQTT broker connection in BrewOS settings
 2. Check "Home Assistant Discovery" is enabled
 3. Confirm HA MQTT integration is connected to the same broker
 4. Use MQTT Explorer to verify topics are being published
+5. Restart Home Assistant after adding the integration
 
 **Stale or missing data:**
 
 1. Check BrewOS device is powered and connected to WiFi
 2. Verify MQTT broker is accessible
 3. Check HA logs for connection errors
+4. Verify the device is publishing to the correct topics
 
 **Entity naming:**
 Entity IDs follow the pattern `{domain}.brewos_{entity_key}`. The prefix can be customized in BrewOS MQTT settings.
+
+### Multi-Device Setup
+
+If you have multiple BrewOS devices:
+
+1. Each device should have a unique `device_id` configured in BrewOS MQTT settings
+2. Each device will be discovered separately
+3. You can configure multiple instances of the integration, one per device
+4. Each device will appear as a separate device in Home Assistant's device registry

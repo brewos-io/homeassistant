@@ -7,9 +7,7 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
-from homeassistant.helpers import selector
 
 from .const import DOMAIN, CONF_TOPIC_PREFIX, DEFAULT_TOPIC_PREFIX
 
@@ -20,6 +18,10 @@ class BrewOSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for BrewOS."""
 
     VERSION = 1
+    
+    def __init__(self):
+        """Initialize the config flow."""
+        self._discovered_devices: dict[str, dict[str, Any]] = {}
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -42,6 +44,11 @@ class BrewOSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 data=user_input,
             )
 
+        # Check if we can discover devices automatically
+        discovered = await self._async_discover_devices()
+        if discovered:
+            return await self.async_step_pick_device()
+
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema(
@@ -56,54 +63,135 @@ class BrewOSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             },
             errors=errors,
         )
+    
+    async def async_step_pick_device(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle device selection from discovered devices."""
+        if user_input is not None:
+            device_id = user_input["device"]
+            device_info = self._discovered_devices[device_id]
+            
+            unique_id = f"brewos_{device_id}"
+            await self.async_set_unique_id(unique_id)
+            self._abort_if_unique_id_configured()
+            
+            return self.async_create_entry(
+                title=device_info.get("name", f"BrewOS ({device_id[:8]})"),
+                data={
+                    CONF_TOPIC_PREFIX: DEFAULT_TOPIC_PREFIX,
+                    "device_id": device_id,
+                    "name": device_info.get("name", f"BrewOS ({device_id[:8]})"),
+                    "model": device_info.get("model", "ECM Controller"),
+                    "manufacturer": device_info.get("manufacturer", "BrewOS"),
+                },
+            )
+        
+        # Build list of discovered devices
+        devices = {
+            device_id: f"{info.get('name', 'BrewOS')} ({device_id[:8] if len(device_id) > 8 else device_id})"
+            for device_id, info in self._discovered_devices.items()
+        }
+        
+        return self.async_show_form(
+            step_id="pick_device",
+            data_schema=vol.Schema({vol.Required("device"): vol.In(devices)}),
+        )
+    
+    async def _async_discover_devices(self) -> bool:
+        """Try to discover BrewOS devices via MQTT."""
+        # This is a simplified discovery - in a real implementation,
+        # you might want to subscribe to availability topics or scan MQTT
+        # For now, we rely on MQTT discovery messages which trigger async_step_mqtt
+        return False
 
     async def async_step_mqtt(self, discovery_info: dict[str, Any]) -> FlowResult:
         """Handle MQTT discovery."""
         # Extract device info from discovery
         topic = discovery_info.get("topic", "")
+        payload = discovery_info.get("payload", {})
+        
+        _LOGGER.debug("MQTT discovery: topic=%s, payload=%s", topic, payload)
         
         # Parse topic to get prefix and device_id
-        # Expected format: homeassistant/sensor/brewos_DEVICEID/...
+        # Expected format: homeassistant/{component}/brewos_{DEVICEID}/{entity}/config
         parts = topic.split("/")
         if len(parts) >= 3:
             entity_id = parts[2]  # brewos_DEVICEID
             if entity_id.startswith("brewos_"):
                 device_id = entity_id[7:]  # Remove "brewos_" prefix
                 
-                await self.async_set_unique_id(f"brewos_{device_id}")
+                # Extract device information from discovery payload if available
+                device_name = "BrewOS Espresso Machine"
+                device_model = "ECM Controller"
+                device_manufacturer = "BrewOS"
+                
+                if isinstance(payload, dict):
+                    # Try to get device info from the discovery payload
+                    device_info = payload.get("device", {})
+                    if device_info:
+                        device_name = device_info.get("name", device_name)
+                        device_model = device_info.get("model", device_model)
+                        device_manufacturer = device_info.get("manufacturer", device_manufacturer)
+                
+                # Create unique ID based on device identifier
+                unique_id = f"brewos_{device_id}"
+                await self.async_set_unique_id(unique_id)
                 self._abort_if_unique_id_configured()
                 
+                # Store device info in context for confirmation step
+                self.context["device_id"] = device_id
+                self.context["device_name"] = device_name
+                self.context["device_model"] = device_model
+                self.context["device_manufacturer"] = device_manufacturer
+                
                 self.context["title_placeholders"] = {
-                    "name": f"BrewOS ({device_id[:8]}...)"
+                    "name": device_name,
+                    "device_id": device_id[:8] if len(device_id) > 8 else device_id
                 }
                 
-                return await self.async_step_mqtt_confirm(device_id=device_id)
+                return await self.async_step_mqtt_confirm()
         
         return self.async_abort(reason="invalid_discovery_info")
 
     async def async_step_mqtt_confirm(
-        self, user_input: dict[str, Any] | None = None, device_id: str = ""
+        self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Confirm MQTT discovery."""
+        device_id = self.context.get("device_id", "")
+        device_name = self.context.get("device_name", "BrewOS Espresso Machine")
+        device_model = self.context.get("device_model", "ECM Controller")
+        device_manufacturer = self.context.get("device_manufacturer", "BrewOS")
+        
         if user_input is not None:
             return self.async_create_entry(
-                title=user_input.get("name", f"BrewOS ({device_id[:8]})"),
+                title=user_input.get("name", device_name),
                 data={
                     CONF_TOPIC_PREFIX: DEFAULT_TOPIC_PREFIX,
                     "device_id": device_id,
-                    "name": user_input.get("name"),
+                    "name": user_input.get("name", device_name),
+                    "model": device_model,
+                    "manufacturer": device_manufacturer,
                 },
             )
+
+        # Show device info in confirmation
+        display_name = device_name
+        if device_id:
+            short_id = device_id[:8] if len(device_id) > 8 else device_id
+            display_name = f"{device_name} ({short_id})"
 
         return self.async_show_form(
             step_id="mqtt_confirm",
             data_schema=vol.Schema(
                 {
-                    vol.Required("name", default=f"BrewOS ({device_id[:8]})"): str,
+                    vol.Required("name", default=display_name): str,
                 }
             ),
             description_placeholders={
                 "device_id": device_id,
+                "device_name": device_name,
+                "device_model": device_model,
             },
         )
 
