@@ -2,6 +2,7 @@
 
 ## Related Repositories
 
+- [Wiki](https://github.com/brewos-io/wiki) - Complete user documentation and guides
 - [Firmware](https://github.com/brewos-io/firmware) - Main firmware repository
 - [Web Site](https://github.com/brewos-io/web) - Project website
 
